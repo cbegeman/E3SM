@@ -3557,6 +3557,10 @@ contains
       end if
 
       call ocn_diagnostics_variables_init(domain, jenkinsOn, hollandJenkinsOn, err)
+      
+      if ( trim(config_vert_advection_method) == 'remap' ) then
+         vertAleTransportTop=0.0_RKIND
+      endif
 
     end subroutine ocn_diagnostics_init!}}}
 
