@@ -33,6 +33,9 @@ module ocn_vertical_remap
    use ocn_mesh
    use ocn_diagnostics
 
+   use BGC_mod
+   use BGC_parms
+
    use ppr_1d
 
    implicit none
@@ -81,13 +84,14 @@ module ocn_vertical_remap
       integer, intent(out) :: err
 
       integer :: nCells, nEdges
-      integer :: nLayers, nLevels, nVars, nDoFs, nTracers
+      integer :: nLayers, nLevels, nVars, nDoFs, nTracers, nTracersEcosys
       integer :: cell1, cell2, iCell, jCell, iEdge, iTrac, k, kTop, kBot
 
       type (mpas_pool_type), pointer :: verticalMeshPool
       type (mpas_pool_type), pointer :: statePool
       type (mpas_pool_type), pointer :: tracersPool
       type (mpas_pool_iterator_type) :: groupItr
+      type (BGC_indices_type) :: ecosysIndices
 
       type(rmap_work) :: work
       type(rcon_ends), dimension(:), allocatable :: bcUpper, bcLower
@@ -102,7 +106,7 @@ module ocn_vertical_remap
       real (kind=RKIND), dimension(:, :), pointer :: layerThickness, restingThickness
       real (kind=RKIND), dimension(:, :), pointer :: normalVelocity
       real (kind=RKIND), dimension(:, :), pointer :: highFreqThickness,lowFreqDivergence
-      real (kind=RKIND), dimension(:, :, :), pointer :: tracersGroup
+      real (kind=RKIND), dimension(:, :, :), pointer :: tracersGroup, ecosysTracers
 
       err = 0
 
@@ -116,6 +120,7 @@ module ocn_vertical_remap
       call mpas_pool_get_subpool(block % structs, 'state', statePool)
 
       call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
+      call mpas_pool_get_array(tracersPool, 'ecosysTracers', ecosysTracers, 1)
 
       call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
       
@@ -358,7 +363,76 @@ module ocn_vertical_remap
          end if
       end do
 
-   !- dealloc any local data, etc      
+      if (associated(ecosysTracers)) then
+
+         ! nTracersEcosys = size(ecosysTracers, dim=1)
+         nTracersEcosys = 12 ! hard-coded because I didn't find loops over nTracersEcosys anywhere in the code
+         allocate(dataNow(nDoFs, nTracersEcosys, nVertLevels))
+         allocate(dataNew(nDoFs, nTracersEcosys, nVertLevels))
+
+         call work%init(nVertLevels + 1, nTracersEcosys, opts) ! this is internal workspace for PPR
+
+         allocate(bcUpper(nTracersEcosys))
+         allocate(bcLower(nTracersEcosys))
+         bcUpper%bcopt = bc_upper
+         bcLower%bcopt = bc_lower
+
+         !$omp parallel
+         !$omp do schedule(runtime) private(iCell, iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew)
+         do iCell = 1, nCells
+
+            kTop = minLevelCell(iCell)
+            kBot = maxLevelCell(iCell)
+
+            nLayers = kBot - kTop + 1
+            nLevels = nLayers + 1
+
+            if (nLevels .lt. 2) cycle
+
+            dataNow(1,1,1:nLayers) = ecosysTracers(ecosysIndices%no3_ind,kTop:kBot,iCell)
+            dataNow(1,2,1:nLayers) = ecosysTracers(ecosysIndices%doc_ind,kTop:kBot,iCell)
+            dataNow(1,3,1:nLayers) = ecosysTracers(ecosysIndices%zooC_ind,kTop:kBot,iCell)
+            dataNow(1,4,1:nLayers) = ecosysTracers(ecosysIndices%spC_ind,kTop:kBot,iCell)
+            dataNow(1,5,1:nLayers) = ecosysTracers(ecosysIndices%spChl_ind,kTop:kBot,iCell)
+            dataNow(1,6,1:nLayers) = ecosysTracers(ecosysIndices%spCaCO3_ind,kTop:kBot,iCell)
+            dataNow(1,7,1:nLayers) = ecosysTracers(ecosysIndices%diatC_ind,kTop:kBot,iCell)
+            dataNow(1,8,1:nLayers) = ecosysTracers(ecosysIndices%diatChl_ind,kTop:kBot,iCell)
+            dataNow(1,9,1:nLayers) = ecosysTracers(ecosysIndices%phaeoC_ind,kTop:kBot,iCell)
+            dataNow(1,10,1:nLayers) = ecosysTracers(ecosysIndices%phaeoChl_ind,kTop:kBot,iCell)
+            dataNow(1,11,1:nLayers) = ecosysTracers(ecosysIndices%diazC_ind,kTop:kBot,iCell)
+            dataNow(1,12,1:nLayers) = ecosysTracers(ecosysIndices%diazChl_ind,kTop:kBot,iCell)
+            call mpas_timer_start("ppr")
+            call rmap1d(nLevels, nLevels, nTracersEcosys, nDoFs, &
+               heightCellNow(kTop:kBot+1, iCell), &
+               heightCellNew(kTop:kBot+1, iCell), &
+               dataNow, dataNew, &
+               bcUpper, bcLower, work, opts)
+            call mpas_timer_stop("ppr")
+
+            ecosysTracers(ecosysIndices%no3_ind,kTop:kBot,iCell)     = dataNew(1,1,1:nLayers)
+            ecosysTracers(ecosysIndices%doc_ind,kTop:kBot,iCell)     = dataNew(1,2,1:nLayers)
+            ecosysTracers(ecosysIndices%zooC_ind,kTop:kBot,iCell)    = dataNew(1,3,1:nLayers)
+            ecosysTracers(ecosysIndices%spC_ind,kTop:kBot,iCell)     = dataNew(1,4,1:nLayers)
+            ecosysTracers(ecosysIndices%spChl_ind,kTop:kBot,iCell)   = dataNew(1,5,1:nLayers)
+            ecosysTracers(ecosysIndices%spCaCO3_ind,kTop:kBot,iCell) = dataNew(1,6,1:nLayers)
+            ecosysTracers(ecosysIndices%diatC_ind,kTop:kBot,iCell)   = dataNew(1,7,1:nLayers)
+            ecosysTracers(ecosysIndices%diatChl_ind,kTop:kBot,iCell) = dataNew(1,8,1:nLayers)
+            ecosysTracers(ecosysIndices%phaeoC_ind,kTop:kBot,iCell)  = dataNew(1,9,1:nLayers)
+            ecosysTracers(ecosysIndices%phaeoChl_ind,kTop:kBot,iCell)= dataNew(1,10,1:nLayers)
+            ecosysTracers(ecosysIndices%diazC_ind,kTop:kBot,iCell)   = dataNew(1,11,1:nLayers)
+            ecosysTracers(ecosysIndices%diazChl_ind,kTop:kBot,iCell) = dataNew(1,12,1:nLayers)
+
+         end do
+         !$omp end do
+         !$omp end parallel
+
+         deallocate(dataNow,dataNew)
+         deallocate(bcUpper,bcLower)
+         call work%free()
+
+      endif
+
+   !- dealloc any local data, etc
 
       deallocate(heightCellNow)
       deallocate(heightEdgeNow)
