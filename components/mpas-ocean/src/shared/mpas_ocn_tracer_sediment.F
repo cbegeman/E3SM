@@ -59,6 +59,7 @@ module ocn_tracer_sediment
    ! Private module variables
    !
    !--------------------------------------------------------------------
+   real(kind=RKIND) :: rho_s = 2650, rho_w = 1020
    real(kind=RKIND), dimension(:), allocatable :: w_settling
 !-----------------------------------------------------------------------
 !  name the necessary sediment derived types
@@ -152,10 +153,17 @@ contains
 
       real (kind=RKIND) :: zTop, zBot, convertLengthScale = 100.0_RKIND
       real (kind=RKIND) :: porosity = 0.5, tau_crit = 0.1, min_erosion_rate = 5e-4 
-      real (kind=RKIND), dimension(:,:) :: kineticEnergyCell
+      
+      real (kind=RKIND), dimension(:), allocatable :: &
+         erosion_flux, settling_flux, bed_flux
+      
+      real (kind=RKIND), dimension(:,:), allocatable :: &
+         kineticEnergyCell
+      
       real (kind=RKIND), dimension(:), pointer :: bottomDrag
       real (kind=RKIND), dimension(:,:), pointer :: normalVelocity
       
+      call mpas_pool_get_array(forcingPool, 'sediment_thickness', sediment_thickness)
 
       call mpas_timer_start("sediment source-sink")
 
@@ -199,7 +207,7 @@ contains
       !DWJ 08/05/2016: This loop needs OpenMP added to it
       k = maxLevelCell(iCell)
       do iCell = 1, nCellsSolve
-         ! surface erosion mass flux ero_flux in unit (kg m-2 s-1) 
+         ! maximum settling flux is that which settles all sediment in the bottom cell
          settling_flux(iCell) = MIN(w_settling(k,iCell)* &
                                     sedimentTracers(k,iCell), &
                                     sedimentTracers(k,iCell)* &
@@ -211,12 +219,17 @@ contains
                                    sediment_thickness*rho_s/dt)
          bed_flux(iCell) = erosion_flux(iCell) - settling_flux(iCell)
          sedimentTracersTend(k,iCell) = sedimentTracersTend(k,iCell) + &
-                                        dt * (erosion_flux(iCell) - settling_flux(iCell) / &
-                                        layerThickness(k,iCell))
+                                        dt * bed_flux(iCell) / &
+                                        layerThickness(k,iCell)
 
       enddo  !  iCell
 
       call mpas_timer_stop("sediment source-sink")
+
+      ! compute diagnostic related to bed fluxes
+      sedimentThicknessTend(iCell) = dt*bed_flux(iCell)/(rho_s*(1.0_RKIND - porosity))
+      sediment_thickness = MAX(0.0_RKIND, &
+                               sediment_thickness + sedimentThicknessTend(iCell))
 
    !--------------------------------------------------------------------
 
@@ -256,7 +269,7 @@ contains
       integer, pointer :: nVertLevels, index_dummy
 
       real (kind=RKIND) :: &
-         rho_R, SD50, ND50, Vh, dstar
+         rho_R, SD50, ND50, Vh, dstar, initial_sediment_thickness
       !
       ! get tracers pools
       !
@@ -338,9 +351,10 @@ contains
         ! sieve diameter (SD50) to nominal diameter (ND50), Raudkivi [1990]
         ND50 = SD50*1.1_RKIND
         ! sediment/water density comparison  -> specific graivity
-        rho_R = 2650_RKIND/1020_RKIND - 1! rhoS/rho0-1
+        rho_R = rho_s/rho_w - 1! rhoS/rho0-1
         ! kinematic viscosity
         Vh = 1e-6_RKIND
+        initial_sediment_thickness = 10.0_RKIND
 
         iTrac = 1 ! for now, only one sediment class
         if (config_sediment_settling_formulation == 'Goldstein-Coco') then
@@ -359,6 +373,7 @@ contains
            w_settling(iTrac) = Vh/SD50 * (sqrt(25.0_RKIND+1.2_RKIND*dstar**2) - 
                                           5.0_RKIND)**1.5_RKIND
         endif
+        sediment_thickness(:) = initial_sediment_thickness
 
     end if  !  associated(sedimentTracers)
 
