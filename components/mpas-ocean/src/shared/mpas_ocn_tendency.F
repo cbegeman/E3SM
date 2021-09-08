@@ -585,7 +585,9 @@ contains
 
       ! Scratch Arrays
       real (kind=RKIND), dimension(:,:), allocatable :: &
-         normalThicknessFlux ! Flux of thickness through edge (m^2/s)
+         normalThicknessFlux, & ! Flux of thickness through edge (m^2/s)
+         w_settling, & ! additional diasurface velocity associated with tracer buoyancy
+         w ! diasurface vertical velocity of tracer across the top interface
 
       ! End preamble
       !-----------------------------------------------------------------
@@ -636,6 +638,8 @@ contains
 
       ! allocate and transfer data not specific to tracer groups
       allocate(normalThicknessFlux(nVertLevels, nEdgesAll+1))
+      allocate(w(nVertLevels, nCellsAll))
+      allocate(w_settling(nVertLevels+1, nCellsAll))
 
       !$acc enter data create(normalThicknessFlux) &
       !$acc            copyin(layerThickness)
@@ -653,6 +657,7 @@ contains
       !$omp parallel
       !$omp do schedule(runtime) private(k)
 #endif
+      w = vertAleTransportTop
       do iEdge = 1,nEdgesAll
       do k = 1,nVertLevels
          normalThicknessFlux(k,iEdge) = &
@@ -883,15 +888,22 @@ contains
          ! NOTE: must be called before ocn_tracer_surface_flux_tend
          !
          if ( groupName == 'sedimentTracers' ) then
+            write(*,*) 'Call ocn_tracer_sediment_compute'
             call ocn_tracer_sediment_compute(tracerGroup, &
                                      nTracersGroup,forcingPool,  &
                                      nCellsOwned, minLevelCell, maxLevelCell, &
                                      nVertLevels, layerThickness, &
-                                     tracerGroupTend, err)
+                                     w_settling, tracerGroupTend, err)
 
+            write(*,*) 'Call ocn_tracer_sediment_surface_flux_compute'
             call ocn_tracer_sediment_surface_flux_compute(tracerGroup, &
                                      forcingPool, nCellsOwned, zMid,  &
                                      tracerGroupSurfaceFlux, err)
+            do iCell = 1,nCellsAll
+               do k = minLevelCell(iCell), maxLevelCell(iCell)
+                  w(k,iCell) = w(k,iCell) + w_settling(k,iCell)
+               enddo
+            enddo
          endif ! sediment
 
          !
@@ -1065,7 +1077,7 @@ contains
          ! Tracer budget is computed and stored within the tracer adv
          ! routine
          call ocn_tracer_advection_tend(tracerGroup, &
-                            normalThicknessFlux, vertAleTransportTop, &
+                            normalThicknessFlux, w, &
                             layerThickness, dt, tracerGroupTend, &
                             computeBudgets)
 

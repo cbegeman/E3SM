@@ -91,7 +91,8 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_tracer_sediment_compute(sedimentTracers, nTracersSediment, forcingPool, &
-      nCellsSolve, minLevelCell, maxLevelCell, nVertLevels, layerThickness, sedimentTracersTend, err)!{{{
+      nCellsSolve, minLevelCell, maxLevelCell, nVertLevels, layerThickness, w_settling, &
+      sedimentTracersTend, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -135,6 +136,8 @@ contains
       !-----------------------------------------------------------------
 
       integer, intent(out) :: err !< Output: Error flag
+      real (kind=RKIND), dimension(:,:), intent(out) :: &
+         w_settling
 
       !-----------------------------------------------------------------
       !
