@@ -59,7 +59,7 @@ module ocn_tracer_sediment
    ! Private module variables
    !
    !--------------------------------------------------------------------
-
+   real(kind=RKIND), dimension(:), allocatable :: w_settling
 !-----------------------------------------------------------------------
 !  name the necessary sediment derived types
 !  all of these are defined in sediment_mod
@@ -90,8 +90,9 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_tracer_sediment_compute(sedimentTracers, nTracersSediment, forcingPool, &
-      nCellsSolve, minLevelCell, maxLevelCell, nVertLevels, layerThickness, w_settling, &
+   subroutine ocn_tracer_sediment_compute(sedimentTracers, &
+      nTracersSediment, forcingPool, dt, nCellsSolve, minLevelCell, &
+      maxLevelCell, nVertLevels, layerThickness, w, &
       sedimentTracersTend, err)!{{{
 
       !-----------------------------------------------------------------
@@ -99,6 +100,8 @@ contains
       ! input variables
       !
       !-----------------------------------------------------------------
+
+      real (kind=RKIND) :: dt
 
       ! one dimensional arrays
       integer, dimension(:), intent(in) :: &
@@ -127,7 +130,7 @@ contains
       !-----------------------------------------------------------------
 
       real (kind=RKIND), dimension(:,:,:), intent(inout) :: &
-         sedimentTracersTend
+         w, sedimentTracersTend
 
       !-----------------------------------------------------------------
       !
@@ -136,8 +139,6 @@ contains
       !-----------------------------------------------------------------
 
       integer, intent(out) :: err !< Output: Error flag
-      real (kind=RKIND), dimension(:,:), intent(out) :: &
-         w_settling
 
       !-----------------------------------------------------------------
       !
@@ -147,9 +148,14 @@ contains
 
       ! source/sink wants cm instead of m
 
-      real (kind=RKIND) :: zTop, zBot, convertLengthScale = 100.0_RKIND
-
       integer :: iCell, iLevel, iTracer, numColumns, column
+
+      real (kind=RKIND) :: zTop, zBot, convertLengthScale = 100.0_RKIND
+      real (kind=RKIND) :: porosity = 0.5, tau_crit = 0.1, min_erosion_rate = 5e-4 
+      real (kind=RKIND), dimension(:,:) :: kineticEnergyCell
+      real (kind=RKIND), dimension(:), pointer :: bottomDrag
+      real (kind=RKIND), dimension(:,:), pointer :: normalVelocity
+      
 
       call mpas_timer_start("sediment source-sink")
 
@@ -165,9 +171,48 @@ contains
 
          enddo  !  iLevel
 
-         call SEDIMENT_SourceSink(SEDIMENT_indices, SEDIMENT_input, SEDIMENT_forcing,    &
-                                  SEDIMENT_output, SEDIMENT_diagnostic_fields,           &
-                                  nVertLevels, numColumnsMax, numColumns)
+         !call SEDIMENT_SourceSink(SEDIMENT_indices, SEDIMENT_input, SEDIMENT_forcing,    &
+         !                         SEDIMENT_output, SEDIMENT_diagnostic_fields,           &
+         !                         nVertLevels, numColumnsMax, numColumns)
+         
+         ! w is the velocity through the top interface and w_settling applies to
+         ! bottom interface
+         do k=minLevelCell(iCell)+1,maxLevelCell(iCell)
+            w(k,iCell) = w(k,iCell) + w_settling(1)
+         enddo  !  iLevel
+
+      enddo  !  iCell
+
+      call mpas_timer_start("sediment surface flux")
+
+      err = 0
+
+      call mpas_pool_get_array(forcingPool, 'bottomDrag', bottomDrag)
+      call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, 2)
+      call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, 2)
+      call ocn_diagnostic_solve_kineticEnergy(normalVelocity, kineticEnergyCell)
+      ! compute shear stress [m^2 s^{-2}]
+      tau_mean = bottomDrag(iCell) * kineticEnergyCell(maxLevelCell(iCell),iCell)
+      ! tau_wave = 0.0_RKIND
+      ! tau_mean = tau_tide*(1.0_RKIND+1.2_RKIND*(tau_wave/(tau_wave+tau_tide+eps))**1.5_RKIND)
+
+      !DWJ 08/05/2016: This loop needs OpenMP added to it
+      k = maxLevelCell(iCell)
+      do iCell = 1, nCellsSolve
+         ! surface erosion mass flux ero_flux in unit (kg m-2 s-1) 
+         settling_flux(iCell) = MIN(w_settling(k,iCell)* &
+                                    sedimentTracers(k,iCell), &
+                                    sedimentTracers(k,iCell)* &
+                                    layerThickness(k,iCell)/dt )
+         ! surface erosion mass flux ero_flux in unit (kg m-2 s-1)
+         ! maximum erosion flux uses all sediment available
+         erosion_flux(iCell) = MIN((1.0_RKIND - porosity) * min_erosion_rate * &
+                                   MAX(tau_mean/tau_crit - 1.0_RKIND, 0.0_RKIND), &
+                                   sediment_thickness*rho_s/dt)
+         bed_flux(iCell) = erosion_flux(iCell) - settling_flux(iCell)
+         sedimentTracersTend(k,iCell) = sedimentTracersTend(k,iCell) + &
+                                        dt * (erosion_flux(iCell) - settling_flux(iCell) / &
+                                        layerThickness(k,iCell))
 
       enddo  !  iCell
 
@@ -176,81 +221,6 @@ contains
    !--------------------------------------------------------------------
 
    end subroutine ocn_tracer_sediment_compute!}}}
-
-!***********************************************************************
-!
-!  routine ocn_tracer_sediment_surface_flux_compute
-!
-!> \brief   computes a tracer tendency due to sediment
-!> \author  Zhendong Cao, Mathew Maltrud
-!> \date    02/04/2021
-!> \details
-!>  This routine computes a tracer tendency due to sediment
-!
-!-----------------------------------------------------------------------
-
-   subroutine ocn_tracer_sediment_surface_flux_compute(sedimentTracers, forcingPool,  &
-                                       nCellsSolve, zMid, sedimentSurfaceFlux, err)!{{{
-
-      !-----------------------------------------------------------------
-      !
-      ! input variables
-      !
-      !-----------------------------------------------------------------
-
-      ! two dimensional arrays
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
-         zMid
-      real (kind=RKIND), dimension(:,:), intent(inout) :: &
-         sedimentSurfaceFlux
-
-      ! three dimensional arrays
-      real (kind=RKIND), dimension(:,:,:), intent(in) :: &
-         sedimentTracers
-
-      ! scalars
-      integer, intent(in) :: nCellsSolve
-
-      type (mpas_pool_type), intent(inout) :: forcingPool
-
-      !-----------------------------------------------------------------
-      !
-      ! input/output variables
-      !
-      !-----------------------------------------------------------------
-
-      !-----------------------------------------------------------------
-      !
-      ! output variables
-      !
-      !-----------------------------------------------------------------
-
-      integer, intent(out) :: err !< Output: Error flag
-
-      !-----------------------------------------------------------------
-      !
-      ! local variables
-      !
-      !-----------------------------------------------------------------
-
-      integer :: iCell
-
-      call mpas_timer_start("sediment surface flux")
-
-      err = 0
-
-      ! fluxes are zero
-
-      !DWJ 08/05/2016: This loop needs OpenMP added to it
-      do iCell = 1, nCellsSolve
-
-      enddo  !  iCell
-
-      call mpas_timer_stop("sediment surface flux")
-
-   !--------------------------------------------------------------------
-
-   end subroutine ocn_tracer_sediment_surface_flux_compute!}}}
 
 !***********************************************************************
 !
@@ -280,11 +250,13 @@ contains
         sedimentTracers
 
       ! scalars
-      integer :: numColumnsMax
+      integer :: numColumnsMax, iTrac
 
       ! scalar pointers
       integer, pointer :: nVertLevels, index_dummy
 
+      real (kind=RKIND) :: &
+         rho_R, SD50, ND50, Vh, dstar
       !
       ! get tracers pools
       !
@@ -357,6 +329,36 @@ contains
     !   allocate diagnostic output fields
     !---------------------------------------------------------------------------
 
+        ! COMPUTE Sediment settling velocity [m/s] 
+        allocate(w_settling(Sediment_tracer_cnt))
+        w_settling(:) = 0.0_RKIND ! no settling velocity is added
+        
+        ! grain diameter
+        SD50 = 2.5e-4_RKIND
+        ! sieve diameter (SD50) to nominal diameter (ND50), Raudkivi [1990]
+        ND50 = SD50*1.1_RKIND
+        ! sediment/water density comparison  -> specific graivity
+        rho_R = 2650_RKIND/1020_RKIND - 1! rhoS/rho0-1
+        ! kinematic viscosity
+        Vh = 1e-6_RKIND
+
+        iTrac = 1 ! for now, only one sediment class
+        if (config_sediment_settling_formulation == 'Goldstein-Coco') then
+           ! Goldstein & Coco [2013]
+           w_settling(iTrac) = (37.8_RKIND*ND50*rho_R*(1 + 100.0_RKIND*ND50))/   &
+                                (0.383_RKIND +                & 
+                                 1E4_RKIND*rho_R*Vh +     &
+                                 1E2_RKIND*ND50*rho_R**2)
+        elseif (config_sediment_settling_formulation == 'Soulsby') then
+           w_settling(iTrac) = 10.36_RKIND*Vh/SD50 * &
+                                 (sqrt(1.0_RKIND + &
+                                       0.156_RKIND*rho_R*gravity*SD50**3.0_RKIND/ &
+                                       (16.0_RKIND*Vh**2.0) ) - 1)
+        elseif (config_sediment_settling_formulation == 'Cheng') then
+           dstar = SD50 * (rho_Ri*gravity/Vh**2.0_RKIND)**0.333_RKIND
+           w_settling(iTrac) = Vh/SD50 * (sqrt(25.0_RKIND+1.2_RKIND*dstar**2) - 
+                                          5.0_RKIND)**1.5_RKIND
+        endif
 
     end if  !  associated(sedimentTracers)
 

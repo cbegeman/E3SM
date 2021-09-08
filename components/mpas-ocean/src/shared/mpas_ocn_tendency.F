@@ -890,20 +890,11 @@ contains
          if ( groupName == 'sedimentTracers' ) then
             write(*,*) 'Call ocn_tracer_sediment_compute'
             call ocn_tracer_sediment_compute(tracerGroup, &
-                                     nTracersGroup,forcingPool,  &
-                                     nCellsOwned, minLevelCell, maxLevelCell, &
+                                     nTracersGroup, forcingPool,  &
+                                     dt, nCellsOwned, minLevelCell, maxLevelCell, &
                                      nVertLevels, layerThickness, &
-                                     w_settling, tracerGroupTend, err)
+                                     w, tracerGroupTend, err)
 
-            write(*,*) 'Call ocn_tracer_sediment_surface_flux_compute'
-            call ocn_tracer_sediment_surface_flux_compute(tracerGroup, &
-                                     forcingPool, nCellsOwned, zMid,  &
-                                     tracerGroupSurfaceFlux, err)
-            do iCell = 1,nCellsAll
-               do k = minLevelCell(iCell), maxLevelCell(iCell)
-                  w(k,iCell) = w(k,iCell) + w_settling(k,iCell)
-               enddo
-            enddo
          endif ! sediment
 
          !
