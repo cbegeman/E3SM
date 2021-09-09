@@ -24,6 +24,7 @@ module ocn_tracer_sediment
    use mpas_derived_types
    use mpas_pool_routines
    use ocn_constants
+   use ocn_config
 
 ! ZHENDONG: need turn those on or define those here later ...   
 !   use SEDIMENT_mod
@@ -48,7 +49,6 @@ module ocn_tracer_sediment
    !--------------------------------------------------------------------
 
    public :: ocn_tracer_sediment_compute, &
-             ocn_tracer_sediment_surface_flux_compute,  &
              ocn_tracer_sediment_init
 
    integer, public:: &
@@ -60,7 +60,8 @@ module ocn_tracer_sediment
    !
    !--------------------------------------------------------------------
    real(kind=RKIND) :: rho_s = 2650, rho_w = 1020
-   real(kind=RKIND), dimension(:), allocatable :: w_settling
+   real(kind=RKIND), dimension(:), allocatable :: &
+      w_settling, sedimentThickness
 !-----------------------------------------------------------------------
 !  name the necessary sediment derived types
 !  all of these are defined in sediment_mod
@@ -93,8 +94,7 @@ contains
 
    subroutine ocn_tracer_sediment_compute(sedimentTracers, &
       nTracersSediment, forcingPool, dt, nCellsSolve, minLevelCell, &
-      maxLevelCell, nVertLevels, layerThickness, w, &
-      sedimentTracersTend, err)!{{{
+      maxLevelCell, nVertLevels, layerThickness, w, tendPool, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -116,7 +116,7 @@ contains
       real (kind=RKIND), dimension(:,:,:), intent(in) :: &
          sedimentTracers
 
-      type (mpas_pool_type), intent(in) :: forcingPool
+      type (mpas_pool_type), intent(in) :: tendPool, forcingPool
 
       ! scalars
       integer, intent(in) :: nTracersSediment, nCellsSolve, nVertLevels
@@ -131,7 +131,7 @@ contains
       !-----------------------------------------------------------------
 
       real (kind=RKIND), dimension(:,:,:), intent(inout) :: &
-         w, sedimentTracersTend
+         w ! total diasurface vertical velocity
 
       !-----------------------------------------------------------------
       !
@@ -149,7 +149,7 @@ contains
 
       ! source/sink wants cm instead of m
 
-      integer :: iCell, iLevel, iTracer, numColumns, column
+      integer :: iCell, k, iTrac, numColumns, column
 
       real (kind=RKIND) :: &
          convertLengthScale = 100.0_RKIND, &
@@ -165,17 +165,31 @@ contains
          kineticEnergyCell
       
       real (kind=RKIND), dimension(:), pointer :: bottomDrag
-      real (kind=RKIND), dimension(:,:), pointer :: normalVelocity
+      real (kind=RKIND), dimension(:,:), pointer :: &
+         normalVelocity, sedConcen, sedConcenTend, sedConcenBedTend
+      real (kind=RKIND), dimension(:,:,:), pointer :: &
+         sedimentTracersTend,
+         sedimentTracersBedTend
       
-      call mpas_pool_get_array(forcingPool, 'sediment_thickness', sediment_thickness)
+      err = 0
+
+      call mpas_pool_get_array(sedimentTracers, 'sedConcen', sedConcen)
+      call mpas_pool_get_array(tendPool, 'sedimentTracersTend', sedimentTracersTend)
+      call mpas_pool_get_array(tendPool, 'sedimentTracersTend', sedimentTracersBedTend)
+      call mpas_pool_get_array(sedimentTracersTend, 'sedConcenTend', sedConcenBedTend)
+      call mpas_pool_get_array(sedimentTracersBedTend, 'sedConcenBedTend', sedConcenBedTend)
 
       call mpas_timer_start("sediment source-sink")
 
-      err = 0
+      allocate(kineticEnergyCell(nVertLevels,nCellsSolve))
 
       numColumns = 1
       column = 1
+      iTrac = 1
 
+      sedimentConc(iTrac,:,:) = sedimentTracers(1,:,:)!sedimentIndices%sedConcen
+      sedimentConcTend(iTrac,:,:) = sedimentTracersTend(1,:,:)!sedimentIndices%sedConcenTend
+      sedimentConcBedTend(iTrac,:) = sedimentTracersBedTend(1,:)!sedimentIndices%sedConcenTend
       do iCell=1,nCellsSolve
 !         SEDIMENT_input%number_of_active_levels(column) = maxLevelCell(iCell)
 !         do iLevel=1,maxLevelCell(iCell)
@@ -213,8 +227,8 @@ contains
          ! settling flux
          ! - maximum settling flux is that which settles all sediment in the bottom cell
          settling_flux(iCell) = MIN(w_settling(k,iCell)* &
-                                    sedimentTracers(k,iCell), &
-                                    sedimentTracers(k,iCell)* &
+                                    sedimentConc(iTrac,k,iCell), &
+                                    sedimentConc(iTrac,k,iCell)* &
                                     layerThickness(k,iCell)/dt )
          ! surface erosion mass flux ero_flux in unit (kg m-2 s-1)
          ! - maximum erosion flux uses all sediment available
@@ -224,9 +238,9 @@ contains
                                    sediment_thickness*rho_s/dt)
          ! total flux to the bed
          bed_flux(iCell) = erosion_flux(iCell) - settling_flux(iCell)
-         sedimentTracersTend(k,iCell) = sedimentTracersTend(k,iCell) + &
-                                        dt * bed_flux(iCell) / &
-                                        layerThickness(k,iCell)
+         sedimentConcTend(iTrac,k,iCell) = sedimentConcTend(iTrac,k,iCell) + &
+                                              dt * bed_flux(iCell) / &
+                                              layerThickness(k,iCell)
 
       enddo  !  iCell
 
@@ -237,6 +251,8 @@ contains
       sediment_thickness = MAX(0.0_RKIND, &
                                sediment_thickness + sedimentThicknessTend(iCell))
 
+      sedimentTracers(1,:,:) = sedimentConc(iTrac,:,:)!sedimentIndices%sedConcen
+      sedimentTracersTend(1,:,:) = sedimentConcTend(iTrac,:,:)!sedimentIndices%sedConcenTend
    !--------------------------------------------------------------------
 
    end subroutine ocn_tracer_sediment_compute!}}}
@@ -272,7 +288,7 @@ contains
       integer :: numColumnsMax, iTrac
 
       ! scalar pointers
-      integer, pointer :: nVertLevels, index_dummy
+      integer, pointer :: nVertLevels, nCells, index_dummy
 
       real (kind=RKIND) :: &
          rho_R, SD50, ND50, Vh, dstar, initial_sediment_thickness
@@ -309,6 +325,7 @@ contains
       !
 
         call mpas_pool_get_dimension(domain % blocklist % dimensions, 'nVertLevels', nVertLevels)
+        call mpas_pool_get_dimension(domain % blocklist % dimensions, 'nCells', nCells)
 
 !!-----------------------------------------------------------------------
 !!  initialize sediment parameters
@@ -359,7 +376,7 @@ contains
     !---------------------------------------------------------------------------
 
         ! COMPUTE Sediment settling velocity [m/s] 
-        allocate(w_settling(Sediment_tracer_cnt))
+        allocate(w_settling(nTracersSediment))
         w_settling(:) = 0.0_RKIND ! no settling velocity is added
         
         iTrac = 1 ! for now, only one sediment class
@@ -379,7 +396,9 @@ contains
            w_settling(iTrac) = Vh/SD50 * (sqrt(25.0_RKIND+1.2_RKIND*dstar**2) -&
                                           5.0_RKIND)**1.5_RKIND
         endif
-        sediment_thickness(:) = initial_sediment_thickness
+
+        allocate(sedimentThickness(sedimentThickness))
+        sedimentThickness(:) = config_sediment_initial_bed_thickness
 
     end if  !  associated(sedimentTracers)
 
