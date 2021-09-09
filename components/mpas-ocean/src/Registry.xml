@@ -813,7 +813,11 @@
 		/>
 		<nml_option name="config_sediment_settling_formulation" type="character" default_value="None" units="unitless"
 					description="Formulation to compute the sediment settling velocities"
-					possible_values=" 'None', 'Cheng', 'Soulsby' "
+					possible_values=" 'None', 'Cheng', 'Soulsby', 'Goldstein-Coco'"
+		/>
+		<nml_option name="config_sediment_initial_bed_thickness" type="real" default_value="10.0" units="m"
+					description="Set initial bed thickness"
+					possible_values="any non-negative values"
 		/>
 	</nml_record>
 	<nml_record name="vegetation_drag" mode="init;forward">
