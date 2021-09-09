@@ -893,7 +893,7 @@ contains
                                      nTracersGroup, forcingPool,  &
                                      dt, nCellsOwned, minLevelCell, maxLevelCell, &
                                      nVertLevels, layerThickness, &
-                                     w, tracerGroupTend, err)
+                                     w, tendPool, err)
 
          endif ! sediment
 
