@@ -26,8 +26,8 @@ module ocn_tracer_sediment
    use ocn_constants
 
 ! ZHENDONG: need turn those on or define those here later ...   
-   use SEDIMENT_mod
-   use SEDIMENT_parms
+!   use SEDIMENT_mod
+!   use SEDIMENT_parms
    !use BGC_mod
    !use BGC_parms
 
@@ -66,14 +66,14 @@ module ocn_tracer_sediment
 !  all of these are defined in sediment_mod
 !-----------------------------------------------------------------------
 
-  type(SEDIMENT_indices_type)    , public :: SEDIMENT_indices
-  type(SEDIMENT_input_type)      , public :: SEDIMENT_input
-  type(SEDIMENT_forcing_type)    , public :: SEDIMENT_forcing
-  type(SEDIMENT_output_type)     , public :: SEDIMENT_output
-  type(SEDIMENT_diagnostics_type), public :: SEDIMENT_diagnostic_fields
-
-! hold indices in tracer pool corresponding to each tracer array
-  type(SEDIMENT_indices_type), public :: sedimentIndices
+!  type(SEDIMENT_indices_type)    , public :: SEDIMENT_indices
+!  type(SEDIMENT_input_type)      , public :: SEDIMENT_input
+!  type(SEDIMENT_forcing_type)    , public :: SEDIMENT_forcing
+!  type(SEDIMENT_output_type)     , public :: SEDIMENT_output
+!  type(SEDIMENT_diagnostics_type), public :: SEDIMENT_diagnostic_fields
+!
+!! hold indices in tracer pool corresponding to each tracer array
+!  type(SEDIMENT_indices_type), public :: sedimentIndices
 
 !***********************************************************************
 
@@ -177,11 +177,11 @@ contains
       column = 1
 
       do iCell=1,nCellsSolve
-         SEDIMENT_input%number_of_active_levels(column) = maxLevelCell(iCell)
-         do iLevel=1,maxLevelCell(iCell)
-            SEDIMENT_input%cell_thickness(iLevel,column)    = layerThickness(iLevel,iCell)*convertLengthScale
-
-         enddo  !  iLevel
+!         SEDIMENT_input%number_of_active_levels(column) = maxLevelCell(iCell)
+!         do iLevel=1,maxLevelCell(iCell)
+!            SEDIMENT_input%cell_thickness(iLevel,column)    = layerThickness(iLevel,iCell)*convertLengthScale
+!
+!         enddo  !  iLevel
 
          !call SEDIMENT_SourceSink(SEDIMENT_indices, SEDIMENT_input, SEDIMENT_forcing,    &
          !                         SEDIMENT_output, SEDIMENT_diagnostic_fields,           &
@@ -282,6 +282,16 @@ contains
 
       err = 0
 
+      ! grain diameter
+      SD50 = 2.5e-4_RKIND
+      ! sieve diameter (SD50) to nominal diameter (ND50), Raudkivi [1990]
+      ND50 = SD50*1.1_RKIND
+      ! sediment/water density comparison  -> specific graivity
+      rho_R = rho_s/rho_w - 1! rhoS/rho0-1
+      ! kinematic viscosity
+      Vh = 1e-6_RKIND
+      initial_sediment_thickness = 10.0_RKIND
+
       !
       ! Get tracer group so we can get the number of tracers in it
       !
@@ -300,50 +310,50 @@ contains
 
         call mpas_pool_get_dimension(domain % blocklist % dimensions, 'nVertLevels', nVertLevels)
 
-!-----------------------------------------------------------------------
-!  initialize sediment parameters
-!-----------------------------------------------------------------------
-
-        allocate( SEDIMENT_indices%short_name(SEDIMENT_tracer_cnt) )
-        allocate( SEDIMENT_indices%long_name(SEDIMENT_tracer_cnt) )
-        allocate( SEDIMENT_indices%units(SEDIMENT_tracer_cnt) )
-
-
-!-----------------------------------------------------------------------
-!  sets most of sediment parameters
-!  sets namelist defaults
-!-----------------------------------------------------------------------
-
-        call SEDIMENT_parms_init
-
-! modify namelist values here....
-
-      !
-      ! for now only do 1 column at a time
-      !
-      numColumnsMax = 1
-
-      SEDIMENT_indices%sedConcen_ind      = 1
-
-      call mpas_pool_get_dimension(tracersPool, 'index_sedConcen',  index_dummy)
-        sedimentIndices%sedConcen_ind  = index_dummy
-! sediment_init sets short and long names, units in SEDIMENT_indices
-        call SEDIMENT_init(SEDIMENT_indices)
-
-!NOTES:
-
-!also check short_name with mpas variable name
-
-!-----------------------------------------------------------------------
-!  allocate input, forcing, diagnostic arrays
-!-----------------------------------------------------------------------
-
-        allocate ( SEDIMENT_input%SEDIMENT_tracers(nVertLevels, numColumnsMax, SEDIMENT_tracer_cnt) )
-        allocate ( SEDIMENT_input%cell_thickness(nVertLevels, numColumnsMax) )
-        allocate ( SEDIMENT_input%number_of_active_levels(numColumnsMax) )
-
-        allocate ( SEDIMENT_output%SEDIMENT_tendencies(nVertLevels, numColumnsMax, SEDIMENT_tracer_cnt) )
-
+!!-----------------------------------------------------------------------
+!!  initialize sediment parameters
+!!-----------------------------------------------------------------------
+!
+!        allocate( SEDIMENT_indices%short_name(SEDIMENT_tracer_cnt) )
+!        allocate( SEDIMENT_indices%long_name(SEDIMENT_tracer_cnt) )
+!        allocate( SEDIMENT_indices%units(SEDIMENT_tracer_cnt) )
+!
+!
+!!-----------------------------------------------------------------------
+!!  sets most of sediment parameters
+!!  sets namelist defaults
+!!-----------------------------------------------------------------------
+!
+!        call SEDIMENT_parms_init
+!
+!! modify namelist values here....
+!
+!      !
+!      ! for now only do 1 column at a time
+!      !
+!      numColumnsMax = 1
+!
+!      SEDIMENT_indices%sedConcen_ind      = 1
+!
+!      call mpas_pool_get_dimension(tracersPool, 'index_sedConcen',  index_dummy)
+!        sedimentIndices%sedConcen_ind  = index_dummy
+!! sediment_init sets short and long names, units in SEDIMENT_indices
+!        call SEDIMENT_init(SEDIMENT_indices)
+!
+!!NOTES:
+!
+!!also check short_name with mpas variable name
+!
+!!-----------------------------------------------------------------------
+!!  allocate input, forcing, diagnostic arrays
+!!-----------------------------------------------------------------------
+!
+!        allocate ( SEDIMENT_input%SEDIMENT_tracers(nVertLevels, numColumnsMax, SEDIMENT_tracer_cnt) )
+!        allocate ( SEDIMENT_input%cell_thickness(nVertLevels, numColumnsMax) )
+!        allocate ( SEDIMENT_input%number_of_active_levels(numColumnsMax) )
+!
+!        allocate ( SEDIMENT_output%SEDIMENT_tendencies(nVertLevels, numColumnsMax, SEDIMENT_tracer_cnt) )
+!
     !---------------------------------------------------------------------------
     !   allocate diagnostic output fields
     !---------------------------------------------------------------------------
@@ -352,16 +362,6 @@ contains
         allocate(w_settling(Sediment_tracer_cnt))
         w_settling(:) = 0.0_RKIND ! no settling velocity is added
         
-        ! grain diameter
-        SD50 = 2.5e-4_RKIND
-        ! sieve diameter (SD50) to nominal diameter (ND50), Raudkivi [1990]
-        ND50 = SD50*1.1_RKIND
-        ! sediment/water density comparison  -> specific graivity
-        rho_R = rho_s/rho_w - 1! rhoS/rho0-1
-        ! kinematic viscosity
-        Vh = 1e-6_RKIND
-        initial_sediment_thickness = 10.0_RKIND
-
         iTrac = 1 ! for now, only one sediment class
         if (config_sediment_settling_formulation == 'Goldstein-Coco') then
            ! Goldstein & Coco [2013]
