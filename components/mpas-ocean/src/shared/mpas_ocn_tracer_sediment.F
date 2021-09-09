@@ -151,8 +151,12 @@ contains
 
       integer :: iCell, iLevel, iTracer, numColumns, column
 
-      real (kind=RKIND) :: zTop, zBot, convertLengthScale = 100.0_RKIND
-      real (kind=RKIND) :: porosity = 0.5, tau_crit = 0.1, min_erosion_rate = 5e-4 
+      real (kind=RKIND) :: &
+         convertLengthScale = 100.0_RKIND, &
+         porosity = 0.5, &
+         tau_crit = 0.1, &
+         tau_mean, &
+         min_erosion_rate = 5e-4 
       
       real (kind=RKIND), dimension(:), allocatable :: &
          erosion_flux, settling_flux, bed_flux
@@ -200,23 +204,25 @@ contains
       call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, 2)
       call ocn_diagnostic_solve_kineticEnergy(normalVelocity, kineticEnergyCell)
       ! compute shear stress [m^2 s^{-2}]
-      tau_mean = bottomDrag(iCell) * kineticEnergyCell(maxLevelCell(iCell),iCell)
       ! tau_wave = 0.0_RKIND
       ! tau_mean = tau_tide*(1.0_RKIND+1.2_RKIND*(tau_wave/(tau_wave+tau_tide+eps))**1.5_RKIND)
 
       !DWJ 08/05/2016: This loop needs OpenMP added to it
       k = maxLevelCell(iCell)
       do iCell = 1, nCellsSolve
-         ! maximum settling flux is that which settles all sediment in the bottom cell
+         ! settling flux
+         ! - maximum settling flux is that which settles all sediment in the bottom cell
          settling_flux(iCell) = MIN(w_settling(k,iCell)* &
                                     sedimentTracers(k,iCell), &
                                     sedimentTracers(k,iCell)* &
                                     layerThickness(k,iCell)/dt )
          ! surface erosion mass flux ero_flux in unit (kg m-2 s-1)
-         ! maximum erosion flux uses all sediment available
+         ! - maximum erosion flux uses all sediment available
+         tau_mean = bottomDrag(iCell) * kineticEnergyCell(maxLevelCell(iCell),iCell)
          erosion_flux(iCell) = MIN((1.0_RKIND - porosity) * min_erosion_rate * &
                                    MAX(tau_mean/tau_crit - 1.0_RKIND, 0.0_RKIND), &
                                    sediment_thickness*rho_s/dt)
+         ! total flux to the bed
          bed_flux(iCell) = erosion_flux(iCell) - settling_flux(iCell)
          sedimentTracersTend(k,iCell) = sedimentTracersTend(k,iCell) + &
                                         dt * bed_flux(iCell) / &
@@ -359,18 +365,18 @@ contains
         iTrac = 1 ! for now, only one sediment class
         if (config_sediment_settling_formulation == 'Goldstein-Coco') then
            ! Goldstein & Coco [2013]
-           w_settling(iTrac) = (37.8_RKIND*ND50*rho_R*(1 + 100.0_RKIND*ND50))/   &
-                                (0.383_RKIND +                & 
-                                 1E4_RKIND*rho_R*Vh +     &
+           w_settling(iTrac) = (37.8_RKIND*ND50*rho_R*(1 + 100.0_RKIND*ND50))/ &
+                                (0.383_RKIND +                                 & 
+                                 1E4_RKIND*rho_R*Vh +                          &
                                  1E2_RKIND*ND50*rho_R**2)
         elseif (config_sediment_settling_formulation == 'Soulsby') then
-           w_settling(iTrac) = 10.36_RKIND*Vh/SD50 * &
-                                 (sqrt(1.0_RKIND + &
-                                       0.156_RKIND*rho_R*gravity*SD50**3.0_RKIND/ &
-                                       (16.0_RKIND*Vh**2.0) ) - 1)
+           w_settling(iTrac) = 10.36_RKIND*Vh/SD50 *                           &
+                               (sqrt(1.0_RKIND +                               &
+                                     0.156_RKIND*rho_R*gravity*SD50**3.0_RKIND/&
+                                     (16.0_RKIND*Vh**2.0) ) - 1)
         elseif (config_sediment_settling_formulation == 'Cheng') then
            dstar = SD50 * (rho_Ri*gravity/Vh**2.0_RKIND)**0.333_RKIND
-           w_settling(iTrac) = Vh/SD50 * (sqrt(25.0_RKIND+1.2_RKIND*dstar**2) - 
+           w_settling(iTrac) = Vh/SD50 * (sqrt(25.0_RKIND+1.2_RKIND*dstar**2) -&
                                           5.0_RKIND)**1.5_RKIND
         endif
         sediment_thickness(:) = initial_sediment_thickness
