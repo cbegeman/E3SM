@@ -133,6 +133,8 @@ set(BGC_FILES
   core_ocean/BGC/DMS_parms.F90
   core_ocean/BGC/MACROS_mod.F90
   core_ocean/BGC/MACROS_parms.F90
+  core_ocean/BGC/SEDIMENT_mod.F90
+  core_ocean/BGC/SEDIMENT_parms.F90
   core_ocean/BGC/co2calc.F90
 )
 
