@@ -791,6 +791,10 @@
 		/>
 	</nml_record>
 	<nml_record name="sediment_transport" mode="init;forward">
+		<nml_option name="config_sediment_size_classes" type="integer" default_value="1" units="unitless"
+					description="Sets the number of sediment tracers, each associated with a size class."
+					possible_values="Integer between 1 and 10"
+		/>
 		<nml_option name="config_sediment_bedload_enabled" type="logical" default_value=".false." units="unitless"
 					description="Controls if sediment bedload transport is computed."
 					possible_values=".true. or .false."

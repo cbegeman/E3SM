@@ -24,6 +24,7 @@ module ocn_tracer_sediment
    use mpas_derived_types
    use mpas_pool_routines
    use ocn_constants
+   use ocn_config
 
 ! ZHENDONG: need turn those on or define those here later ...   
    use SEDIMENT_mod
@@ -52,7 +53,7 @@ module ocn_tracer_sediment
              ocn_tracer_sediment_init
 
    integer, public:: &
-      numColumnsMax
+      nCells
 
    !--------------------------------------------------------------------
    !
@@ -67,7 +68,6 @@ module ocn_tracer_sediment
 
   type(SEDIMENT_indices_type)    , public :: SEDIMENT_indices
   type(SEDIMENT_input_type)      , public :: SEDIMENT_input
-  type(SEDIMENT_forcing_type)    , public :: SEDIMENT_forcing
   type(SEDIMENT_output_type)     , public :: SEDIMENT_output
   type(SEDIMENT_diagnostics_type), public :: SEDIMENT_diagnostic_fields
 
@@ -86,12 +86,12 @@ contains
 !> \author  Zhendong Cao, Mathew Maltrud
 !> \date    02/04/2021
 !> \details
-!>  This routine computes a tracer tendency due to sediment
+!>  This routine only places bounds on sediment concentration
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_tracer_sediment_compute(sedimentTracers, nTracersSediment, forcingPool, &
-      nCellsSolve, minLevelCell, maxLevelCell, nVertLevels, layerThickness, sedimentTracersTend, err)!{{{
+   subroutine ocn_tracer_sediment_compute(sedimentTracers, nTracersSediment, &
+      nCellsSolve, minLevelCell, maxLevelCell, nVertLevels, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -102,16 +102,6 @@ contains
       ! one dimensional arrays
       integer, dimension(:), intent(in) :: &
          minLevelCell, maxLevelCell
-
-      ! two dimensional arrays
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
-         layerThickness
-
-      ! three dimensional arrays
-      real (kind=RKIND), dimension(:,:,:), intent(in) :: &
-         sedimentTracers
-
-      type (mpas_pool_type), intent(in) :: forcingPool
 
       ! scalars
       integer, intent(in) :: nTracersSediment, nCellsSolve, nVertLevels
@@ -125,8 +115,9 @@ contains
       !
       !-----------------------------------------------------------------
 
+      ! three dimensional arrays
       real (kind=RKIND), dimension(:,:,:), intent(inout) :: &
-         sedimentTracersTend
+         sedimentTracers
 
       !-----------------------------------------------------------------
       !
@@ -142,29 +133,25 @@ contains
       !
       !-----------------------------------------------------------------
 
-      ! source/sink wants cm instead of m
-
-      real (kind=RKIND) :: zTop, zBot, convertLengthScale = 100.0_RKIND
-
-      integer :: iCell, iLevel, iTracer, numColumns, column
+      integer :: iCell, iLevel, iTracer
 
       call mpas_timer_start("sediment source-sink")
 
       err = 0
 
-      numColumns = 1
-      column = 1
-
       do iCell=1,nCellsSolve
-         SEDIMENT_input%number_of_active_levels(column) = maxLevelCell(iCell)
-         do iLevel=1,maxLevelCell(iCell)
-            SEDIMENT_input%cell_thickness(iLevel,column)    = layerThickness(iLevel,iCell)*convertLengthScale
-
-         enddo  !  iLevel
-
-         call SEDIMENT_SourceSink(SEDIMENT_indices, SEDIMENT_input, SEDIMENT_forcing,    &
+         SEDIMENT_input%number_of_active_levels(iCell) = maxLevelCell(iCell) - minLevelCell(iCell) + 1
+         do iTracer=1,nTracersSediment
+         SEDIMENT_input%SEDIMENT_tracers(:,iCell,iTracer) = &
+            sedimentTracers(iTracer,:,iCell)
+         enddo
+         call SEDIMENT_SourceSink(SEDIMENT_indices, SEDIMENT_input, &
                                   SEDIMENT_output, SEDIMENT_diagnostic_fields,           &
-                                  nVertLevels, numColumnsMax, numColumns)
+                                  nVertLevels, nCellsSolve)
+         do iTracer=1,nTracersSediment
+         sedimentTracers(iTracer,:,iCell) = &
+            SEDIMENT_output%SEDIMENT_tracers(:,iCell,iTracer)
+         enddo
 
       enddo  !  iCell
 
@@ -186,7 +173,7 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_tracer_sediment_surface_flux_compute(sedimentTracers, forcingPool,  &
+   subroutine ocn_tracer_sediment_surface_flux_compute(sedimentTracers, &
                                        nCellsSolve, zMid, sedimentSurfaceFlux, err)!{{{
 
       !-----------------------------------------------------------------
@@ -208,7 +195,6 @@ contains
       ! scalars
       integer, intent(in) :: nCellsSolve
 
-      type (mpas_pool_type), intent(inout) :: forcingPool
 
       !-----------------------------------------------------------------
       !
@@ -277,7 +263,7 @@ contains
         sedimentTracers
 
       ! scalars
-      integer :: numColumnsMax
+      integer :: nCells
 
       ! scalar pointers
       integer, pointer :: nVertLevels, index_dummy
@@ -304,15 +290,16 @@ contains
       ! pull nVertLevels out of the mesh structure
       !
 
-        call mpas_pool_get_dimension(domain % blocklist % dimensions, 'nVertLevels', nVertLevels)
+         call mpas_pool_get_dimension(domain % blocklist % dimensions, 'nVertLevels', nVertLevels)
+         call mpas_pool_get_dimension(domain % blocklist % dimensions, 'nCells', nCells)
 
 !-----------------------------------------------------------------------
 !  initialize sediment parameters
 !-----------------------------------------------------------------------
 
-        allocate( SEDIMENT_indices%short_name(SEDIMENT_tracer_cnt) )
-        allocate( SEDIMENT_indices%long_name(SEDIMENT_tracer_cnt) )
-        allocate( SEDIMENT_indices%units(SEDIMENT_tracer_cnt) )
+         allocate( SEDIMENT_indices%short_name(SEDIMENT_tracer_cnt) )
+         allocate( SEDIMENT_indices%long_name(SEDIMENT_tracer_cnt) )
+         allocate( SEDIMENT_indices%units(SEDIMENT_tracer_cnt) )
 
 
 !-----------------------------------------------------------------------
@@ -320,21 +307,14 @@ contains
 !  sets namelist defaults
 !-----------------------------------------------------------------------
 
-        call SEDIMENT_parms_init
+         call SEDIMENT_parms_init
 
-! modify namelist values here....
+         SEDIMENT_indices%sedConcen_ind      = 1
 
-      !
-      ! for now only do 1 column at a time
-      !
-      numColumnsMax = 1
-
-      SEDIMENT_indices%sedConcen_ind      = 1
-
-      call mpas_pool_get_dimension(tracersPool, 'index_sedConcen',  index_dummy)
-        sedimentIndices%sedConcen_ind  = index_dummy
+         call mpas_pool_get_dimension(tracersPool, 'index_sedConcen',  index_dummy)
+           sedimentIndices%sedConcen_ind  = index_dummy
 ! sediment_init sets short and long names, units in SEDIMENT_indices
-        call SEDIMENT_init(SEDIMENT_indices)
+         call SEDIMENT_init(SEDIMENT_indices)
 
 !NOTES:
 
@@ -344,18 +324,20 @@ contains
 !  allocate input, forcing, diagnostic arrays
 !-----------------------------------------------------------------------
 
-        allocate ( SEDIMENT_input%SEDIMENT_tracers(nVertLevels, numColumnsMax, SEDIMENT_tracer_cnt) )
-        allocate ( SEDIMENT_input%cell_thickness(nVertLevels, numColumnsMax) )
-        allocate ( SEDIMENT_input%number_of_active_levels(numColumnsMax) )
+         allocate ( SEDIMENT_input%SEDIMENT_tracers(nVertLevels, nCells, SEDIMENT_tracer_cnt) )
+         allocate ( SEDIMENT_input%cell_thickness(nVertLevels, nCells) )
+         allocate ( SEDIMENT_input%number_of_active_levels(nCells) )
 
-        allocate ( SEDIMENT_output%SEDIMENT_tendencies(nVertLevels, numColumnsMax, SEDIMENT_tracer_cnt) )
+         allocate ( SEDIMENT_output%SEDIMENT_tendencies(nVertLevels, nCells, SEDIMENT_tracer_cnt) )
+         allocate ( SEDIMENT_output%SEDIMENT_tracers(nVertLevels, nCells, SEDIMENT_tracer_cnt) )
 
     !---------------------------------------------------------------------------
     !   allocate diagnostic output fields
     !---------------------------------------------------------------------------
+         SEDIMENT_input%number_of_active_tracers = config_sediment_size_classes
 
 
-    end if  !  associated(sedimentTracers)
+      end if  !  associated(sedimentTracers)
 
 
 
