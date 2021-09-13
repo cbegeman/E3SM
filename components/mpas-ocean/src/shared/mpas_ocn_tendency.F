@@ -883,15 +883,12 @@ contains
          ! NOTE: must be called before ocn_tracer_surface_flux_tend
          !
          if ( groupName == 'sedimentTracers' ) then
-            call ocn_tracer_sediment_compute(tracerGroup, &
-                                     nTracersGroup,forcingPool,  &
-                                     nCellsOwned, minLevelCell, maxLevelCell, &
-                                     nVertLevels, layerThickness, &
-                                     tracerGroupTend, err)
+            call ocn_tracer_sediment_compute(tracerGroup, minLevelCell, &
+                                     maxLevelCell, tracerGroupTend, err)
 
-            call ocn_tracer_sediment_surface_flux_compute(tracerGroup, &
-                                     forcingPool, nCellsOwned, zMid,  &
-                                     tracerGroupSurfaceFlux, err)
+            call ocn_tracer_sediment_bed_flux_compute(tracerGroup, &
+                                     forcingPool, maxLevelCell,  &
+                                     tracerGroupTend, err)
          endif ! sediment
 
          !

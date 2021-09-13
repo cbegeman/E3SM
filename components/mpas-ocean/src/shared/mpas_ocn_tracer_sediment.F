@@ -52,9 +52,6 @@ module ocn_tracer_sediment
              ocn_tracer_sediment_surface_flux_compute,  &
              ocn_tracer_sediment_init
 
-   integer, public:: &
-      nCells
-
    !--------------------------------------------------------------------
    !
    ! Private module variables
@@ -90,8 +87,8 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_tracer_sediment_compute(sedimentTracers, nTracersSediment, &
-      nCellsSolve, minLevelCell, maxLevelCell, nVertLevels, err)!{{{
+   subroutine ocn_tracer_sediment_compute(sedimentTracers, minLevelCell, &
+      maxLevelCell, sedimentTracersTend, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -99,16 +96,13 @@ contains
       !
       !-----------------------------------------------------------------
 
-      ! one dimensional arrays
-      integer, dimension(:), intent(in) :: &
+      real (kind=RKIND), dimension(:), intent(in) :: &
          minLevelCell, maxLevelCell
-
-      ! scalars
-      integer, intent(in) :: nTracersSediment, nCellsSolve, nVertLevels
-
       !
       ! two dimensional pointers
       !
+      ! three dimensional arrays
+
       !-----------------------------------------------------------------
       !
       ! input/output variables
@@ -117,7 +111,7 @@ contains
 
       ! three dimensional arrays
       real (kind=RKIND), dimension(:,:,:), intent(inout) :: &
-         sedimentTracers
+         sedimentTracers, sedimentTracersTend
 
       !-----------------------------------------------------------------
       !
@@ -134,10 +128,16 @@ contains
       !-----------------------------------------------------------------
 
       integer :: iCell, iLevel, iTracer
+      integer :: nTracersSediment, nCellsSolve, nVertLevels
+
 
       call mpas_timer_start("sediment source-sink")
 
       err = 0
+      
+      nTracersSediment = size(sedimentTracers, dim=1)
+      nCellsSolve = size(sedimentTracers, dim=2)
+      nVertLevels = size(sedimentTracers, dim=3)
 
       do iCell=1,nCellsSolve
          SEDIMENT_input%number_of_active_levels(iCell) = maxLevelCell(iCell) - minLevelCell(iCell) + 1
@@ -146,7 +146,7 @@ contains
             sedimentTracers(iTracer,:,iCell)
          enddo
          call SEDIMENT_SourceSink(SEDIMENT_indices, SEDIMENT_input, &
-                                  SEDIMENT_output, SEDIMENT_diagnostic_fields,           &
+                                  SEDIMENT_output, SEDIMENT_diagnostic_fields, &
                                   nVertLevels, nCellsSolve)
          do iTracer=1,nTracersSediment
          sedimentTracers(iTracer,:,iCell) = &
@@ -173,8 +173,9 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_tracer_sediment_surface_flux_compute(sedimentTracers, &
-                                       nCellsSolve, zMid, sedimentSurfaceFlux, err)!{{{
+   subroutine ocn_tracer_sediment_bed_flux_compute(sedimentTracers, &
+      forcingPool, maxLevelCell, &
+      sedimentTracersTend, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -182,25 +183,25 @@ contains
       !
       !-----------------------------------------------------------------
 
-      ! two dimensional arrays
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
-         zMid
-      real (kind=RKIND), dimension(:,:), intent(inout) :: &
-         sedimentSurfaceFlux
+      ! one dimensional arrays
+      integer, dimension(:), intent(in) :: &
+         maxLevelCell
 
+      ! two dimensional arrays
       ! three dimensional arrays
       real (kind=RKIND), dimension(:,:,:), intent(in) :: &
          sedimentTracers
 
-      ! scalars
-      integer, intent(in) :: nCellsSolve
-
+      type (mpas_pool_type), intent(in) :: forcingPool
 
       !-----------------------------------------------------------------
       !
       ! input/output variables
       !
       !-----------------------------------------------------------------
+      ! three dimensional arrays
+      real (kind=RKIND), dimension(:,:,:), intent(inout) :: &
+         sedimentTracersTend
 
       !-----------------------------------------------------------------
       !
@@ -216,20 +217,65 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: iCell
+      integer :: iCell, iTracer, k
+      integer :: nTracersSediment, nCellsSolve
 
-      call mpas_timer_start("sediment surface flux")
+      real (kind=RKIND), dimension(:), allocatable :: &
+         erosion_flux, settling_flux, bed_flux
+      
+      real (kind=RKIND), dimension(:,:), allocatable :: &
+         kineticEnergyCell
+      
+      real (kind=RKIND) :: &
+         convertLengthScale = 100.0_RKIND, &
+         porosity = 0.5, &
+         tau_crit = 0.1, &
+         tau_mean, &
+         sedimentThickness = 10.0_RKIND, &
+         min_erosion_rate = 5e-4 
+      
+      real (kind=RKIND), dimension(:), pointer :: bottomDrag
+
+      call mpas_timer_start("sediment bed flux")
 
       err = 0
 
-      ! fluxes are zero
+      call mpas_pool_get_array(forcingPool, 'bottomDrag', bottomDrag)
 
-      !DWJ 08/05/2016: This loop needs OpenMP added to it
+      nTracersSediment = size(sedimentTracers, dim=1)
+      nCellsSolve = size(sedimentTracers, dim=2)
+      allocate(kineticEnergyCell(nVertLevels,nCellsSolve))
+      kineticEnergyCell(:,:) = 0.0_RKIND
+
+      !$omp parallel
+      !$omp do schedule(runtime) private(remainingFlux, k, iTracer)
       do iCell = 1, nCellsSolve
-
+         k = maxLevelCell(iCell)
+         do iTracer = 1, nTracersSediment
+            ! settling flux
+            ! - maximum settling flux is that which settles all sediment in the bottom cell
+            settling_flux(iCell) = MIN(w_settling(k,iCell)* &
+                                       sedimentTracers(iTrac,k,iCell), &
+                                       sedimentTracers(iTrac,k,iCell)* &
+                                       layerThickness(k,iCell)/dt )
+            ! surface erosion mass flux ero_flux in unit (kg m-2 s-1)
+            ! - maximum erosion flux uses all sediment available
+            tau_mean = bottomDrag(iCell) * kineticEnergyCell(k,iCell)
+            erosion_flux(iCell) = MIN((1.0_RKIND - porosity) * min_erosion_rate * &
+                                      MAX(tau_mean/tau_crit - 1.0_RKIND, 0.0_RKIND), &
+                                      sediment_thickness*rho_s/dt)
+            ! total flux to the bed
+            bed_flux(iCell) = erosion_flux(iCell) - settling_flux(iCell)
+            sedimentTracersTend(iTrac,k,iCell) = sedimentTracersTend(iTrac,k,iCell) + &
+                                                 dt * bed_flux(iCell) / &
+                                                 layerThickness(k,iCell)
+   
+         enddo  !  iTracer
       enddo  !  iCell
+      !$omp end do
+      !$omp end parallel
 
-      call mpas_timer_stop("sediment surface flux")
+      call mpas_timer_stop("sediment bed flux")
 
    !--------------------------------------------------------------------
 
@@ -262,11 +308,8 @@ contains
       real (kind=RKIND), dimension(:,:,:), pointer :: &
         sedimentTracers
 
-      ! scalars
-      integer :: nCells
-
       ! scalar pointers
-      integer, pointer :: nVertLevels, index_dummy
+      integer, pointer :: nVertLevels, index_dummy, nCells
 
       !
       ! get tracers pools
