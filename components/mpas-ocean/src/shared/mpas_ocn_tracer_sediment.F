@@ -49,7 +49,7 @@ module ocn_tracer_sediment
    !--------------------------------------------------------------------
 
    public :: ocn_tracer_sediment_compute, &
-             ocn_tracer_sediment_surface_flux_compute,  &
+             ocn_tracer_sediment_bed_flux_compute,  &
              ocn_tracer_sediment_init
 
    !--------------------------------------------------------------------
@@ -57,6 +57,9 @@ module ocn_tracer_sediment
    ! Private module variables
    !
    !--------------------------------------------------------------------
+   real(kind=RKIND) :: rho_s = 2650, rho_w = 1020
+   real(kind=RKIND), dimension(:), allocatable :: &
+      wSettling, sedimentThickness
 
 !-----------------------------------------------------------------------
 !  name the necessary sediment derived types
@@ -96,7 +99,7 @@ contains
       !
       !-----------------------------------------------------------------
 
-      real (kind=RKIND), dimension(:), intent(in) :: &
+      integer, dimension(:), intent(in) :: &
          minLevelCell, maxLevelCell
       !
       ! two dimensional pointers
@@ -163,7 +166,7 @@ contains
 
 !***********************************************************************
 !
-!  routine ocn_tracer_sediment_surface_flux_compute
+!  routine ocn_tracer_sediment_bed_flux_compute
 !
 !> \brief   computes a tracer tendency due to sediment
 !> \author  Zhendong Cao, Mathew Maltrud
@@ -174,7 +177,7 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_tracer_sediment_bed_flux_compute(sedimentTracers, &
-      forcingPool, maxLevelCell, &
+      forcingPool, maxLevelCell, dt, layerThickness, &
       sedimentTracersTend, err)!{{{
 
       !-----------------------------------------------------------------
@@ -182,12 +185,16 @@ contains
       ! input variables
       !
       !-----------------------------------------------------------------
+      real (kind=RKIND), intent(in) :: dt
 
       ! one dimensional arrays
       integer, dimension(:), intent(in) :: &
          maxLevelCell
 
       ! two dimensional arrays
+      real (kind=RKIND), dimension(:,:), intent(in) :: &
+         layerThickness
+
       ! three dimensional arrays
       real (kind=RKIND), dimension(:,:,:), intent(in) :: &
          sedimentTracers
@@ -217,21 +224,20 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: iCell, iTracer, k
-      integer :: nTracersSediment, nCellsSolve
+      integer :: iCell, iTrac, k
+      integer :: nTracersSediment, nCellsSolve, nVertLevels
 
       real (kind=RKIND), dimension(:), allocatable :: &
-         erosion_flux, settling_flux, bed_flux
+         erosionFlux 
       
       real (kind=RKIND), dimension(:,:), allocatable :: &
-         kineticEnergyCell
+         kineticEnergyCell, settlingFlux, bedFlux
       
       real (kind=RKIND) :: &
          convertLengthScale = 100.0_RKIND, &
          porosity = 0.5, &
          tau_crit = 0.1, &
          tau_mean, &
-         sedimentThickness = 10.0_RKIND, &
          min_erosion_rate = 5e-4 
       
       real (kind=RKIND), dimension(:), pointer :: bottomDrag
@@ -244,30 +250,40 @@ contains
 
       nTracersSediment = size(sedimentTracers, dim=1)
       nCellsSolve = size(sedimentTracers, dim=2)
+      nVertLevels = size(sedimentTracers, dim=3)
+      allocate(erosionFlux(nCellsSolve))
+      allocate(settlingFlux(nTracersSediment,nCellsSolve), &
+               bedFlux(nTracersSediment,nCellsSolve))
+      
       allocate(kineticEnergyCell(nVertLevels,nCellsSolve))
       kineticEnergyCell(:,:) = 0.0_RKIND
+      allocate(wSettling(nTracersSediment))
+      wSettling(:) = 0.0_RKIND ! no settling velocity is added
+      allocate(sedimentThickness(nCellsSolve))
+      sedimentThickness(:) = 10.0_RKIND
 
       !$omp parallel
       !$omp do schedule(runtime) private(remainingFlux, k, iTracer)
       do iCell = 1, nCellsSolve
          k = maxLevelCell(iCell)
-         do iTracer = 1, nTracersSediment
+         ! surface erosion mass flux ero_flux in unit (kg m-2 s-1)
+         ! - maximum erosion flux uses all sediment available
+         tau_mean = bottomDrag(iCell) * kineticEnergyCell(k,iCell)
+         ! TODO scale erosion flux by bed compostion
+         erosionFlux(iCell) = MIN((1.0_RKIND - porosity) * min_erosion_rate * &
+                                   MAX(tau_mean/tau_crit - 1.0_RKIND, 0.0_RKIND), &
+                                   sedimentThickness(iCell)*rho_s/dt)
+         do iTrac = 1, nTracersSediment
             ! settling flux
             ! - maximum settling flux is that which settles all sediment in the bottom cell
-            settling_flux(iCell) = MIN(w_settling(k,iCell)* &
-                                       sedimentTracers(iTrac,k,iCell), &
-                                       sedimentTracers(iTrac,k,iCell)* &
-                                       layerThickness(k,iCell)/dt )
-            ! surface erosion mass flux ero_flux in unit (kg m-2 s-1)
-            ! - maximum erosion flux uses all sediment available
-            tau_mean = bottomDrag(iCell) * kineticEnergyCell(k,iCell)
-            erosion_flux(iCell) = MIN((1.0_RKIND - porosity) * min_erosion_rate * &
-                                      MAX(tau_mean/tau_crit - 1.0_RKIND, 0.0_RKIND), &
-                                      sediment_thickness*rho_s/dt)
+            settlingFlux(iTrac,iCell) = MIN(wSettling(iTrac)* &
+                                            sedimentTracers(iTrac,k,iCell), &
+                                            sedimentTracers(iTrac,k,iCell)* &
+                                            layerThickness(k,iCell)/dt )
             ! total flux to the bed
-            bed_flux(iCell) = erosion_flux(iCell) - settling_flux(iCell)
+            bedFlux(iTrac,iCell) = erosionFlux(iCell) - settlingFlux(iTrac,iCell)
             sedimentTracersTend(iTrac,k,iCell) = sedimentTracersTend(iTrac,k,iCell) + &
-                                                 dt * bed_flux(iCell) / &
+                                                 dt * bedFlux(iTrac,iCell) / &
                                                  layerThickness(k,iCell)
    
          enddo  !  iTracer
@@ -279,7 +295,7 @@ contains
 
    !--------------------------------------------------------------------
 
-   end subroutine ocn_tracer_sediment_surface_flux_compute!}}}
+   end subroutine ocn_tracer_sediment_bed_flux_compute!}}}
 
 !***********************************************************************
 !

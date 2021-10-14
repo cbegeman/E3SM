@@ -887,8 +887,8 @@ contains
                                      maxLevelCell, tracerGroupTend, err)
 
             call ocn_tracer_sediment_bed_flux_compute(tracerGroup, &
-                                     forcingPool, maxLevelCell,  &
-                                     tracerGroupTend, err)
+                                     forcingPool, maxLevelCell, dt, &
+                                     layerThickness, tracerGroupTend, err)
          endif ! sediment
 
          !
