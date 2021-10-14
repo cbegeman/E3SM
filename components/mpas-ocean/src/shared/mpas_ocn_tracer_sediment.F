@@ -62,21 +62,6 @@ module ocn_tracer_sediment
    real(kind=RKIND) :: rho_s = 2650, rho_w = 1020
    real(kind=RKIND), dimension(:), allocatable :: &
       w_settling, sedimentThickness
-!-----------------------------------------------------------------------
-!  name the necessary sediment derived types
-!  all of these are defined in sediment_mod
-!-----------------------------------------------------------------------
-
-!  type(SEDIMENT_indices_type)    , public :: SEDIMENT_indices
-!  type(SEDIMENT_input_type)      , public :: SEDIMENT_input
-!  type(SEDIMENT_forcing_type)    , public :: SEDIMENT_forcing
-!  type(SEDIMENT_output_type)     , public :: SEDIMENT_output
-!  type(SEDIMENT_diagnostics_type), public :: SEDIMENT_diagnostic_fields
-!
-!! hold indices in tracer pool corresponding to each tracer array
-!  type(SEDIMENT_indices_type), public :: sedimentIndices
-
-!***********************************************************************
 
 contains
 
@@ -187,20 +172,10 @@ contains
       column = 1
       iTrac = 1
 
-      sedimentConc(iTrac,:,:) = sedimentTracers(1,:,:)!sedimentIndices%sedConcen
-      sedimentConcTend(iTrac,:,:) = sedimentTracersTend(1,:,:)!sedimentIndices%sedConcenTend
-      sedimentConcBedTend(iTrac,:) = sedimentTracersBedTend(1,:)!sedimentIndices%sedConcenTend
+      sedimentConc(iTrac,:,:) = sedimentTracers(1,:,:)
+      sedimentConcTend(iTrac,:,:) = sedimentTracersTend(1,:,:)
+      sedimentConcBedTend(iTrac,:) = sedimentTracersBedTend(1,:)
       do iCell=1,nCellsSolve
-!         SEDIMENT_input%number_of_active_levels(column) = maxLevelCell(iCell)
-!         do iLevel=1,maxLevelCell(iCell)
-!            SEDIMENT_input%cell_thickness(iLevel,column)    = layerThickness(iLevel,iCell)*convertLengthScale
-!
-!         enddo  !  iLevel
-
-         !call SEDIMENT_SourceSink(SEDIMENT_indices, SEDIMENT_input, SEDIMENT_forcing,    &
-         !                         SEDIMENT_output, SEDIMENT_diagnostic_fields,           &
-         !                         nVertLevels, numColumnsMax, numColumns)
-         
          ! w is the velocity through the top interface and w_settling applies to
          ! bottom interface
          do k=minLevelCell(iCell)+1,maxLevelCell(iCell)
@@ -217,9 +192,6 @@ contains
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, 2)
       call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, 2)
       call ocn_diagnostic_solve_kineticEnergy(normalVelocity, kineticEnergyCell)
-      ! compute shear stress [m^2 s^{-2}]
-      ! tau_wave = 0.0_RKIND
-      ! tau_mean = tau_tide*(1.0_RKIND+1.2_RKIND*(tau_wave/(tau_wave+tau_tide+eps))**1.5_RKIND)
 
       !DWJ 08/05/2016: This loop needs OpenMP added to it
       k = maxLevelCell(iCell)
@@ -230,8 +202,12 @@ contains
                                     sedimentConc(iTrac,k,iCell), &
                                     sedimentConc(iTrac,k,iCell)* &
                                     layerThickness(k,iCell)/dt )
+         
          ! surface erosion mass flux ero_flux in unit (kg m-2 s-1)
          ! - maximum erosion flux uses all sediment available
+         
+         ! compute shear stress [m^2 s^{-2}]
+         ! TODO Make sure that tidal velocity is accounted for in kineticEnergyCell
          tau_mean = bottomDrag(iCell) * kineticEnergyCell(maxLevelCell(iCell),iCell)
          erosion_flux(iCell) = MIN((1.0_RKIND - porosity) * min_erosion_rate * &
                                    MAX(tau_mean/tau_crit - 1.0_RKIND, 0.0_RKIND), &
@@ -251,8 +227,8 @@ contains
       sediment_thickness = MAX(0.0_RKIND, &
                                sediment_thickness + sedimentThicknessTend(iCell))
 
-      sedimentTracers(1,:,:) = sedimentConc(iTrac,:,:)!sedimentIndices%sedConcen
-      sedimentTracersTend(1,:,:) = sedimentConcTend(iTrac,:,:)!sedimentIndices%sedConcenTend
+      sedimentTracers(1,:,:) = sedimentConc(iTrac,:,:)
+      sedimentTracersTend(1,:,:) = sedimentConcTend(iTrac,:,:)
    !--------------------------------------------------------------------
 
    end subroutine ocn_tracer_sediment_compute!}}}
@@ -326,54 +302,6 @@ contains
 
         call mpas_pool_get_dimension(domain % blocklist % dimensions, 'nVertLevels', nVertLevels)
         call mpas_pool_get_dimension(domain % blocklist % dimensions, 'nCells', nCells)
-
-!!-----------------------------------------------------------------------
-!!  initialize sediment parameters
-!!-----------------------------------------------------------------------
-!
-!        allocate( SEDIMENT_indices%short_name(SEDIMENT_tracer_cnt) )
-!        allocate( SEDIMENT_indices%long_name(SEDIMENT_tracer_cnt) )
-!        allocate( SEDIMENT_indices%units(SEDIMENT_tracer_cnt) )
-!
-!
-!!-----------------------------------------------------------------------
-!!  sets most of sediment parameters
-!!  sets namelist defaults
-!!-----------------------------------------------------------------------
-!
-!        call SEDIMENT_parms_init
-!
-!! modify namelist values here....
-!
-!      !
-!      ! for now only do 1 column at a time
-!      !
-!      numColumnsMax = 1
-!
-!      SEDIMENT_indices%sedConcen_ind      = 1
-!
-!      call mpas_pool_get_dimension(tracersPool, 'index_sedConcen',  index_dummy)
-!        sedimentIndices%sedConcen_ind  = index_dummy
-!! sediment_init sets short and long names, units in SEDIMENT_indices
-!        call SEDIMENT_init(SEDIMENT_indices)
-!
-!!NOTES:
-!
-!!also check short_name with mpas variable name
-!
-!!-----------------------------------------------------------------------
-!!  allocate input, forcing, diagnostic arrays
-!!-----------------------------------------------------------------------
-!
-!        allocate ( SEDIMENT_input%SEDIMENT_tracers(nVertLevels, numColumnsMax, SEDIMENT_tracer_cnt) )
-!        allocate ( SEDIMENT_input%cell_thickness(nVertLevels, numColumnsMax) )
-!        allocate ( SEDIMENT_input%number_of_active_levels(numColumnsMax) )
-!
-!        allocate ( SEDIMENT_output%SEDIMENT_tendencies(nVertLevels, numColumnsMax, SEDIMENT_tracer_cnt) )
-!
-    !---------------------------------------------------------------------------
-    !   allocate diagnostic output fields
-    !---------------------------------------------------------------------------
 
         ! COMPUTE Sediment settling velocity [m/s] 
         allocate(w_settling(nTracersSediment))
