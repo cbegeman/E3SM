@@ -568,6 +568,7 @@ contains
 
       real (kind=RKIND), dimension(:,:), pointer, contiguous :: &
          layerThickness,               &! layer thickness
+         normalVelocity,               &! normal velocity
          tracerGroupSurfaceFlux,       &! tracer flux at surface
          fractionAbsorbed,             &! frac sfc flux aborbed
          fractionAbsorbedRunoff,       &! frac runoff flux aborbed
@@ -586,7 +587,6 @@ contains
       ! Scratch Arrays
       real (kind=RKIND), dimension(:,:), allocatable :: &
          normalThicknessFlux, & ! Flux of thickness through edge (m^2/s)
-         w_settling, & ! additional diasurface velocity associated with tracer buoyancy
          w ! diasurface vertical velocity of tracer across the top interface
 
       ! End preamble
@@ -629,6 +629,8 @@ contains
 
       call mpas_pool_get_array(statePool,   'layerThickness', &
                                              layerThickness, timeLevel)
+      call mpas_pool_get_array(statePool,   'normalVelocity', &
+                                             normalVelocity, timeLevel)
       call mpas_pool_get_array(forcingPool, 'penetrativeTemperatureFlux', &
                                              penetrativeTemperatureFlux)
       call mpas_pool_get_array(forcingPool, 'fractionAbsorbed', &
@@ -639,7 +641,6 @@ contains
       ! allocate and transfer data not specific to tracer groups
       allocate(normalThicknessFlux(nVertLevels, nEdgesAll+1))
       allocate(w(nVertLevels, nCellsAll))
-      allocate(w_settling(nVertLevels+1, nCellsAll))
 
       !$acc enter data create(normalThicknessFlux) &
       !$acc            copyin(layerThickness)
@@ -888,12 +889,11 @@ contains
          ! NOTE: must be called before ocn_tracer_surface_flux_tend
          !
          if ( groupName == 'sedimentTracers' ) then
-            write(*,*) 'Call ocn_tracer_sediment_compute'
             call ocn_tracer_sediment_compute(tracerGroup, &
                                      nTracersGroup, forcingPool,  &
                                      dt, nCellsOwned, minLevelCell, maxLevelCell, &
                                      nVertLevels, layerThickness, &
-                                     w, tendPool, err)
+                                     w, normalVelocity, tracerGroupTend, err)
 
          endif ! sediment
 
@@ -1071,7 +1071,6 @@ contains
                             normalThicknessFlux, w, &
                             layerThickness, dt, tracerGroupTend, &
                             computeBudgets)
-
          !$acc update host (activeTracerHorizontalAdvectionEdgeFlux, &
          !$acc              activeTracerHorizontalAdvectionTendency, &
          !$acc              activeTracerVerticalAdvectionTopFlux, &
