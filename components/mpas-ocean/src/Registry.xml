@@ -819,6 +819,15 @@
 					description="Set initial bed thickness"
 					possible_values="any non-negative values"
 		/>
+               <nml_option name="config_sediment_grain_diameter" type="real" default_value="0.00025" units="m"
+                                        description="Median grain diameter"
+					possible_values="any non-negative values"
+               />
+               <nml_option name="config_sediment_grain_density" type="real" default_value="2650.0" units="kg m^{-3}"
+                                        description="Grain density"
+					possible_values="any non-negative values"
+               />
+ 
 	</nml_record>
 	<nml_record name="vegetation_drag" mode="init;forward">
 		<nml_option name="config_use_vegetation_drag" type="logical" default_value=".false." units="unitless"
@@ -3372,32 +3381,12 @@
 			 packages="tidalForcing"
 		/>
 		<!-- Input fields for sediment transport -->
-		<var name="sedimentGrainDiameter" type="real" dimensions="nCells" units="m"
-			 description="Median grain diameter of each sediment class"
-			 packages="sedimentTransportPKG"
-		/>
-		<var name="sedimentGrainDensity" type="real" dimensions="nCells" units="kg m^{-3}"
-			 description="Grain density of each sediment class"
-			 packages="sedimentTransportPKG"
-		/>
 		<var name="sedimentSettlingVelocity" type="real" dimensions="nCells" units="m s^{-1}"
 			 description="Sediment settling velocity"
 			 packages="sedimentTransportPKG"
 		/>
-		<var name="sedimentClassFraction" type="real" dimensions="nCells Time" units=""
-			 description="Fraction of each sediment class on bed sediment layer"
-			 packages="sedimentTransportPKG"
-		/>
-		<var name="sedimentBedloadTransportRate" type="real" dimensions="nCells Time" units="kg m^{-1} s^{-1}"
-			 description="Sediment bedload transport rate"
-			 packages="sedimentTransportPKG"
-		/>
-		<var name="sedimentBedloadTransportCoeff" type="real" dimensions="nCells" units=""
-			 description="Sediment bedload transport coefficient (0, 1.0)"
-			 packages="sedimentTransportPKG"
-		/>
-		<var name="sedimentCrticalErosionShear" type="real" dimensions="nCells" units="m^2 s^2"
-			 description="crtical erosion shear stress"
+		<var name="sedimentCritErosionShear" type="real" dimensions="nCells" units="m^2 s^2"
+			 description="critical erosion shear stress"
 			 packages="sedimentTransportPKG"
 		/>
 		<var name="sedimentErodibilityConstant" type="real" dimensions="nCells" units="kg m^{-2} s^{-1}"
