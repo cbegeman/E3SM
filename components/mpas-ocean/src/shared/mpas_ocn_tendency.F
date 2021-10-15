@@ -890,7 +890,7 @@ contains
          !
          if ( groupName == 'sedimentTracers' ) then
             call ocn_tracer_sediment_compute(tracerGroup, &
-                                     nTracersGroup, forcingPool,  &
+                                     nTracersGroup, &
                                      dt, nCellsOwned, minLevelCell, maxLevelCell, &
                                      nVertLevels, layerThickness, &
                                      w, normalVelocity, tracerGroupTend, err)
