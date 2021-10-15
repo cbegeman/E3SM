@@ -47,7 +47,7 @@
 		<var_struct name="tracers" time_levs="2">
 			<var_array name="sedimentTracers" dimensions="nVertLevels nCells Time" type="real" packages="sedimentTracersPKG" >
 				<!-- Add constituents of tracer group -->
-				<var name="sedConcen" array_group="sedimentGRP" units="kg m^{-3}"
+				<var name="sedimentTracers" array_group="sedimentGRP" units="kg m^{-3}"
           description="(suspended) sediment Concentration"
 				/>
 			</var_array>
@@ -58,32 +58,34 @@
 		<var_struct name="tracersTend" time_levs="1">
 			<var_array name="sedimentTracersTend" type="real" dimensions="nVertLevels nCells Time" packages="sedimentTracersPKG">
 				<!-- Add constituents of tracer group -->
-				<var name="sedConcenTend" array_group="sedimentGRP" units="kg m^{-3} s^{-1}"
+				<var name="sedimentTracersTend" array_group="sedimentGRP" units="kg m^{-3} s^{-1}"
           description="(suspended) sediment Cocentration Tendency"
 				/>
 			</var_array>
 		</var_struct>
 		<var_struct name="tracersBedTend" time_levs="1">
 			<var_array name="sedimentTracersBedTend" type="real" dimensions="nCells Time" packages="sedimentTracersPKG">
-				<var name="sedConcenBedTend" array_group="sedimentTracerFluxGRP" units="m s^{-1}"
+				<var name="sedimentTracersBedTend" array_group="sedimentTracerFluxGRP" units="m s^{-1}"
           description="Thickness tendency of sediment layer at the seafloor. Positive means thickening of sediment layer"
 				/>
+			</var_array>
+		</var_struct>
 	</var_struct>
 
 	<var_struct name="forcing" time_levs="1">
 		<var_struct name="tracersSurfaceFlux" time_levs="1">
 			<var_array name="sedimentTracersSurfaceFlux" type="real" dimensions="nCells Time" packages="sedimentTracersPKG">
-				<var name="sedConcenSurfaceFlux" array_group="sedimentTracerFluxGRP" units="kg m^{-3} m s^{-1}"
+				<var name="sedimentTracersSurfaceFlux" array_group="sedimentSurfaceFluxGRP" units="kg m^{-3} m s^{-1}"
           description="Flux of (suspended) sediment Concentration through the ocean surface. Positive into ocean"
 				/>
 			</var_array>
 			<var_array name="sedimentTracersSurfaceFluxRunoff" type="real" dimensions="nCells Time" packages="sedimentTracersPKG">
-				<var name="sedConcenSurfaceFluxRunoff" array_group="sedimentRunoffFluxGRP" units="kg m^{-3} m s^{-1}"
+				<var name="sedimentTracersSurfaceFluxRunoff" array_group="sedimentRunoffFluxGRP" units="kg m^{-3} m s^{-1}"
 					description="Flux of (suspended) sediment through the ocean surface due to river runoff. Positive into ocean"
 				/>
 			</var_array>
 			<var_array name="sedimentTracersSurfaceFluxRemoved" type="real" dimensions="nCells Time" packages="sedimentTracersPKG">
-        <var name="sedConcenSurfaceFluxRemoved" array_group="sedimentRemovedFluxGRP" units="kg m^{-3} m s^{-1}"
+        <var name="sedimentTracersSurfaceFluxRemoved" array_group="sedimentRemovedFluxGRP" units="kg m^{-3} m s^{-1}"
 			 description="Flux of (suspended) sediment that is ignored coming into the ocean. Positive into ocean."
 				/>
 			</var_array>
