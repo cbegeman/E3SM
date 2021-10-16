@@ -215,8 +215,9 @@ contains
                                                  dt * bedFlux(iCell) / &
                                                  layerThickness(k,iCell)
          enddo  !  iCell
+         ! TODO check sign of bedFlux
          write(*,*) 'bedFlux',bedFlux(1), 'settlingFlux', settlingFlux(1), 'erosionFlux', erosionFlux(1)
-         write(*,*) 'sedimentTracersTend',sedimentTracersTend(1,1,1)
+         write(*,*) 'sedimentTracersTend',sedimentTracersTend(1,maxLevelCell(1),1)
 
          !write(*,*) '-- compute sedimentThicknessTend'
          !do iCell = 1, nCellsSolve
