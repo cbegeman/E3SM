@@ -159,7 +159,7 @@ contains
       do iCell=1,nCellsSolve
          ! w is the velocity through the top interface and wSettling applies to
          ! bottom interface
-         do k=minLevelCell(iCell)+1, maxLevelCell(iCell)
+         do k=minLevelCell(iCell)+1, maxLevelCell(iCell)+1
             w(k,iCell) = w(k,iCell) - wSettling(iTrac)
          enddo  !  iLevel
 
@@ -178,7 +178,6 @@ contains
 
          !DWJ 08/05/2016: This loop needs OpenMP added to it
          ! Only the tendency at the bottom of the domain is computed
-         write(*,*) '-- compute settlingFlux'
          do iCell = 1, nCellsSolve
             k = maxLevelCell(iCell)
             ! settling flux
@@ -187,54 +186,45 @@ contains
                                       sedimentTracers(iTrac,k,iCell), &
                                       sedimentTracers(iTrac,k,iCell) * &
                                       layerThickness(k,iCell)/dt )
-         enddo  !  iCell
-            
-         write(*,*) '-- compute erosionFlux'
-         do iCell = 1, nCellsSolve
-            k = maxLevelCell(iCell)
+
             ! surface erosion mass flux ero_flux in unit (kg m-2 s-1)
             ! - maximum erosion flux uses all sediment available
-            
+
             ! compute shear stress [m^2 s^{-2}]
             ! TODO Make sure that tidal velocity is accounted for in kineticEnergyCell
             tau_mean = bottomDrag * kineticEnergyCell(k,iCell)
             erosionFlux(iCell) = MIN((1.0_RKIND - porosity) * min_erosion_rate * &
                                       MAX(tau_mean/tau_crit - 1.0_RKIND, 0.0_RKIND), &
                                       sedimentThickness(iCell)*rho_s/dt)
-         enddo  !  iCell
-         write(*,*) '-- compute bedFlux'
-         do iCell = 1, nCellsSolve
-            k = maxLevelCell(iCell)
+
             ! total flux to the bed
             bedFlux(iCell) = erosionFlux(iCell) - settlingFlux(iCell)
+
+            !sedimentTracersTend(iTrac,k,iCell) = sedimentTracersTend(iTrac,k,iCell) + &
+            !                                     dt * bedFlux(iCell) / &
+            !                                     layerThickness(k,iCell)
          enddo  !  iCell
-         write(*,*) '-- compute sedimentTracersTend'
+
+         write(*,*) '-- compute sedimentThicknessTend'
          do iCell = 1, nCellsSolve
             k = maxLevelCell(iCell)
-            sedimentTracersTend(iTrac,k,iCell) = sedimentTracersTend(iTrac,k,iCell) + &
-                                                 dt * bedFlux(iCell) / &
-                                                 layerThickness(k,iCell)
+            ! compute diagnostic related to bed fluxes
+            ! TODO store sedimentThicknessTend as sedimentTracersBedTend
+            sedimentThicknessTend(iCell) = dt * bedFlux(iCell)/ &
+                                           (rho_s*(1.0_RKIND - porosity))
          enddo  !  iCell
-         ! TODO check sign of bedFlux
-         write(*,*) 'bedFlux',bedFlux(1), 'settlingFlux', settlingFlux(1), 'erosionFlux', erosionFlux(1)
-         write(*,*) 'sedimentTracersTend',sedimentTracersTend(1,maxLevelCell(1),1)
-
-         !write(*,*) '-- compute sedimentThicknessTend'
-         !do iCell = 1, nCellsSolve
-         !   k = maxLevelCell(iCell)
-         !   ! compute diagnostic related to bed fluxes
-         !   ! TODO store sedimentThicknessTend as sedimentTracersBedTend
-         !   sedimentThicknessTend(iCell) = dt * bedFlux(iCell)/ &
-         !                                  (rho_s*(1.0_RKIND - porosity))
-         !enddo  !  iCell
-         !write(*,*) '-- compute sedimentThickness'
-         !do iCell = 1, nCellsSolve
-         !   k = maxLevelCell(iCell)
-         !   sedimentThickness(iCell) = MAX(0.0_RKIND, &
-         !                                sedimentThickness(iCell) &
-         !                              + sedimentThicknessTend(iCell))
-
-         !enddo  !  iCell
+         write(*,*) '-- compute sedimentThickness'
+         do iCell = 1, nCellsSolve
+            k = maxLevelCell(iCell)
+            sedimentThickness(iCell) = MAX(0.0_RKIND, &
+                                         sedimentThickness(iCell) &
+                                       + sedimentThicknessTend(iCell))
+         enddo  !  iCell
+         write(*,*) 'sedimentThickness=',sedimentThickness(1)
+         write(*,*) 'sedimentThicknessTend=',sedimentThicknessTend(1)
+         write(*,*) 'bedFlux=',bedFlux(1)
+         write(*,*) 'settlingFlux=',settlingFlux(1)
+         write(*,*) 'erosionFlux=',erosionFlux(1)
          deallocate(sedimentThicknessTend, bedFlux, erosionFlux, settlingFlux)
          call mpas_timer_stop("sediment surface flux")
       endif
