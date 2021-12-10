@@ -940,6 +940,14 @@
 					description="Number of timesteps between each remapping. If 0, remapping occurs every timestep"
 					possible_values="Any integer greater than or equal to 0"
 		/>
+		<nml_option name="config_vert_remap_time_relax_factor" type="real" default_value="1.0" units="non-dimensional"
+					description="Relaxation factor in time for layer motion due to regridding"
+					possible_values="any real greater than 1"
+		/>
+		<nml_option name="config_vert_remap_horizontal_diffusivity" type="real" default_value="0.0" units="non-dimensional"
+					description="Horizontal diffusivity applied to layer interface gradients at regridding"
+					possible_values="any real greater than 0"
+		/>
 		<nml_option name="config_vert_tracer_adv_flux_order" type="integer" default_value="3" units="unitless"
 					description="Order of polynomial used for tracer reconstruction at layer edges for flux-form method"
 					possible_values="2, 3 and 4"

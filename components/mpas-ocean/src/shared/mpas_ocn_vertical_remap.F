@@ -27,6 +27,7 @@ module ocn_vertical_remap
    use mpas_vector_reconstruction
    use mpas_spline_interpolation
    use mpas_timer
+   use mpas_log
 
    use ocn_constants
    use ocn_config
@@ -48,6 +49,7 @@ module ocn_vertical_remap
    type(rmap_opts) :: opts
    integer :: bc_upper, bc_lower
    integer :: itimestepLastRemap
+   character (len=100) :: log_string
 
    !--------------------------------------------------------------------
 
@@ -80,19 +82,20 @@ module ocn_vertical_remap
       type (block_type), intent(in) :: block
       integer, intent(out) :: err
 
-      integer :: nCells, nEdges
-      integer :: nLayers, nLevels, nVars, nDoFs, nTracers
-      integer :: cell1, cell2, iCell, jCell, iEdge, iTrac, k, kTop, kBot
+      integer :: cell1, cell2, iCell, jCell, iEdge, iTrac, &
+         k, kTop, kBot, kTopNow, kBotNow, &
+         nCells, nEdges, nVars, nDoFs, nTracers, &
+         nLayers, nLayersNow, nLevels, nLevelsNow
 
       type (mpas_pool_type), pointer :: verticalMeshPool
       type (mpas_pool_type), pointer :: statePool
       type (mpas_pool_type), pointer :: tracersPool
+      type (mpas_pool_type), pointer :: forcingPool
       type (mpas_pool_iterator_type) :: groupItr
 
       type(rmap_work) :: work
       type(rcon_ends), dimension(:), allocatable :: bcUpper, bcLower
 
-      real (kind=RKIND), dimension(:, :, :), allocatable :: dataNow, dataNew
       real (kind=RKIND), dimension(:, :), allocatable :: &
          layerThicknessNew,            & ! layerThickness (new target grid)
          layerThickEdge,               & ! layerThickness at edges (lagrangian grid)
@@ -100,12 +103,21 @@ module ocn_vertical_remap
          heightCellNow, heightEdgeNow, & ! depth at layer interfaces (lagrangian grid)
          heightCellNew, heightEdgeNew    ! depth at layer interfaces (new target grid)
 
+      real (kind=RKIND), dimension(:, :, :), allocatable :: dataNow, dataNew
+
+      integer, dimension(:), allocatable :: &
+         minLevelCellNow, maxLevelCellNow, minLevelEdgeBotNow, maxLevelEdgeTopNow
+      integer, dimension(:), allocatable :: mask
+
+      integer, dimension(:), pointer :: landIceMask
+
       real (kind=RKIND), dimension(:, :), pointer :: layerThickness, restingThickness
       real (kind=RKIND), dimension(:, :), pointer :: normalVelocity
       real (kind=RKIND), dimension(:, :), pointer :: highFreqThickness,lowFreqDivergence
       real (kind=RKIND), dimension(:, :, :), pointer :: tracersGroup
 
       err = 0
+      call mpas_log_write('enter remap')
 
       itimestepLastRemap = itimestepLastRemap + 1
       if (itimestepLastRemap < config_vert_remap_interval) return
@@ -115,6 +127,7 @@ module ocn_vertical_remap
       ! than sub-blocks
       call mpas_pool_get_subpool(block % structs, 'verticalMesh', verticalMeshPool)
       call mpas_pool_get_subpool(block % structs, 'state', statePool)
+      call mpas_pool_get_subpool(block % structs, 'forcing', forcingPool)
 
       call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
 
@@ -126,12 +139,18 @@ module ocn_vertical_remap
          call mpas_pool_get_array(statePool, 'highFreqThickness', highFreqThickness, 2)
          call mpas_pool_get_array(statePool, 'lowFreqDivergence', lowFreqDivergence, 2)
       end if
-
+      call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask, 2)
+      
       nCells = nCellsAll
       nEdges = nEdgesAll
 
       ! SETUP VERTICAL GRIDS:
 
+      allocate(mask(nCells))
+      allocate(minLevelCellNow(nCells))
+      allocate(maxLevelCellNow(nCells))
+      allocate(minLevelEdgeBotNow(nEdges))
+      allocate(maxLevelEdgeTopNow(nEdges))
       allocate(heightCellNow(nVertLevels + 1, nCells))
       allocate(heightCellNew(nVertLevels + 1, nCells))
       allocate(heightEdgeNow(nVertLevels + 1, nEdges))
@@ -140,9 +159,16 @@ module ocn_vertical_remap
       allocate(layerThickEdge(nVertLevels, nEdges))
       allocate(layerThickEdgeNew(nVertLevels, nEdges))
 
+      call mpas_log_write('call regrid')
+      mask(:) = 1 ! replace mask with landIceMask
+
+      minLevelCellNow = minLevelCell
+      maxLevelCellNow = maxLevelCell
+      minLevelEdgeBotNow = minLevelEdgeBot
+      maxLevelEdgeTopNow = maxLevelEdgeTop
+
       ! Compute new layer thicknesses based on vertical coordinate choice
-      ! Currently, zstar coordinate is hard-coded
-      call ocn_vert_regrid(restingThickness, layerThickness, &
+      call ocn_vert_regrid(mask, restingThickness, layerThickness, &
                            layerThicknessNew, err)
 
       ! There's currently a silly issue in PPR: it assumes the "coordinates" for
@@ -151,6 +177,9 @@ module ocn_vertical_remap
       ! I'll make some updates to PPR to handle this, but for now, just flip the
       ! signs to make PPR happy. This shouldn't have any actual impact.
 
+      ! TODO evaluate mismatch between heightCell*(kmin,*) and -ssh to determine
+      ! whether it should be forced to equal -ssh
+
       !$omp parallel
       !$omp do schedule(runtime) private(k)
       do iCell = 1, nCells
@@ -158,7 +187,7 @@ module ocn_vertical_remap
          heightCellNew(:, iCell) = bottomDepth(iCell)
 
          ! reconstruct "now" heights
-         do k = maxLevelCell(iCell), minLevelCell(iCell), -1
+         do k = maxLevelCellNow(iCell), minLevelCellNow(iCell)+1, -1
             heightCellNow(k, iCell) = &
                heightCellNow(k + 1, iCell) - layerThickness(k, iCell)
          end do
@@ -169,6 +198,13 @@ module ocn_vertical_remap
             heightCellNew(k, iCell) = &
                heightCellNew(k + 1, iCell) - layerThicknessNew(k, iCell)
          end do
+         if (iCell == 4) then
+            do k = MAX(maxLevelCellNow(iCell),maxLevelCell(iCell)), &
+                   MIN(minLevelCellNow(iCell),minLevelCell(iCell)), -1
+               write(log_string,*) 'remap: k,zOld,zNew',k,heightCellNow(k,iCell),heightCellNew(k,iCell)
+               call mpas_log_write(log_string)
+            enddo
+         endif
       end do
       !$omp end do
       !$omp end parallel
@@ -233,8 +269,8 @@ module ocn_vertical_remap
       bcUpper%bcopt = bc_upper
       bcLower%bcopt = bc_lower
 
-      dataNow = 0.0_RKIND
-      dataNew = 0.0_RKIND
+      dataNow = -1E34_RKIND
+      dataNew = -1E34_RKIND
 
       call work%init(nVertLevels + 1, nVars, opts) ! this is internal workspace for PPR
 
@@ -244,21 +280,25 @@ module ocn_vertical_remap
          !$omp do schedule(runtime) private(iEdge, kTop, kBot, nLayers, nLevels, dataNow, dataNew)
          do iEdge = 1, nEdges
 
+            kTopNow = minLevelEdgeBotNow(iEdge)
+            kBotNow = maxLevelEdgeTopNow(iEdge)
             kTop = minLevelEdgeBot(iEdge)
             kBot = maxLevelEdgeTop(iEdge)
 
+            nLayersNow = kBotNow - kTopNow + 1
+            nLevelsNow = nLayersNow + 1
             nLayers = kBot - kTop + 1
             nLevels = nLayers + 1
 
             if (nLevels .lt. 2) cycle
 
-            dataNow(1, 1, 1:nLayers) = normalVelocity   (kTop:kBot, iEdge)
-            dataNow(1, 2, 1:nLayers) = highFreqThickness(kTop:kBot, iEdge)
-            dataNow(1, 3, 1:nLayers) = lowFreqDivergence(kTop:kBot, iEdge)
+            dataNow(1, 1, 1:nLayersNow) = normalVelocity   (kTopNow:kBotNow, iEdge)
+            dataNow(1, 2, 1:nLayersNow) = highFreqThickness(kTopNow:kBotNow, iEdge)
+            dataNow(1, 3, 1:nLayersNow) = lowFreqDivergence(kTopNow:kBotNow, iEdge)
 
             call mpas_timer_start("ppr")
-            call rmap1d(nLevels, nLevels, nVars ,nDoFs, &
-               heightEdgeNow(kTop:kBot+1, iEdge), &
+            call rmap1d(nLevelsNow, nLevels, nVars ,nDoFs, &
+               heightEdgeNow(kTopNow:kBotNow+1, iEdge), &
                heightEdgeNew(kTop:kBot+1, iEdge), &
                dataNow, dataNew, &
                bcUpper, bcLower, work, opts)
@@ -275,26 +315,41 @@ module ocn_vertical_remap
          !$omp do schedule(runtime) private(iEdge, kTop, kBot, nLayers, nLevels, dataNow, dataNew)
          do iEdge = 1, nEdges
 
+            kTopNow = minLevelEdgeBotNow(iEdge)
+            kBotNow = maxLevelEdgeTopNow(iEdge)
             kTop = minLevelEdgeBot(iEdge)
             kBot = maxLevelEdgeTop(iEdge)
 
+            nLayersNow = kBotNow - kTopNow + 1
+            nLevelsNow = nLayersNow + 1
             nLayers = kBot - kTop + 1
             nLevels = nLayers + 1
 
             if (nLevels .lt. 2) cycle
 
-            dataNow(1, 1, 1:nLayers) = normalVelocity(kTop:kBot, iEdge)
+            dataNow(1, 1, 1:nLayersNow) = normalVelocity   (kTopNow:kBotNow, iEdge)
 
             call mpas_timer_start("ppr")
-            call rmap1d(nLevels, nLevels, nVars ,nDoFs, &
-               heightEdgeNow(kTop:kBot+1, iEdge), &
+            call rmap1d(nLevelsNow, nLevels, nVars ,nDoFs, &
+               heightEdgeNow(kTopNow:kBotNow+1, iEdge), &
                heightEdgeNew(kTop:kBot+1, iEdge), &
-               dataNow, dataNew, &
+               dataNow(:,:,1:nLayersNow), dataNew(:,:,1:nLayers), &
                bcUpper, bcLower, work, opts)
             call mpas_timer_stop("ppr")
 
-            normalVelocity   (kTop:kBot, iEdge) = dataNew(1, 1, 1:nLayers)
-
+            normalVelocity(kTop:kBot, iEdge) = dataNew(1, 1, 1:nLayers)
+            if (kBot .ne. kBotNow) then
+               write(log_string,*) 'remap: kBotNow,kBot',kBotNow,kBot
+               call mpas_log_write(log_string)
+               write(log_string,*) 'remap: kTopNow,kTop',kTopNow,kTop
+               call mpas_log_write(log_string)
+               do k = MAX(kBotNow,kBot), 1, -1
+                  write(log_string,*) 'remap: k,uOld,uNew',k,&
+                     dataNow(1,1,k),normalVelocity(k,iEdge)
+                  call mpas_log_write(log_string)
+               enddo
+            endif
+         
          end do
          !$omp end do
          !$omp end parallel
@@ -315,6 +370,9 @@ module ocn_vertical_remap
 
                allocate(dataNow(nDoFs, nTracers, nVertLevels))
                allocate(dataNew(nDoFs, nTracers, nVertLevels))
+               dataNow = -1E34_RKIND
+               dataNew = -1E34_RKIND
+
                
                call work%init(nVertLevels + 1, nTracers, opts) ! this is internal workspace for PPR
 
@@ -327,9 +385,13 @@ module ocn_vertical_remap
                !$omp do schedule(runtime) private(iCell, iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew)
                do iCell = 1, nCells
 
+                  kTopNow = minLevelCellNow(iCell)
+                  kBotNow = maxLevelCellNow(iCell)
                   kTop = minLevelCell(iCell)
                   kBot = maxLevelCell(iCell)
 
+                  nLayersNow = kBotNow - kTopNow + 1
+                  nLevelsNow = nLayersNow + 1
                   nLayers = kBot - kTop + 1
                   nLevels = nLayers + 1
 
@@ -337,12 +399,12 @@ module ocn_vertical_remap
 
                   do iTrac = 1, nTracers
 
-                     dataNow(1, iTrac, 1:nLayers) = tracersGroup(iTrac, kTop:kBot, iCell)
+                     dataNow(1, iTrac, 1:nLayersNow) = tracersGroup(iTrac, kTopNow:kBotNow, iCell)
 
                   end do
                   call mpas_timer_start("ppr")
-                  call rmap1d(nLevels, nLevels, nTracers,nDoFs, &
-                     heightCellNow(kTop:kBot+1, iCell), &
+                  call rmap1d(nLevelsNow, nLevels, nTracers,nDoFs, &
+                     heightCellNow(kTopNow:kBotNow+1, iCell), &
                      heightCellNew(kTop:kBot+1, iCell), &
                      dataNow, dataNew, &
                      bcUpper, bcLower, work, opts)
@@ -351,7 +413,17 @@ module ocn_vertical_remap
                   do iTrac = 1, nTracers
                      tracersGroup(iTrac, kTop:kBot, iCell) = dataNew(1, iTrac, 1:nLayers)
                   end do
-
+                  if (kBot .ne. kBotNow) then
+                     write(log_string,*) 'remap: kBotNow,kBot',kBotNow,kBot
+                     call mpas_log_write(log_string)
+                     write(log_string,*) 'remap: kTopNow,kTop',kTopNow,kTop
+                     call mpas_log_write(log_string)
+                     do k = MAX(kBotNow,kBot), 1, -1
+                        write(log_string,*) 'remap: k,ptOld,ptNew',k,&
+                           dataNow(1,1,k),tracersGroup(1,k,iCell)
+                        call mpas_log_write(log_string)
+                     enddo
+                  endif
                end do
                !$omp end do
                !$omp end parallel

@@ -1979,6 +1979,9 @@ module ocn_time_integration_split
          ! Perform the remapping
          call ocn_remap_vert_state(block, err)
 
+         if (config_use_min_max_thickness) & ! Update mesh
+            call ocn_meshMinMaxLevel()
+
          call mpas_timer_stop("vertical remap")
 
       end if
