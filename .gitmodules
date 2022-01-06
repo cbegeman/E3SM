@@ -55,3 +55,6 @@
 [submodule "externals/mct"]
 	path = externals/mct
 	url = git@github.com:MCSclimate/MCT.git
+[submodule "externals/smartredis"]
+	path = externals/smartredis
+	url = git@github.com:cbegeman/SmartRedis.git
