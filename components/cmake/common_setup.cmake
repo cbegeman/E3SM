@@ -415,8 +415,8 @@ message(STATUS "Find smartredis lib")
 #set(SMARTREDIS_HOME "/turquoise/usr/projects/climate/cbegeman/soft/smartredis") # Alternative location on badger
 set(SMARTREDIS_HOME ${CMAKE_CURRENT_SOURCE_DIR}/../../../externals/smartredis)
 set(SMARTREDIS_LIB_DIR "${SMARTREDIS_HOME}/install/lib")
-set(SMARTREDIS_FTN_SRC ${SMARTREDIS_HOME}/src/fortran)
-set(SMARTREDIS_INC ${SMARTREDIS_HOME}/install/include)
+set(SMARTREDIS_FTN_SRC "${SMARTREDIS_HOME}/src/fortran")
+set(SMARTREDIS_INC "${SMARTREDIS_HOME}/install/include")
 list(APPEND INCLDIR "${SMARTREDIS_INC}")
 set(SLIBS "${SLIBS} ${SMARTREDIS_LIB_DIR}/libhiredis.a ${SMARTREDIS_LIB_DIR}/libredis++.a" ${SMARTREDIS_LIB_DIR}/libsmartredis.so) #plain
 
