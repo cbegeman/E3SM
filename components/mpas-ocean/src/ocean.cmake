@@ -13,6 +13,15 @@ if(LAPACK_FOUND AND BLAS_FOUND)
   list(APPEND SLIBS "${LAPACK_LIBRARIES} ${BLAS_LIBRARIES}")
 endif()
 
+# SMARTREDIS handled here
+list(APPEND INCLUDES "../../../externals/smartredis/install/include")
+set(SMARTREDIS_FILES
+    ../../../externals/smartredis/src/fortran/fortran_c_interop.F90
+    ../../../externals/smartredis/src/fortran/dataset.F90
+    ../../../externals/smartredis/src/fortran/client.F90
+)
+#    ../../../externals/smartredis/install/include/enum_fortran.inc
+
 # driver (files live in E3SM)
 list(APPEND RAW_SOURCES
   ../../mpas-ocean/driver/ocn_comp_mct.F
@@ -219,8 +228,8 @@ set(GOTM_FILES
   core_ocean/gotm/src/turbulence/variances.F90
 )
 
-list(APPEND RAW_SOURCES ${CVMIX_FILES} ${BGC_FILES} ${MARBL_FILES} ${GOTM_FILES})
-list(APPEND NO_PREPROCESS ${CVMIX_FILES} ${BGC_FILES} ${MARBL_FILES} ${GOTM_FILES})
+list(APPEND RAW_SOURCES ${CVMIX_FILES} ${BGC_FILES} ${MARBL_FILES} ${GOTM_FILES} ${SMARTREDIS_FILES})
+list(APPEND NO_PREPROCESS ${CVMIX_FILES} ${BGC_FILES} ${MARBL_FILES} ${GOTM_FILES} ${SMARTREDIS_FILES})
 
 # Add analysis members
 list(APPEND RAW_SOURCES
