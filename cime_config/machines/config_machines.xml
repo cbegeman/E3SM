@@ -2814,6 +2814,10 @@
       <env name="PNETCDF_PATH">$ENV{PNETCDF_PATH}</env>
       <env name="NETCDF_PATH">$ENV{NETCDF_PATH}</env>
       <env name="MKLROOT">$ENV{MKLROOT}</env>
+      <env name="SMARTREDIS_LIB">/turquoise/usr/projects/climate/cbegeman/soft/smartredis/install/lib</env>
+      <env name="SMARTREDIS_INCLUDE">$ENV{SMARTREDIS_INCLUDE}</env>
+      <env name="SMARTREDIS_FSRC">$ENV{SMARTREDIS_FSRC}</env>
+      <env name="LD_LIBRARY_PATH">$ENV{SMARTREDIS_LIB}:$ENV{LD_LIBRARY_PATH}</env>
       <env name="PNETCDF_HINTS">romio_ds_write=disable;romio_ds_read=disable;romio_cb_write=enable;romio_cb_read=enable</env>
     </environment_variables>
   </machine>
