@@ -410,6 +410,16 @@ if (NOT GLCROOT)
   set(GLCROOT "${CIMEROOT}/../components/cism")
 endif()
 
+#if (USE_SMARTSIM)
+message(STATUS "Find smartredis lib")
+#set(SMARTREDIS_HOME "/turquoise/usr/projects/climate/cbegeman/soft/smartredis") # Alternative location on badger
+set(SMARTREDIS_HOME ${CMAKE_CURRENT_SOURCE_DIR}/../../../externals/smartredis)
+set(SMARTREDIS_LIB_DIR "${SMARTREDIS_HOME}/install/lib")
+set(SMARTREDIS_FTN_SRC ${SMARTREDIS_HOME}/src/fortran)
+set(SMARTREDIS_INC ${SMARTREDIS_HOME}/install/include)
+list(APPEND INCLDIR "${SMARTREDIS_INC}")
+set(SLIBS "${SLIBS} ${SMARTREDIS_LIB_DIR}/libhiredis.a ${SMARTREDIS_LIB_DIR}/libredis++.a" ${SMARTREDIS_LIB_DIR}/libsmartredis.so) #plain
+
 list(APPEND INCLDIR "${INSTALL_SHAREDPATH}/include")
 
 string(FIND "${CAM_CONFIG_OPTS}" "-cosp" HAS_COSP)
@@ -443,6 +453,9 @@ endif()
 if (USE_PETSC)
   set(SLIBS "${SLIBS} ${PETSC_LIB}")
 endif()
+
+# Smartredis TODO add if (USE_SMARTSIM)
+#set(SLIBS "${SLIBS} -L${SMARTREDIS_LIB}")
 
 # Add trilinos libraries; too be safe, we include all libraries included in the trilinos build,
 # as well as all necessary third-party libraries
