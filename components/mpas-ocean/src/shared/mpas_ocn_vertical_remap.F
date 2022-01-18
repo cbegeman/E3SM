@@ -337,6 +337,7 @@ module ocn_vertical_remap
                bcUpper, bcLower, work, opts)
             call mpas_timer_stop("ppr")
 
+            normalVelocity(:, iEdge) = 0.0_RKIND
             normalVelocity(kTop:kBot, iEdge) = dataNew(1, 1, 1:nLayers)
             if (kBot .ne. kBotNow) then
                write(log_string,*) 'remap: kBotNow,kBot',kBotNow,kBot
