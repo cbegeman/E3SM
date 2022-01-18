@@ -169,6 +169,7 @@ module ocn_mesh
    public :: &
       ocn_meshCreate, &
       ocn_meshUpdateFields, &
+      ocn_meshMinMaxLevel, &
       ocn_meshDestroy
    !}}}
 
