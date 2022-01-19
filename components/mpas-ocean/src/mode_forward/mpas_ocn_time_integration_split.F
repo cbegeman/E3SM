@@ -56,7 +56,6 @@ module ocn_time_integration_split
    ! Public parameters
    !
    !--------------------------------------------------------------------
-
    !--------------------------------------------------------------------
    !
    ! Public member functions
@@ -75,6 +74,8 @@ module ocn_time_integration_split
    character (len=*), parameter :: &
       subcycleGroupName = 'subcycleFields', &! name for cached halo exch
       finalBtrGroupName = 'finalBtrFields'   ! name for cached halo exch
+
+   character(len=100) :: log_string
 
    logical :: &
       unsplit           ! flag for unsplit_explicit time option
@@ -785,6 +786,31 @@ module ocn_time_integration_split
                if (cellHaloComputeCounter < neededHalos) then
 
                   call mpas_timer_start('se halo subcycle')
+                  !$omp parallel
+                  !$omp do schedule(runtime)
+                  do iEdge = 1, nEdgesAll
+                     if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                        write(log_string,*) 'before halo nEdgesAll: iEdge,uBtrCur',&
+                           iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                        call mpas_log_write(log_string)
+                     end if
+                  end do
+                  !$omp end do
+                  !$omp end parallel
+
+                  ! Lots of wrong values at first timestep
+                  !$omp parallel
+                  !$omp do schedule(runtime)
+                  do iEdge = 1, nEdgesHalo(edgeHaloComputeCounter-1)
+                     if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                        write(log_string,*) 'before halo nEdgesHalo: iEdge,uBtrCur',&
+                           iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                        call mpas_log_write(log_string)
+                        exit
+                     end if
+                  end do
+                  !$omp end do
+                  !$omp end parallel
                   call mpas_dmpar_exch_group_reuse_halo_exch(domain, &
                        subcycleGroupName, timeLevel=oldBtrSubcycleTime)
                   call mpas_timer_stop('se halo subcycle')
@@ -795,6 +821,28 @@ module ocn_time_integration_split
                   edgeHaloComputeCounter = config_num_halos + 1 - &
                                            haloDecrement
                end if ! halo update
+               !$omp parallel
+               !$omp do schedule(runtime)
+               do iEdge = 1, nEdgesAll
+                  if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                     write(log_string,*) 'after halo nEdgesAll: iEdge,uBtrCur',&
+                        iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                     call mpas_log_write(log_string)
+                  end if
+               end do
+               !$omp end do
+               !$omp end parallel
+               !$omp parallel
+               !$omp do schedule(runtime)
+               do iEdge = 1, nEdgesHalo(edgeHaloComputeCounter-1)
+                  if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                     write(log_string,*) 'after halo nEdgesHalo: iEdge,uBtrCur',&
+                        iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                     call mpas_log_write(log_string)
+                  end if
+               end do
+               !$omp end do
+               !$omp end parallel
 
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: VELOCITY PREDICTOR STEP
@@ -807,6 +855,17 @@ module ocn_time_integration_split
                                  'normalBarotropicVelocitySubcycle', &
                                   normalBarotropicVelocitySubcycleCur, &
                                   uPerpTime)
+                  !$omp parallel
+                  !$omp do schedule(runtime)
+                  do iEdge = 1, nEdgesHalo(edgeHaloComputeCounter-1)
+                  if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                     write(log_string,*) 'before cor nEdges: iEdge,uBtrCur',&
+                        iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                     call mpas_log_write(log_string)
+                  end if
+                  end do ! edges
+                  !$omp end do
+                  !$omp end parallel
                   call mpas_pool_get_array(statePool, &
                                  'normalBarotropicVelocitySubcycle', &
                                   normalBarotropicVelocitySubcycleNew, &
@@ -845,8 +904,10 @@ module ocn_time_integration_split
 
                   if (edgeHaloComputeCounter <= 1) then
                      nEdges = nEdgesOwned
+                     call mpas_log_write('nEdgesOwned')
                   else
                      nEdges = nEdgesHalo(edgeHaloComputeCounter-1)
+                     call mpas_log_write('nEdgesHalo')
                   endif
 
                   !$omp parallel
@@ -877,8 +938,30 @@ module ocn_time_integration_split
                              *(sshSubcycleCur(cell2) - &
                                sshSubcycleCur(cell1))/dcEdge(iEdge) + &
                                barotropicForcing(iEdge)))
+                     if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                        write(log_string,*) 'after cor nEdges: iEdge,uBtrCur',&
+                           iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                        call mpas_log_write(log_string)
+                     end if
+                     !if (ABS(normalBarotropicVelocitySubcycleNew(iEdge))>1.0_RKIND) then
+                     !   write(log_string,*) 'after cor nEdges: iEdge,uBtrNew',&
+                     !      iEdge, normalBarotropicVelocitySubcycleNew(iEdge)
+                     !   call mpas_log_write(log_string)
+                     !end if
 
                   end do ! edges
+                  !$omp end do
+                  !$omp end parallel
+
+                  !$omp parallel
+                  !$omp do schedule(runtime)
+                  do iEdge = 1, nEdgesAll
+                     if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                        write(log_string,*) 'after cor nEdgesAll: iEdge,uBtrCur',&
+                           iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                        call mpas_log_write(log_string)
+                     end if
+                  end do
                   !$omp end do
                   !$omp end parallel
 
@@ -1148,6 +1231,11 @@ module ocn_time_integration_split
                            *(CoriolisTerm - gravity* &
                              (sshCell2 - sshCell1)/dcEdge(iEdge) &
                            + barotropicForcing(iEdge)))
+                     !if (ABS(normalBarotropicVelocitySubcycleNew(iEdge))>1.0_RKIND) then
+                     !   write(log_string,*) 'after vel pred: iEdge,uBtrNew',&
+                     !      iEdge, normalBarotropicVelocitySubcycleNew(iEdge)
+                     !   call mpas_log_write(log_string)
+                     !end if
 
                   end do
                   !$omp end do
