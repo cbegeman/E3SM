@@ -189,6 +189,9 @@ module ocn_time_integration_split
       real (kind=RKIND), dimension(:), allocatable :: &
          btrvel_temp
 
+      real (kind=RKIND), dimension(:,:), allocatable :: &
+         hTemp
+
       ! State Array Pointers
       real (kind=RKIND), dimension(:), pointer :: &
          sshSubcycleCur,              &! subcycl ssh    at current time
@@ -288,6 +291,7 @@ module ocn_time_integration_split
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       call mpas_timer_start("se prep")
+      allocate(hTemp(nVertLevels,nCellsAll))
 
       !*** Retrieve model state, pools
       !*** No longer support sub-blocks so this retrieves the only block
@@ -575,6 +579,9 @@ module ocn_time_integration_split
 
          call ocn_tend_vel(tendPool, statePool, forcingPool, &
                            stage1_tend_time, dt)
+         write(log_string,*) 'after tend vel split: min(utend),max(utend)',&
+            dt*MINVAL(normalVelocityTend),dt*MAXVAL(normalVelocityTend)
+         call mpas_log_write(log_string)
 
          call mpas_timer_stop('se bcl vel tend')
 
@@ -786,31 +793,31 @@ module ocn_time_integration_split
                if (cellHaloComputeCounter < neededHalos) then
 
                   call mpas_timer_start('se halo subcycle')
-                  !$omp parallel
-                  !$omp do schedule(runtime)
-                  do iEdge = 1, nEdgesAll
-                     if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
-                        write(log_string,*) 'before halo nEdgesAll: iEdge,uBtrCur',&
-                           iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
-                        call mpas_log_write(log_string)
-                     end if
-                  end do
-                  !$omp end do
-                  !$omp end parallel
+                  !!$omp parallel
+                  !!$omp do schedule(runtime)
+                  !do iEdge = 1, nEdgesAll
+                  !   if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                  !      write(log_string,*) 'before halo nEdgesAll: iEdge,uBtrCur',&
+                  !         iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                  !      call mpas_log_write(log_string)
+                  !   end if
+                  !end do
+                  !!$omp end do
+                  !!$omp end parallel
 
                   ! Lots of wrong values at first timestep
-                  !$omp parallel
-                  !$omp do schedule(runtime)
-                  do iEdge = 1, nEdgesHalo(edgeHaloComputeCounter-1)
-                     if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
-                        write(log_string,*) 'before halo nEdgesHalo: iEdge,uBtrCur',&
-                           iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
-                        call mpas_log_write(log_string)
-                        exit
-                     end if
-                  end do
-                  !$omp end do
-                  !$omp end parallel
+                  !!$omp parallel
+                  !!$omp do schedule(runtime)
+                  !do iEdge = 1, nEdgesHalo(edgeHaloComputeCounter-1)
+                  !   if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                  !      write(log_string,*) 'before halo nEdgesHalo: iEdge,uBtrCur',&
+                  !         iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                  !      call mpas_log_write(log_string)
+                  !      exit
+                  !   end if
+                  !end do
+                  !!$omp end do
+                  !!$omp end parallel
                   call mpas_dmpar_exch_group_reuse_halo_exch(domain, &
                        subcycleGroupName, timeLevel=oldBtrSubcycleTime)
                   call mpas_timer_stop('se halo subcycle')
@@ -832,17 +839,17 @@ module ocn_time_integration_split
                end do
                !$omp end do
                !$omp end parallel
-               !$omp parallel
-               !$omp do schedule(runtime)
-               do iEdge = 1, nEdgesHalo(edgeHaloComputeCounter-1)
-                  if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
-                     write(log_string,*) 'after halo nEdgesHalo: iEdge,uBtrCur',&
-                        iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
-                     call mpas_log_write(log_string)
-                  end if
-               end do
-               !$omp end do
-               !$omp end parallel
+               !!$omp parallel
+               !!$omp do schedule(runtime)
+               !do iEdge = 1, nEdgesHalo(edgeHaloComputeCounter-1)
+               !   if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+               !      write(log_string,*) 'after halo nEdgesHalo: iEdge,uBtrCur',&
+               !         iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+               !      call mpas_log_write(log_string)
+               !   end if
+               !end do
+               !!$omp end do
+               !!$omp end parallel
 
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: VELOCITY PREDICTOR STEP
@@ -904,10 +911,10 @@ module ocn_time_integration_split
 
                   if (edgeHaloComputeCounter <= 1) then
                      nEdges = nEdgesOwned
-                     call mpas_log_write('nEdgesOwned')
+                     !call mpas_log_write('nEdgesOwned')
                   else
                      nEdges = nEdgesHalo(edgeHaloComputeCounter-1)
-                     call mpas_log_write('nEdgesHalo')
+                     !call mpas_log_write('nEdgesHalo')
                   endif
 
                   !$omp parallel
@@ -938,11 +945,11 @@ module ocn_time_integration_split
                              *(sshSubcycleCur(cell2) - &
                                sshSubcycleCur(cell1))/dcEdge(iEdge) + &
                                barotropicForcing(iEdge)))
-                     if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
-                        write(log_string,*) 'after cor nEdges: iEdge,uBtrCur',&
-                           iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
-                        call mpas_log_write(log_string)
-                     end if
+                     !if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                     !   write(log_string,*) 'after cor nEdges: iEdge,uBtrCur',&
+                     !      iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                     !   call mpas_log_write(log_string)
+                     !end if
                      !if (ABS(normalBarotropicVelocitySubcycleNew(iEdge))>1.0_RKIND) then
                      !   write(log_string,*) 'after cor nEdges: iEdge,uBtrNew',&
                      !      iEdge, normalBarotropicVelocitySubcycleNew(iEdge)
@@ -953,17 +960,17 @@ module ocn_time_integration_split
                   !$omp end do
                   !$omp end parallel
 
-                  !$omp parallel
-                  !$omp do schedule(runtime)
-                  do iEdge = 1, nEdgesAll
-                     if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
-                        write(log_string,*) 'after cor nEdgesAll: iEdge,uBtrCur',&
-                           iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
-                        call mpas_log_write(log_string)
-                     end if
-                  end do
-                  !$omp end do
-                  !$omp end parallel
+                  !!$omp parallel
+                  !!$omp do schedule(runtime)
+                  !do iEdge = 1, nEdgesAll
+                  !   if (ABS(normalBarotropicVelocitySubcycleCur(iEdge))>1.0_RKIND) then
+                  !      write(log_string,*) 'after cor nEdgesAll: iEdge,uBtrCur',&
+                  !         iEdge, normalBarotropicVelocitySubcycleCur(iEdge)
+                  !      call mpas_log_write(log_string)
+                  !   end if
+                  !end do
+                  !!$omp end do
+                  !!$omp end parallel
 
                endif ! config_btr_gam1_velWt1>1.0e-12
 
@@ -1612,6 +1619,21 @@ module ocn_time_integration_split
          call mpas_timer_stop('thick vert trans vel top')
 
          call ocn_tend_thick(tendPool, forcingPool, meshPool)
+         hTemp = 0.0_RKIND
+         do iCell = 1,nCellsAll
+            do k = minLevelCell(iCell),maxLevelCell(iCell)
+                hTemp(k,iCell) = layerThicknessCur(k,iCell)
+            enddo
+         enddo 
+         write(log_string,*) 'after tend thick split: min(htend),max(htend)',&
+            dt*MINVAL(layerThicknessTend),dt*MAXVAL(layerThicknessTend)
+         call mpas_log_write(log_string)
+         write(log_string,*) 'after tend thick split: min(hCur),max(hCur)',&
+            MINVAL(hTemp),MAXVAL(hTemp)
+         call mpas_log_write(log_string)
+         !write(log_string,*) 'after tend thick split: min(hCur),max(hCur)',&
+         !   MINVAL(layerThicknessCur),MAXVAL(layerThicknessCur)
+         !call mpas_log_write(log_string)
 
          call mpas_timer_stop('se thick tend')
 
@@ -1970,6 +1992,33 @@ module ocn_time_integration_split
             end do ! iEdges
             !$omp end do
             !$omp end parallel
+            write(log_string,*) 'after update split: min(ubtr),max(ubtr)',&
+               MINVAL(normalBarotropicVelocityNew),MAXVAL(normalBarotropicVelocityNew)
+            call mpas_log_write(log_string)
+            write(log_string,*) 'after update split: min(ubcl),max(ubcl)',&
+               MINVAL(normalBaroclinicVelocityNew),MAXVAL(normalBaroclinicVelocityNew)
+            call mpas_log_write(log_string)
+            write(log_string,*) 'after update split: min(htend),max(htend)',&
+               dt*MINVAL(layerThicknessTend),dt*MAXVAL(layerThicknessTend)
+            call mpas_log_write(log_string)
+            hTemp = 0.0_RKIND
+            do iCell = 1,nCellsAll
+               do k = minLevelCell(iCell),maxLevelCell(iCell)
+                   hTemp(k,iCell) = layerThicknessNew(k,iCell)
+               enddo
+            enddo 
+            write(log_string,*) 'after update split: min(h),max(h)',&
+               MINVAL(hTemp),MAXVAL(hTemp)
+            call mpas_log_write(log_string)
+            hTemp = 0.0_RKIND
+            do iCell = 1,nCellsAll
+               do k = minLevelCell(iCell),maxLevelCell(iCell)
+                   hTemp(k,iCell) = layerThicknessCur(k,iCell)
+               enddo
+            enddo 
+            write(log_string,*) 'after update split: min(hCur),max(hCur)',&
+               MINVAL(hTemp),MAXVAL(hTemp)
+            call mpas_log_write(log_string)
 
          endif ! splitExplicitStep
 
@@ -1981,6 +2030,25 @@ module ocn_time_integration_split
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! END large iteration loop
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+      write(log_string,*) 'before remap split: min(ssh),max(ssh)',&
+         MINVAL(sshNew),MAXVAL(sshNew)
+      call mpas_log_write(log_string)
+      write(log_string,*) 'before remap split: min(u),max(u)',&
+         MINVAL(normalVelocityNew),MAXVAL(normalVelocityNew)
+      call mpas_log_write(log_string)
+      hTemp = 0.0_RKIND
+      do iCell = 1,nCellsAll
+         do k = minLevelCell(iCell),maxLevelCell(iCell)
+             hTemp(k,iCell) = layerThicknessNew(k,iCell)
+         enddo
+      enddo 
+      !write(log_string,*) 'after update split: min(hCur),max(hCur)',&
+      !   MINVAL(layerThicknessCur),MAXVAL(layerThicknessCur)
+      !call mpas_log_write(log_string)
+      write(log_string,*) 'before remap split: min(h),max(h)',&
+         MINVAL(hTemp),MAXVAL(hTemp)
+      call mpas_log_write(log_string)
 
       call mpas_timer_start("se implicit vert mix")
 
@@ -2073,6 +2141,25 @@ module ocn_time_integration_split
          call mpas_timer_stop("vertical remap")
 
       end if
+      write(log_string,*) 'end split: min(ssh),max(ssh)',&
+         MINVAL(sshNew),MAXVAL(sshNew)
+      call mpas_log_write(log_string)
+      write(log_string,*) 'end split: min(u),max(u)',&
+         MINVAL(normalVelocityNew),MAXVAL(normalVelocityNew)
+      call mpas_log_write(log_string)
+      hTemp = 0.0_RKIND
+      do iCell = 1,nCellsAll
+         do k = minLevelCell(iCell),maxLevelCell(iCell)
+             hTemp(k,iCell) = layerThicknessNew(k,iCell)
+         enddo
+      enddo 
+      !write(log_string,*) 'after update split: min(hCur),max(hCur)',&
+      !   MINVAL(layerThicknessCur),MAXVAL(layerThicknessCur)
+      !call mpas_log_write(log_string)
+      write(log_string,*) 'end split: min(h),max(h)',&
+         MINVAL(hTemp),MAXVAL(hTemp)
+      call mpas_log_write(log_string)
+      call ocn_validate_state(domain,2)
 
       call mpas_timer_start('se fini')
 

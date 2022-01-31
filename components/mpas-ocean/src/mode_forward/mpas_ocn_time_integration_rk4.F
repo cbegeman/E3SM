@@ -33,7 +33,6 @@ module ocn_time_integration_rk4
    use ocn_diagnostics
    use ocn_diagnostics_variables
    use ocn_gm
-   use ocn_mesh
 
    use ocn_equation_of_state
    use ocn_vmix
@@ -625,14 +624,6 @@ module ocn_time_integration_rk4
 
       block => domain % blocklist
       do while (associated(block))
-         ! Vertical Lagrangian remapping of state variables
-         if ( configVertAdvMethod == 2 ) then
-           call ocn_remap_vert_state(block, err)
-           if (config_use_min_max_thickness) then ! Update mesh
-              call ocn_meshMinMaxLevel()
-           endif
-         endif
-
          call mpas_pool_get_subpool(block % structs, 'state', statePool)
          call mpas_pool_get_subpool(statePool, 'tracers', tracersPool)
          call mpas_pool_get_subpool(block % structs, 'forcing', forcingPool)
