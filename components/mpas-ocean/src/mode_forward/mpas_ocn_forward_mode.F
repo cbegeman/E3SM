@@ -88,6 +88,8 @@ module ocn_forward_mode
    use ocn_constants
    use ocn_config
 
+   use smartredis_client, only: client_type
+
    implicit none
    private
 
@@ -95,6 +97,8 @@ module ocn_forward_mode
              ocn_forward_mode_run, &
              ocn_forward_mode_finalize, &
              ocn_forward_mode_setup_clock
+
+#  include "../../../../externals/smartredis/install/include/enum_fortran.inc"
 
 !***********************************************************************
 
@@ -136,6 +140,7 @@ module ocn_forward_mode
       !-----------------------------------------------------------------
 
       integer :: err_tmp    ! local error codes from subroutine calls
+      integer(kind=enum_kind) :: err_client
 
       real (kind=RKIND) :: &
          dt,               &! time step in seconds
@@ -160,6 +165,8 @@ module ocn_forward_mode
       type (MPAS_TimeInterval_type) :: &
          timeStep,      &! time step in time manager form
          alarmTimeStep   ! alarm interval in time manager form
+
+      type(client_type) :: client
 
       ! End preamble
       !-------------
@@ -189,6 +196,13 @@ module ocn_forward_mode
       ! Extract block structure from domain
       ! Currently only support one block per task
       block => domain % blocklist
+
+      err_client = client%initialize(.false.)
+      if (err_client /= SRNoError) then
+         call mpas_log_write('Error initializing redis client in init', &
+              MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
+         ierr = ior(ierr, 1)
+      endif
 
       !-----------------------------------------------------------------
       ! Initialize data from external file input
