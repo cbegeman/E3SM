@@ -36,6 +36,7 @@ module ocn_time_integration_rk4
 
    use ocn_equation_of_state
    use ocn_vmix
+   use ocn_vertical_remap
    use ocn_time_average_coupled
    use ocn_wetting_drying
 
@@ -59,6 +60,14 @@ module ocn_time_integration_rk4
    !--------------------------------------------------------------------
 
    public :: ocn_time_integrator_rk4
+
+   !--------------------------------------------------------------------
+   !
+   ! Private module variables
+   !
+   !--------------------------------------------------------------------
+
+   integer :: configVertAdvMethod
 
    contains
 
@@ -186,6 +195,12 @@ module ocn_time_integration_rk4
       real (kind=RKIND), dimension(:,:), pointer :: restingThickness
       real (kind=RKIND) :: totalDepth
 
+      ! Remap variables
+      real (kind=RKIND) :: totalThickness
+      real (kind=RKIND), dimension(:,:), allocatable :: layerThicknessRemap
+      real (kind=RKIND), dimension(:,:), pointer :: &
+         layerThicknessLagNew
+
       ! Get config options
       call mpas_pool_get_config(domain % configs, 'config_mom_del4', config_mom_del4)
       call mpas_pool_get_config(domain % configs, 'config_filter_btr_mode', config_filter_btr_mode)
@@ -205,6 +220,15 @@ module ocn_time_integration_rk4
       call mpas_pool_get_config(domain % configs, 'config_zero_drying_velocity', config_zero_drying_velocity)
       call mpas_pool_get_config(domain % configs, 'config_use_tidal_forcing', config_use_tidal_forcing)
       call mpas_pool_get_config(domain % configs, 'config_tidal_forcing_type', config_tidal_forcing_type)
+      call mpas_pool_get_config(domain % configs, 'config_vert_advection_method', config_vert_advection_method)
+
+
+      if ( config_vert_advection_method == 'flux-form' ) then
+         configVertAdvMethod = 1
+      elseif ( config_vert_advection_method == 'remap' ) then
+         configVertAdvMethod = 2
+      endif
+
 
       !
       ! Initialize time_levs(2) with state at current time
@@ -621,6 +645,56 @@ module ocn_time_integration_rk4
       call mpas_timer_stop("RK4-implicit vert mix halos")
 
       call mpas_timer_stop("RK4-implicit vert mix")
+
+      ! Vertical Lagrangian remapping of state variables
+      if ( configVertAdvMethod == 2 ) then
+         block => domain % blocklist
+         do while(associated(block))
+            call mpas_pool_get_subpool(block % structs, 'state', statePool)
+            call mpas_pool_get_subpool(block % structs, 'tend', tendPool)
+            call mpas_pool_get_array(tendPool, 'layerThickness', layerThicknessTend)
+            call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessNew, 2)
+            call mpas_pool_get_dimension(block % dimensions, 'nCells', nCells)
+            call mpas_pool_get_subpool(block % structs, 'verticalMesh', verticalMeshPool)
+            call mpas_pool_get_dimension(meshPool, 'nVertLevels', nVertLevels)
+            call mpas_pool_get_array(meshPool, 'minLevelCell', minLevelCell)
+            call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
+            call mpas_pool_get_array(meshPool, 'bottomDepth', bottomDepth)
+            call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
+            call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
+            call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityCur, 1)
+            call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityNew, 2)
+
+            allocate(layerThicknessRemap(nVertLevels, nCells))
+            ! Initialize target layerThickness for remapping to
+            ! its current, Lagrangian location
+            layerThicknessRemap = layerThicknessNew
+            ! Store the current, Lagrangian location for computation of the
+            ! Eulerian vertical velocity induced by remapping
+            layerThicknessLagNew = layerThicknessNew
+
+            ! calc. z*-style expansions
+            !$omp parallel
+            !$omp do schedule(runtime) private(k,totalThickness)
+            do iCell = 1, nCells
+               totalThickness = 0.0_RKIND
+               do k = maxLevelCell(iCell), minLevelCell(iCell), -1
+                  totalThickness = totalThickness + layerThicknessNew(k,iCell)
+               end do
+               do k = maxLevelCell(iCell), minLevelCell(iCell), -1
+                  layerThicknessRemap(k, iCell) = restingThickness(k, iCell) * &
+                                                  totalThickness / bottomDepth(iCell)
+               end do
+            end do
+            !$omp end do
+            !$omp end parallel
+            call ocn_remap_vert_state(block, layerThicknessRemap, err)
+
+            deallocate(layerThicknessRemap)
+            block => block % next
+         end do
+      end if
+
 
       block => domain % blocklist
       do while (associated(block))
