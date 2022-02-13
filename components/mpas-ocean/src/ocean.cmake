@@ -1,3 +1,4 @@
+message(STATUS "ocean.cmake")
 
 # build_options.mk stuff handled here
 list(APPEND CPPDEFS "-DCORE_OCEAN")
@@ -15,12 +16,13 @@ endif()
 
 # SMARTREDIS handled here
 list(APPEND INCLUDES "../../../externals/smartredis/install/include")
+include_directories(SYSTEM "../../../externals/smartredis/install/include")
 set(SMARTREDIS_FILES
     ../../../externals/smartredis/src/fortran/fortran_c_interop.F90
     ../../../externals/smartredis/src/fortran/dataset.F90
     ../../../externals/smartredis/src/fortran/client.F90
+    ../../../externals/smartredis/install/include/enum_fortran.inc
 )
-#    ../../../externals/smartredis/install/include/enum_fortran.inc
 
 # driver (files live in E3SM)
 list(APPEND RAW_SOURCES
