@@ -186,7 +186,7 @@ Date last modified: YYYY/MM/DD
 Contributors: (add your name to this list if it does not appear)
 
 Stability of the wet/dry interface is achieved through a damping function on the
-fluxes and velocities out of a dry cell
+volume fluxes and velocities out of a dry cell
 
 .. math::
 
@@ -195,6 +195,7 @@ fluxes and velocities out of a dry cell
 
 An alternative to damping the fluxes and velocities at dry cells is removing
 terms from the momentum equation.
+
 
 Algorithm design: Allow baroclinic velocities in shallow, wet cells
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -250,6 +251,43 @@ Is is appropriate to use upwinded layerThickEdge in the computation of the
 horizontal gradient of density at the top of edges in mpas_ocn_gm.F_?
 
 .. _mpas_ocn_gm.F: https://github.com/E3SM-Project/E3SM/blob/460ef4af4b91d01213ea0d00290236c996d100f2/components/mpas-ocean/src/shared/mpas_ocn_gm.F#L455-L493
+
+
+Implementation: Stability under existing time-stepping algorithms
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Date last modified: YYYY/MM/DD
+
+Contributors: (add your name to this list if it does not appear)
+
+Add additional options for damping thickness fluxes and velocities to the
+existing `ocn_wetting_drying` module. 
+
+Existing options for damping thickness fluxes and velocities:
+
+If `config_zero_drying_velocity` is true, every cell that would reach
+the minimum thin film thickness (plus an optional tolerance
+`config_drying_safety_height`) through the outgoing flux alone in that 
+timestep has `normalVelocity` and `normalTransportVelocity` set to zero. 
+
+If `config_zero_drying_velocity` is false, for only edges where the flux is
+outgoing:
+
+.. math::
+
+   u_{\text{Trans}} = u_{\text{Trans}} + u_{\text{Wet}}
+   u = u + u_{\text{Wet}}
+   u_{\text{Wet}} = - u * min(max(0,\\
+                                 (1 - \nabla \cdot F_{\text{out}})^2)\\
+                              1)
+   u_{\text{tend}} = u_{\text{tend}} * (1 - u_{\text{Wet}})
+   u = u * (1 - u_{\text{Wet}}) \text{(diagnostic update)}
+
+In addition, `normalVelocity` and `normalTransportVelocity` are set to zero
+when :math:`|u_{\text{Trans}} + u_{\text{Wet}}| < \varepsilon` where
+:math:`\varepsilon` is some small tolerance, designed to prevent spurious fluxes.
+
+Each of these updates are applied on each RK4 iteration.
 
 
 Implementation: Avoid new constraints on the time step
