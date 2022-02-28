@@ -105,7 +105,7 @@ module ocn_forward_mode
              ocn_forward_mode_finalize, &
              ocn_forward_mode_setup_clock
 
-!#  include "../../../mpas-framework/src/framework/enum_fortran.inc"
+#  include "../../../mpas-framework/src/framework/enum_fortran.inc"
 
 !***********************************************************************
 
