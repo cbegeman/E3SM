@@ -16,7 +16,7 @@ os.chdir( '{{ caseroot }}')
 
 _LIBDIR = os.path.join("{{ cimeroot }}", "scripts", "Tools")
 sys.path.append(_LIBDIR)
-_SMARTDIR = "/turquoise/usr/projects/climate/cbegeman/smartsim"
+_SMARTDIR = "/turquoise/usr/projects/climate/cbegeman/SmartSim-0.3.2"
 sys.path.append(_SMARTDIR)
 
 from standard_script_setup          import *
@@ -76,14 +76,6 @@ def _main_func(description):
     caseroot, skip_pnl, set_continue_run, resubmit = parse_command_line(sys.argv, description)
 
     with Case(caseroot, read_only=False) as case:
-        JOB_IDS = case.get_value("JOB_IDS")
-        JOB1 = JOB_IDS.split(', ')[0]
-        JOB_ID = JOB1.split(':')[1]
-        DB_NODES = case.get_value("DB_NODES")
-
-        db_command_input = 'source activate SmartSim-cime && python launch_db_for_e3sm.py -j {} -N {}'.format(JOB_ID,DB_NODES)
-        db_command = subprocess.run(db_command_input, shell=True, capture_output=True)
-
         success = case.case_run(skip_pnl=skip_pnl, set_continue_run=set_continue_run, submit_resubmits=resubmit)
 
     sys.exit(0 if success else 1)
