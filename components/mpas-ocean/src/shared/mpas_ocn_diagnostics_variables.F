@@ -131,7 +131,7 @@ module ocn_diagnostics_variables
    real (kind=RKIND), dimension(:,:), pointer :: viscosity
    real (kind=RKIND), dimension(:,:), pointer :: vertViscTopOfEdge
    real (kind=RKIND), dimension(:,:), pointer :: vertViscTopOfCell
-   real (kind=RKIND), dimension(:,:), pointer :: wettingVelocity
+   real (kind=RKIND), dimension(:,:), pointer :: wettingVelocityFactor
    type (field2DReal), pointer :: wettingVelocityField
 
    real (kind=RKIND), dimension(:,:), pointer :: vertDiffTopOfCell
@@ -237,9 +237,9 @@ contains
       end if
 
       if ( trim(config_ocean_run_mode) == 'forward' ) then
-         call mpas_pool_get_array(diagnosticsPool, 'wettingVelocity', &
-                   wettingVelocity)
-         call mpas_pool_get_field(diagnosticsPool, 'wettingVelocity', &
+         call mpas_pool_get_array(diagnosticsPool, 'wettingVelocityFactor', &
+                   wettingVelocityFactor)
+         call mpas_pool_get_field(diagnosticsPool, 'wettingVelocityFactor', &
                    wettingVelocityField)
       end if
 
@@ -740,8 +740,8 @@ contains
          !$acc                   )
       end if
       if ( trim(config_ocean_run_mode) == 'forward' ) then
-         !$acc enter data create( &
-         !$acc                   wettingVelocity              &
+         !$acc enter data copyin( &
+         !$acc                   wettingVelocityFactor            &
          !$acc                   )
       end if
       if (config_use_GM.or.config_use_Redi) then
@@ -981,7 +981,7 @@ contains
       end if
       if ( trim(config_ocean_run_mode) == 'forward' ) then
          !$acc exit data delete(                              &
-         !$acc                   wettingVelocity              &
+         !$acc                   wettingVelocityFactor        &
          !$acc                   )
       end if
       if (config_use_GM.or.config_use_Redi) then
@@ -1177,7 +1177,7 @@ contains
                  normalizedRelativeVorticityCell)
       end if
       if ( trim(config_ocean_run_mode) == 'forward' ) then
-         nullify(wettingVelocity)
+         nullify(wettingVelocityFactor)
       end if
       if (config_use_GM.or.config_use_Redi) then
          nullify(RediKappa,         &
