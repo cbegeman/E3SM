@@ -1211,7 +1211,7 @@ module ocn_time_integration_rk4
          do k = 1, maxLevelEdgeTop(iEdge)
             normalVelocityProvis(k, iEdge) = normalVelocityCur(k, iEdge) + rkSubstepWeight &
                                            * normalVelocityTend(k, iEdge)
-            normalVelocityProvis(k, iEdge) = normalVelocityProvis(k, iEdge) * (1.0_RKIND - wettingVelocity(k, iEdge))
+            normalVelocityProvis(k, iEdge) = normalVelocityProvis(k, iEdge) * (1.0_RKIND - wettingVelocityFactor(k, iEdge))
          end do
       end do
       !$omp end do
@@ -1447,7 +1447,7 @@ module ocn_time_integration_rk4
       !$omp do schedule(runtime)
       do iEdge = 1, nEdges
          normalVelocityNew(:, iEdge) = normalVelocityNew(:, iEdge) + rkWeight * normalVelocityTend(:, iEdge)
-         normalVelocityNew(:, iEdge) = normalVelocityNew(:, iEdge) * (1.0_RKIND - wettingVelocity(:, iEdge))
+         normalVelocityNew(:, iEdge) = normalVelocityNew(:, iEdge) * (1.0_RKIND - wettingVelocityFactor(:, iEdge))
       end do
       !$omp end do
       !$omp end parallel
