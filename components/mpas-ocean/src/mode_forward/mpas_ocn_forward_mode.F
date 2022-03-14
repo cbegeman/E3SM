@@ -141,6 +141,7 @@ module ocn_forward_mode
 
       integer :: err_tmp    ! local error codes from subroutine calls
       integer(kind=enum_kind) :: err_client
+      character(len=100) :: log_string
 
       real (kind=RKIND) :: &
          dt,               &! time step in seconds
@@ -197,6 +198,8 @@ module ocn_forward_mode
       ! Currently only support one block per task
       block => domain % blocklist
 
+      call get_environment_variable('SSDB',log_string)
+      call mpas_log_write('SSDB='//TRIM(log_string))
       err_client = client%initialize(.false.)
       call mpas_log_write('Client gives error:$i',intArgs=(/err_client/))
       if (err_client /= SRNoError) then
