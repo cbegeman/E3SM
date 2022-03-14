@@ -16,8 +16,6 @@ os.chdir( '{{ caseroot }}')
 
 _LIBDIR = os.path.join("{{ cimeroot }}", "scripts", "Tools")
 sys.path.append(_LIBDIR)
-_SMARTDIR = "/turquoise/usr/projects/climate/cbegeman/SmartSim-0.3.2"
-sys.path.append(_SMARTDIR)
 
 from standard_script_setup          import *
 
