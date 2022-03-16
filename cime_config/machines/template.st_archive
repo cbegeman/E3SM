@@ -15,8 +15,6 @@ os.chdir( '{{ caseroot }}')
 _LIBDIR = os.path.join("{{ cimeroot }}", "scripts", "Tools")
 sys.path.append(_LIBDIR)
 
-os.environ["MODULEPATH"]="/etc/modulefiles:/usr/share/modulefiles:/usr/share/modulefiles/Linux:/usr/share/modulefiles/Core:/usr/share/lmod/lmod/modulefiles/Core:/usr/projects/hpcsoft/modulefiles/toss3/badger/compiler:/usr/projects/hpcsoft/modulefiles/toss3/badger/debugger:/usr/projects/hpcsoft/modulefiles/toss3/badger/libraries:/usr/projects/hpcsoft/modulefiles/toss3/badger/misc:/usr/projects/hpcsoft/modulefiles/toss3/badger/mpi:/usr/projects/hpcsoft/modulefiles/toss3/badger/tools:/usr/projects/hpcsoft/modulefiles/toss3/badger/viz:/usr/projects/hpcsoft/modulefiles/toss3/badger/LANL_Core:/usr/projects/climate/SHARED_CLIMATE/modulefiles/all:/usr/projects/hpcsoft/modulefiles/toss3/badger/friendly-testing"
-
 from standard_script_setup          import *
 from CIME.case import Case
 
