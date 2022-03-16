@@ -9,7 +9,7 @@ FRAMEWORK_DIR = ../../../mpas-framework/src
 OCEAN_SHARED_INCLUDES = -I$(FRAMEWORK_DIR)/framework -I$(FRAMEWORK_DIR)/external/esmf_time_f90 -I$(FRAMEWORK_DIR)/operators
 OCEAN_SHARED_INCLUDES += -I$(PWD)/shared -I$(PWD)/analysis_members -I$(PWD)/mode_forward -I$(PWD)/mode_analysis
 OCEAN_SHARED_INCLUDES += -I$(PWD)/BGC -I$(PWD)/MARBL/include -I$(PWD)/cvmix/src/shared -I$(PWD)/gotm/build -I$(PWD)/gotm/build/modules
-OCEAN_SHARED_INCLUDES += -I$(PWD)/../../../externals/smartredis/install/include
+OCEAN_SHARED_INCLUDES += -I$(SMARTREDIS_PATH)/install/include
 ifneq "$(EXCLUDE_INIT_MODE)" "true"
 	OCEAN_SHARED_INCLUDES += -I$(PWD)/mode_init
 endif
