@@ -15,14 +15,19 @@ if(LAPACK_FOUND AND BLAS_FOUND)
 endif()
 
 # SMARTREDIS handled here
-list(APPEND INCLUDES "../../../externals/smartredis/install/include")
-include_directories(SYSTEM "../../../externals/smartredis/install/include")
+list(APPEND INCLUDES "${SMARTREDIS_INC}")
+include_directories(SYSTEM "${SMARTREDIS_INC}")
 set(SMARTREDIS_FILES
-    ../../../externals/smartredis/src/fortran/fortran_c_interop.F90
-    ../../../externals/smartredis/src/fortran/dataset.F90
-    ../../../externals/smartredis/src/fortran/client.F90
-    ../../../externals/smartredis/install/include/enum_fortran.inc
+    ${SMARTREDIS_FTN_SRC}/fortran_c_interop.F90
+    ${SMARTREDIS_FTN_SRC}/dataset.F90
+    ${SMARTREDIS_FTN_SRC}/client.F90
 )
+#set(SMARTREDIS_FILES
+#    ../../../externals/smartredis/src/fortran/fortran_c_interop.F90
+#    ../../../externals/smartredis/src/fortran/dataset.F90
+#    ../../../externals/smartredis/src/fortran/client.F90
+#    ../../../externals/smartredis/install/include/enum_fortran.inc
+#)
 
 # driver (files live in E3SM)
 list(APPEND RAW_SOURCES
