@@ -418,10 +418,8 @@ set(SMARTREDIS_HOME "${SMARTREDIS_PATH}")
 set(SMARTREDIS_LIB_DIR "${SMARTREDIS_PATH}/install/lib")
 set(SMARTREDIS_FTN_SRC "${SMARTREDIS_PATH}/src/fortran")
 set(SMARTREDIS_INC "${SMARTREDIS_PATH}/install/include")
-#list(APPEND INCLDIR "${SMARTREDIS_INC}")
-#set(SMARTREDIS_INCLUDE ${SMARTREDIS_HOME}/include)
-#list(APPEND INCLDIR "${SMARTREDIS_INCLUDE}")
-#set(SLIBS "${SLIBS} ${SMARTREDIS_LIB_DIR}/libhiredis.a ${SMARTREDIS_LIB_DIR}/libredis++.a" ${SMARTREDIS_LIB_DIR}/libsmartredis.so) #plain
+list(APPEND INCLDIR "${SMARTREDIS_INC}")
+set(SLIBS "${SLIBS} ${SMARTREDIS_LIB_DIR}/libhiredis.a ${SMARTREDIS_LIB_DIR}/libredis++.a" ${SMARTREDIS_LIB_DIR}/libsmartredis.so) #plain
 
 list(APPEND INCLDIR "${INSTALL_SHAREDPATH}/include")
 
@@ -456,9 +454,6 @@ endif()
 if (USE_PETSC)
   set(SLIBS "${SLIBS} ${PETSC_LIB}")
 endif()
-
-# Smartredis TODO add if (USE_SMARTSIM)
-#set(SLIBS "${SLIBS} -L${SMARTREDIS_LIB}")
 
 # Add trilinos libraries; too be safe, we include all libraries included in the trilinos build,
 # as well as all necessary third-party libraries
