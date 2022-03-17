@@ -15,19 +15,16 @@ if(LAPACK_FOUND AND BLAS_FOUND)
 endif()
 
 # SMARTREDIS handled here
+set(SMARTREDIS_INC "/home/ac.cbegeman/soft/smartredis/0.3.0/install/include")
+message(STATUS "Include ${SMARTREDIS_INC}")
 list(APPEND INCLUDES "${SMARTREDIS_INC}")
 include_directories(SYSTEM "${SMARTREDIS_INC}")
+set(SMARTREDIS_FTN_SRC "/home/ac.cbegeman/soft/smartredis/0.3.0/src/fortran")
 set(SMARTREDIS_FILES
     ${SMARTREDIS_FTN_SRC}/fortran_c_interop.F90
     ${SMARTREDIS_FTN_SRC}/dataset.F90
     ${SMARTREDIS_FTN_SRC}/client.F90
 )
-#set(SMARTREDIS_FILES
-#    ../../../externals/smartredis/src/fortran/fortran_c_interop.F90
-#    ../../../externals/smartredis/src/fortran/dataset.F90
-#    ../../../externals/smartredis/src/fortran/client.F90
-#    ../../../externals/smartredis/install/include/enum_fortran.inc
-#)
 
 # driver (files live in E3SM)
 list(APPEND RAW_SOURCES
@@ -235,6 +232,7 @@ set(GOTM_FILES
   core_ocean/gotm/src/turbulence/variances.F90
 )
 
+message(STATUS "Append ${SMARTREDIS_FTN_SRC}")
 list(APPEND RAW_SOURCES ${CVMIX_FILES} ${BGC_FILES} ${MARBL_FILES} ${GOTM_FILES} ${SMARTREDIS_FILES})
 list(APPEND NO_PREPROCESS ${CVMIX_FILES} ${BGC_FILES} ${MARBL_FILES} ${GOTM_FILES} ${SMARTREDIS_FILES})
 
