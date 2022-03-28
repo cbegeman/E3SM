@@ -412,10 +412,15 @@ endif()
 
 #if (USE_SMARTSIM)
 message(STATUS "Find smartredis lib")
-#set(SMARTREDIS_HOME "/turquoise/usr/projects/climate/cbegeman/soft/smartredis") # Alternative location on badger
+#set(SMARTREDIS_PATH "/turquoise/usr/projects/climate/cbegeman/soft/smartredis") # Alternative location on badger
 #set(SMARTREDIS_HOME ${CMAKE_CURRENT_SOURCE_DIR}/../../../externals/smartredis)
-set(SMARTREDIS_PATH "/home/ac.cbegeman/soft/smartredis/0.3.0")
-message(STATUS "SMARTREDIS_PATH = ${SMARTREDIS_PATH}")
+#set(SMARTREDIS_PATH "/home/ac.cbegeman/soft/smartredis/0.3.0")
+if (DEFINED ENV{SMARTREDIS_PATH)
+  set(SMARTREDIS_PATH $ENV{SMARTREDIS_PATH})
+  message(STATUS "SMARTREDIS_PATH = $ENV{SMARTREDIS_PATH}")
+else()
+  message(STATUS "SMARTREDIS_PATH not defined")
+endif()
 set(SMARTREDIS_LIB_DIR "${SMARTREDIS_PATH}/install/lib")
 message(STATUS "SMARTREDIS_LIB_DIR = ${SMARTREDIS_LIB_DIR}")
 set(SMARTREDIS_FTN_SRC "${SMARTREDIS_PATH}/src/fortran")
