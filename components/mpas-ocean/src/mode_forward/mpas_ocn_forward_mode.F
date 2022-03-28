@@ -148,6 +148,9 @@ module ocn_forward_mode
          maxDensity,       &! local max of mesh density
          maxDensity_global  ! global max of mesh density
 
+      real (kind=c_float), dimension(:), pointer :: &
+         sendArrayReal1d    ! pointer to mesh density array
+
       real (kind=RKIND), dimension(:), pointer :: &
          meshDensity        ! pointer to mesh density array
 
@@ -207,6 +210,24 @@ module ocn_forward_mode
               MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
          ierr = ior(ierr, 1)
       endif
+      call MPAS_stream_mgr_begin_iteration(domain%streamManager, 'smartsend', ierr)
+      call MPAS_stream_mgr_get_next_field(domain%streamManager, 'smartsend', smartFieldName, isActive)
+      if (isActive) then
+         call mpas_pool_get_field_info(domain%blocklist%allFields, smartFieldName, fieldInfo)
+         if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, smartFieldName, sendArrayReal1d)
+            err_client = client%put_tensor("send_array", sendArrayReal64, shape(sendArrayReal1d))
+            if (err_client /= SRNoError) then
+               call mpas_log_write('Error put tensor', &
+                    MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
+               ierr = ior(ierr, 1)
+            endif
+         endif
+      else
+         call mpas_log_write('')
+      endif
+      !call mpas_get_package(domain%packages,'smartPKG',smartPKG)
+
 
       !-----------------------------------------------------------------
       ! Initialize data from external file input

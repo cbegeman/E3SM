@@ -1649,6 +1649,17 @@
 			<var name="vertViscTopOfCell"/>
 			<var name="vertDiffTopOfCell"/>
 		</stream>
+		<stream name="smartsend"
+				type="output"
+				filename_template="output/smartsend.nc"
+				filename_interval="00-01-00_00:00:00"
+				reference_time="0001-01-01_00:00:00"
+				clobber_mode="truncate"
+				output_interval="0000_01:00:00"
+				runtime_format="single_file"
+				mode="forward">
+			<var name="gmBolusKappa"/>
+		</stream>
 
 		<stream name="restart"
 				type="input;output"
