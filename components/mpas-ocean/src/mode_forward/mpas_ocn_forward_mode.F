@@ -95,7 +95,7 @@ module ocn_forward_mode
    use ocn_constants
    use ocn_config
 
-!   use smartredis_client, only: client_type
+   use smartredis_client, only: client_type
 
    implicit none
    private
@@ -155,6 +155,18 @@ module ocn_forward_mode
          maxDensity,       &! local max of mesh density
          maxDensity_global  ! global max of mesh density
 
+      real (kind=c_float), pointer :: &
+         sendArrayReal0d    ! pointer to float to send to orchestrator
+
+      real (kind=c_float), dimension(:), pointer :: &
+         sendArrayReal1d    ! pointer to array to send to orchestrator
+
+      real (kind=RKIND), pointer :: &
+         recvArrayReal0d    ! pointer to float to recv from orchestrator
+
+      real (kind=RKIND), dimension(:), pointer :: &
+         recvArrayReal1d    ! pointer to array to recv from orchestrator
+
       real (kind=RKIND), dimension(:), pointer :: &
          meshDensity        ! pointer to mesh density array
 
@@ -178,7 +190,7 @@ module ocn_forward_mode
          alarmTimeStep   ! alarm interval in time manager form
 
       character (len=StrKIND) :: units
-      !type(client_type) :: client
+      type(client_type) :: client
 
       ! End preamble
       !-------------
@@ -222,6 +234,35 @@ module ocn_forward_mode
             !ierr = ior(ierr, 1)
          endif
       endif
+      !call MPAS_stream_mgr_begin_iteration(domain%streamManager, 'smartsend', ierr)
+      !call MPAS_stream_mgr_get_next_field(domain%streamManager, 'smartsend', smartFieldName, isActive)
+      !if (isActive) then
+      !   call mpas_pool_get_field_info(domain%blocklist%allFields, smartFieldName, fieldInfo)
+      !   WRITE(log_string,*) smartFieldName, 'has type', fieldInfo%fieldType
+      !   call mpas_log_write(log_string)
+      !   if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
+      !      call mpas_pool_get_field(domain%blocklist%allFields, smartFieldName, sendArrayReal1d)
+      !      WRITE(log_string,*) smartFieldName, 'retrieved from stream', sendArrayReal1d
+      !      err_client = client%put_tensor("send_array", sendArrayReal1d, shape(sendArrayReal1d))
+      !      if (err_client /= SRNoError) then
+      !         WRITE(log_string,*) 'Error put tensor:', smartFieldName
+      !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
+      !         ierr = ior(ierr, 1)
+      !      endif
+      !   endif
+      !else
+      !   WRITE(log_string,*) 'smartsend field', smartFieldName, 'is not active'
+      !   call mpas_log_write(log_string)
+      !endif
+      ! TODO add similar loop for stream smartrecv
+      !      err_client = client%unpack_tensor("send_array", recvArrayReal1d, shape(recvArrayReal1d))
+      !      if (err_client /= SRNoError) then
+      !         WRITE(log_string,*) 'Error unpack tensor:', smartFieldName
+      !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
+      !         ierr = ior(ierr, 1)
+      !      endif
+      !call mpas_get_package(domain%packages,'smartPKG',smartPKG)
+
 
       !-----------------------------------------------------------------
       ! Initialize data from external file input
