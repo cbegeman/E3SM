@@ -15,11 +15,15 @@ if(LAPACK_FOUND AND BLAS_FOUND)
 endif()
 
 # SMARTREDIS handled here
-set(SMARTREDIS_INC "/home/ac.cbegeman/soft/smartredis/0.3.0/install/include")
+set(SMARTREDIS_INC $ENV{SMARTREDIS_INC})
+#set(SMARTREDIS_INC "/turquoise/usr/projects/climate/cbegeman/soft/smartredis/install/include")
+#set(SMARTREDIS_INC "/home/ac.cbegeman/soft/smartredis/0.3.0/install/include")
 message(STATUS "Include ${SMARTREDIS_INC}")
 list(APPEND INCLUDES "${SMARTREDIS_INC}")
 include_directories(SYSTEM "${SMARTREDIS_INC}")
-set(SMARTREDIS_FTN_SRC "/home/ac.cbegeman/soft/smartredis/0.3.0/src/fortran")
+set(SMARTREDIS_FTN_SRC $ENV{SMARTREDIS_FTN_SRC})
+#set(SMARTREDIS_FTN_SRC "/turquoise/usr/projects/climate/cbegeman/soft/smartredis/src/fortran")
+#set(SMARTREDIS_FTN_SRC "/home/ac.cbegeman/soft/smartredis/0.3.0/src/fortran")
 set(SMARTREDIS_FILES
     ${SMARTREDIS_FTN_SRC}/fortran_c_interop.F90
     ${SMARTREDIS_FTN_SRC}/dataset.F90
