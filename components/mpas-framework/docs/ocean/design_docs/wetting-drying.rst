@@ -156,10 +156,6 @@ ramping function with water column thickness as an input.
 
 .. math::
 
-   a = 1
-
-.. math::
-
    \beta_{e} = 1 - \min\left(1,\, \max\left(0,\,
    \frac{H_{\text{edge}}^{*}}{H_{\text{upwind}}} - 1\right)\right)
 
