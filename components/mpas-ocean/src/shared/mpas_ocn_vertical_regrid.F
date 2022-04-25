@@ -101,7 +101,7 @@ module ocn_vertical_regrid
 
       !$omp parallel
       !$omp do schedule(runtime) private(k)
-      do iCell = 1,nCellsAll
+      do iCell = 1, nCellsAll
          totalThickness(iCell) = 0.0_RKIND
          totalRestingThickness(iCell) = 0.0_RKIND
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
@@ -113,16 +113,17 @@ module ocn_vertical_regrid
          layerScalingFactor(iCell) = totalThickness(iCell)/ &
                                      totalRestingThickness(iCell)
 
+         if (totalRestingThickness(iCell) .ne. bottomDepth(iCell)) then
          !if (iCell == 7) then
-         !   write(log_string,*) 'Regrid S1: H,Hrest=',&
-         !      totalThickness(iCell),totalRestingThickness(iCell)
-         !   call mpas_log_write(log_string)
+            write(log_string,*) 'Regrid S1: H,Hrest,zBed=',&
+               totalThickness(iCell),totalRestingThickness(iCell),bottomDepth(iCell)
+            call mpas_log_write(log_string)
          !   do k = maxLevelCell(iCell), minLevelCell(iCell), -1
          !   write(log_string,*) 'Regrid S1: k,hrest=',&
          !      k,restingThickness(k,iCell)
          !   call mpas_log_write(log_string)
          !   end do
-         !endif
+         endif
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
             layerThicknessTarget(k, iCell) = restingThickness(k, iCell) * &
                                              layerScalingFactor(iCell)
@@ -238,7 +239,7 @@ module ocn_vertical_regrid
                   restingThickness(kmin,iCell) = restingThickness(kmin+1,iCell)
 
             endif
-            exit
+            !exit
          endif 
          if (MINVAL(layerThicknessTarget(kmin:kmax,iCell)) < minLayerThickness &
              .and. kmax - kmin + 1 > minLayers &
