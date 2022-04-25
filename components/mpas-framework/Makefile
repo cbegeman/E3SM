@@ -517,6 +517,7 @@ CPPINCLUDES =
 FCINCLUDES =
 LIBS =
 
+
 #
 # If user has indicated a PIO2 library, define USE_PIO2 pre-processor macro
 #
@@ -604,6 +605,14 @@ endif
 	FCINCLUDES += -I$(PNETCDF)/include
 	LIBS += -L$(PNETCDF)/$(PNETCDFLIBLOC) -lpnetcdf
 endif
+
+#ifeq "$(USE_SMARTSIM)" "true"
+#override LIBS += -L$(SMARTREDIS_PATH)/lib
+#override LIBS += -lhiredis.a
+#override LIBS += -lredis++.a
+#override LIBS += -lsmartredis.so
+#override LIBS += -lsmartredis-fortran.so
+#endif
 
 ifeq "$(USE_LAPACK)" "true"
 ifndef LAPACK
@@ -1005,7 +1014,7 @@ drver:  $(AUTOCLEAN_DEPS) framework dycore
 
 
 mpas: $(AUTOCLEAN_DEPS) framework dycore drver
-	$(LINKER) $(LDFLAGS) -o $(EXE_NAME) $(FWPATH)/driver/*.o -L$(FWPATH) -Lsrc -ldycore -lops -lframework $(LIBS) -I./external/esmf_time_f90 -L$(FWPATH)/external/esmf_time_f90 -lesmf_time
+	$(LINKER) $(LDFLAGS) -o $(EXE_NAME) $(FWPATH)/driver/*.o -L$(FWPATH) -Lsrc -ldycore -lops -lframework $(LIBS) -I./external/esmf_time_f90 -L$(FWPATH)/external/esmf_time_f90 -lesmf_time -L$(SMARTREDIS_PATH)/lib -lhiredis -lredis++ -lsmartredis-fortran
 
 framework:
 	cd $(FWPATH); $(MAKE) \

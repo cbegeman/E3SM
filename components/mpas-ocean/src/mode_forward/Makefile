@@ -1,4 +1,4 @@
-.SUFFIXES: .F .o
+.SUFFIXES: .F .o .F90
 
 OBJS = mpas_ocn_forward_mode.o \
        mpas_ocn_time_integration.o \
