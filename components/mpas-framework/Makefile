@@ -625,6 +625,29 @@ endif
 
 ifeq "$(USE_SHTNS)" "true"
 	override CPPFLAGS += -DUSE_SHTNS
+
+ifeq "$(USE_SMARTSIM)" "true"
+ifndef SMARTREDIS_PATH
+$(error SMARTREDIS_PATH is not set.  Please set SMARTREDIS_PATH to the SMARTREDIS install directory when USE_SMARTSIM=true)
+endif
+ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libhiredis.*))
+	LIBS += -L$(SMARTREDIS_PATH)/lib
+else
+$(error libhiredis.* does NOT exist in $(SMARTREDIS_PATH)/lib)
+endif
+ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libredis++.*))
+	LIBS += -L$(SMARTREDIS_PATH)/lib
+else
+$(error libredis++.* does NOT exist in $(SMARTREDIS)/lib)
+endif
+ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libsmartredis.*))
+	LIBS += -L$(SMARTREDIS_PATH)/lib
+else
+$(error libsmartredis.* does NOT exist in $(SMARTREDIS_PATH)/lib)
+endif
+	LIBS += -lhiredis.a
+	LIBS += -lredis++.a
+	LIBS += -lsmartredis.so
 endif
 
 RM = rm -f
