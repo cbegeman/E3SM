@@ -1,6 +1,7 @@
 ifeq "$(ROOT_DIR)" ""
 	ROOT_DIR=$(shell pwd)/src
 endif
+SMARTREDIS_PATH=/home/ac.cbegeman/soft/smartredis/0.3.0
 EXE_NAME=ocean_model
 NAMELIST_SUFFIX=ocean
 FCINCLUDES += -I$(ROOT_DIR)/driver
@@ -10,6 +11,8 @@ FCINCLUDES += -I$(ROOT_DIR)/cvmix/src/shared
 FCINCLUDES += -I$(ROOT_DIR)/BGC
 FCINCLUDES += -I$(ROOT_DIR)/MARBL/include
 FCINCLUDES += -I$(ROOT_DIR)/gotm/build/modules
+FCINCLUDES += -I$(SMARTREDIS_PATH)/install/include
+FCINCLUDES += -I$(SMARTREDIS_PATH)/src/fortran
 override CPPFLAGS += -DCORE_OCEAN
 
 report_builds:
