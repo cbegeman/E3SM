@@ -26,6 +26,7 @@ module ocn_thick_ale
 
    use ocn_constants
    use ocn_config
+   use ocn_mesh
 
    implicit none
    private
@@ -116,7 +117,7 @@ contains
       integer, dimension(:), pointer :: minLevelCell
       integer, dimension(:), pointer :: nCellsArray
 
-      real (kind=RKIND) :: weightSum, thicknessSum, remainder, newThickness
+      real (kind=RKIND) :: weightSum, columnThickness, thicknessSum, remainder, newThickness
       real (kind=RKIND), dimension(:), pointer :: vertCoordMovementWeights
       real (kind=RKIND), dimension(:), allocatable :: &
          prelim_ALE_thickness,   & !> ALE thickness at new time
@@ -160,13 +161,14 @@ contains
             do k = kMin, kMax
                thicknessSum = thicknessSum + vertCoordMovementWeights(k) * restingThickness(k, iCell)
             end do
+            columnThickness = bottomDepth(iCell) + SSH(iCell)
    
             ! Note that restingThickness is nonzero, and remaining terms are perturbations about zero.
             ! This is equation 4 and 6 in Petersen et al 2015, but with eqn 6
             do k = kMin, kMax
                ALE_thickness(k, iCell) = restingThickness(k, iCell) &
-                  + ( SSH(iCell) * vertCoordMovementWeights(k) * restingThickness(k, iCell) ) &
-                    / thicknessSum
+                  + ( (columnThickness - thicknessSum) * vertCoordMovementWeights(k) * &
+                      restingThickness(k, iCell) ) / thicknessSum
             end do
          enddo
          !$omp end do
