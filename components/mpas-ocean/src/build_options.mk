@@ -1,7 +1,6 @@
 ifeq "$(ROOT_DIR)" ""
 	ROOT_DIR=$(shell pwd)/src
 endif
-SMARTREDIS_PATH=/home/ac.cbegeman/soft/smartredis/0.3.0
 EXE_NAME=ocean_model
 NAMELIST_SUFFIX=ocean
 FCINCLUDES += -I$(ROOT_DIR)/driver
