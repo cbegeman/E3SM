@@ -88,6 +88,7 @@ module ocn_tendency
              ocn_tend_vel, &
              ocn_tend_tracer, &
              ocn_tend_freq_filtered_thickness, &
+             ocn_tend_meke, &
              ocn_tendency_init
 
    !--------------------------------------------------------------------
@@ -1305,6 +1306,100 @@ contains
    !--------------------------------------------------------------------
 
    end subroutine ocn_tend_tracer!}}}
+
+!***********************************************************************
+!
+!  routine ocn_tend_meke
+!
+!> \brief   Computes mesoscale eddy kinetic energy tendency
+!> \author  Carolyn Begeman, Luke Van Roekel
+!> \date    June 2022
+!> \details
+!>  This routine computes meke tendency for the ocean
+!
+!-----------------------------------------------------------------------
+
+   subroutine ocn_tend_meke(tendPool, statePool,  &
+                            meshPool, dt, timeLevelIn )!{{{
+
+      !-----------------------------------------------------------------
+      ! input variables
+      !-----------------------------------------------------------------
+
+      type (mpas_pool_type), intent(in) :: &
+         statePool,          &!< [in] ocean state variables
+         meshPool             !< [in] mesh information
+
+      real (kind=RKIND), intent(in) :: &
+         dt                   !< [in] time step (seconds)
+
+      integer, intent(in), optional :: &
+         timeLevelIn          !< [in] time index to use for state vars
+
+      ! these variables input from shared diagnostics module:
+      !    normalTransportVelocity - transport velocity across edge
+      !    layerThickEdgeFlux      - flux-related layer thickness on edge
+
+      !-----------------------------------------------------------------
+      ! input/output variables
+      !-----------------------------------------------------------------
+
+      type (mpas_pool_type), intent(inout) :: &
+         tendPool        !< [inout] Tendency terms for all variables
+
+      real (kind=RKIND), dimension(:,:), pointer, contiguous :: &
+         meke,               &! mesoscale EKE
+         mekeTend             ! mesoscale EKE tendency
+
+      integer :: &
+         iCell, k,           &! loop counters for cell,edge,vert,tracer
+         err,                &! internal error flag 
+         timeLevel            ! time level to use for state variables
+
+      ! End preamble
+      !-----------------------------------------------------------------
+      ! Begin code
+
+      call mpas_timer_start("ocn_tend_meke")
+
+      ! set time level to default 1 or override with input arg
+      if (present(timeLevelIn)) then
+         timeLevel = timeLevelIn
+      else
+         timeLevel = 1
+      end if
+
+      ! retrieve data from pools 
+      call mpas_pool_get_array(statePool, 'meke', &
+                               meke, timeLevel)
+      call mpas_pool_get_array(tendPool, 'meke', &
+                               mekeTend)
+
+      ! initialize meke tendencies to zero.
+      !$omp parallel
+      !$omp do schedule(runtime) private(k)
+      do iCell = 1, nCellsAll
+      do k=1, nVertLevels
+         mekeTend(k, iCell) = 0.0_RKIND
+      end do
+      end do
+      !$omp end do
+      !$omp end parallel
+
+      ! Accumulate tendencies for all tracers
+      ! First is the horizontal advection term
+      !     -div( layerThickness \phi u)
+      ! Tracer budget is computed and stored within the tracer adv
+      ! routine
+      !call ocn_meke_advection_tend(meke, &
+      !                   normalThicknessFlux, vertAleTransportTop, &
+      !                   layerThickness, dt, mekeTend)
+
+      call mpas_timer_stop("ocn_tend_meke")
+
+   !--------------------------------------------------------------------
+
+   end subroutine ocn_tend_meke!}}}
 
 !***********************************************************************
 !
