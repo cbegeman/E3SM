@@ -63,10 +63,10 @@
 		<var_struct name="tracers" time_levs="2">
 			<var_array name="activeTracers" dimensions="nVertLevels nCells Time" type="real" packages="activeTracersPKG" >
 				<var name="temperature" array_group="activeGRP" units="degrees Celsius"
-			 description="potential temperature"
+			 description="potential temperature" missing_value="FILLVAL" missing_value_mask="cellMask"
 				/>
 				<var name="salinity" array_group="activeGRP" units="grams salt per kilogram seawater"
-			 description="salinity"
+			 description="salinity" missing_value="FILLVAL" missing_value_mask="cellMask"
 				/>
 			</var_array>
 		</var_struct>
