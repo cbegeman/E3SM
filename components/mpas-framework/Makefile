@@ -627,27 +627,26 @@ ifeq "$(USE_SHTNS)" "true"
 	override CPPFLAGS += -DUSE_SHTNS
 
 ifeq "$(USE_SMARTSIM)" "true"
-ifndef SMARTREDIS_PATH
+ifdef SMARTREDIS_PATH
+>---LIBS += -L$(SMARTREDIS_PATH)/lib
+else
 $(error SMARTREDIS_PATH is not set.  Please set SMARTREDIS_PATH to the SMARTREDIS install directory when USE_SMARTSIM=true)
 endif
-ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libhiredis.*))
-	LIBS += -L$(SMARTREDIS_PATH)/lib
+ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libhiredis.a))
+>---LIBS += -lhiredis.a
 else
-$(error libhiredis.* does NOT exist in $(SMARTREDIS_PATH)/lib)
+$(error libhiredis.a does NOT exist in $(SMARTREDIS_PATH)/lib)
 endif
-ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libredis++.*))
-	LIBS += -L$(SMARTREDIS_PATH)/lib
+ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libredis++.a))
+>---LIBS += -lredis++.a
 else
-$(error libredis++.* does NOT exist in $(SMARTREDIS)/lib)
+$(error libredis++.a does NOT exist in $(SMARTREDIS)/lib)
 endif
-ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libsmartredis.*))
-	LIBS += -L$(SMARTREDIS_PATH)/lib
+ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libsmartredis.so))
+>---LIBS += -lsmartredis.so
 else
-$(error libsmartredis.* does NOT exist in $(SMARTREDIS_PATH)/lib)
+$(error libsmartredis.so does NOT exist in $(SMARTREDIS_PATH)/lib)
 endif
-	LIBS += -lhiredis.a
-	LIBS += -lredis++.a
-	LIBS += -lsmartredis.so
 endif
 
 RM = rm -f
