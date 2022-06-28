@@ -10,8 +10,7 @@ FCINCLUDES += -I$(ROOT_DIR)/cvmix/src/shared
 FCINCLUDES += -I$(ROOT_DIR)/BGC
 FCINCLUDES += -I$(ROOT_DIR)/MARBL/include
 FCINCLUDES += -I$(ROOT_DIR)/gotm/build/modules
-FCINCLUDES += -I$(SMARTREDIS_PATH)/install/include
-FCINCLUDES += -I$(SMARTREDIS_PATH)/src/fortran
+FCINCLUDES += -I$(SMARTREDIS_PATH)/include
 override CPPFLAGS += -DCORE_OCEAN
 
 report_builds:
