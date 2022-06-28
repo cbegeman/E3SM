@@ -625,6 +625,7 @@ endif
 
 ifeq "$(USE_SHTNS)" "true"
 	override CPPFLAGS += -DUSE_SHTNS
+endif
 
 ifeq "$(USE_SMARTSIM)" "true"
 ifdef SMARTREDIS_PATH
