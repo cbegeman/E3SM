@@ -517,6 +517,7 @@ CPPINCLUDES =
 FCINCLUDES =
 LIBS =
 
+
 #
 # If user has indicated a PIO2 library, define USE_PIO2 pre-processor macro
 #
@@ -605,6 +606,14 @@ endif
 	LIBS += -L$(PNETCDF)/$(PNETCDFLIBLOC) -lpnetcdf
 endif
 
+#ifeq "$(USE_SMARTSIM)" "true"
+#override LIBS += -L$(SMARTREDIS_PATH)/lib
+#override LIBS += -lhiredis.a
+#override LIBS += -lredis++.a
+#override LIBS += -lsmartredis.so
+#override LIBS += -lsmartredis-fortran.so
+#endif
+
 ifeq "$(USE_LAPACK)" "true"
 ifndef LAPACK
 $(error LAPACK is not set.  Please set LAPACK to the LAPACK install directory when USE_LAPACK=true)
@@ -625,29 +634,6 @@ endif
 
 ifeq "$(USE_SHTNS)" "true"
 	override CPPFLAGS += -DUSE_SHTNS
-endif
-
-ifeq "$(USE_SMARTSIM)" "true"
-ifdef SMARTREDIS_PATH
->---LIBS += -L$(SMARTREDIS_PATH)/lib
-else
-$(error SMARTREDIS_PATH is not set.  Please set SMARTREDIS_PATH to the SMARTREDIS install directory when USE_SMARTSIM=true)
-endif
-ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libhiredis.a))
->---LIBS += -lhiredis.a
-else
-$(error libhiredis.a does NOT exist in $(SMARTREDIS_PATH)/lib)
-endif
-ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libredis++.a))
->---LIBS += -lredis++.a
-else
-$(error libredis++.a does NOT exist in $(SMARTREDIS)/lib)
-endif
-ifneq (, $(shell ls $(SMARTREDIS_PATH)/lib/libsmartredis.so))
->---LIBS += -lsmartredis.so
-else
-$(error libsmartredis.so does NOT exist in $(SMARTREDIS_PATH)/lib)
-endif
 endif
 
 RM = rm -f
@@ -1028,7 +1014,7 @@ drver:  $(AUTOCLEAN_DEPS) framework dycore
 
 
 mpas: $(AUTOCLEAN_DEPS) framework dycore drver
-	$(LINKER) $(LDFLAGS) -o $(EXE_NAME) $(FWPATH)/driver/*.o -L$(FWPATH) -Lsrc -ldycore -lops -lframework $(LIBS) -I./external/esmf_time_f90 -L$(FWPATH)/external/esmf_time_f90 -lesmf_time
+	$(LINKER) $(LDFLAGS) -o $(EXE_NAME) $(FWPATH)/driver/*.o -L$(FWPATH) -Lsrc -ldycore -lops -lframework $(LIBS) -I./external/esmf_time_f90 -L$(FWPATH)/external/esmf_time_f90 -lesmf_time -L$(SMARTREDIS_PATH)/lib -lhiredis.a -lredis++.a -lsmartredis-fortran.so
 
 framework:
 	cd $(FWPATH); $(MAKE) \
