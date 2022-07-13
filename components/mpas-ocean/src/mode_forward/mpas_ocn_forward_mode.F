@@ -152,6 +152,7 @@ module ocn_forward_mode
       real (kind=c_float), pointer :: &
          sendArrayReal0d    ! pointer to float to send to orchestrator
 
+      real (kind=RKIND), dimension(:), pointer :: RossbyRadiusCell
       real (kind=c_float), dimension(:), pointer :: &
          sendArrayReal1d    ! pointer to array to send to orchestrator
 
@@ -224,35 +225,6 @@ module ocn_forward_mode
             !ierr = ior(ierr, 1)
          endif
       endif
-      !call MPAS_stream_mgr_begin_iteration(domain%streamManager, 'smartsend', ierr)
-      !call MPAS_stream_mgr_get_next_field(domain%streamManager, 'smartsend', smartFieldName, isActive)
-      !if (isActive) then
-      !   call mpas_pool_get_field_info(domain%blocklist%allFields, smartFieldName, fieldInfo)
-      !   WRITE(log_string,*) smartFieldName, 'has type', fieldInfo%fieldType
-      !   call mpas_log_write(log_string)
-      !   if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
-      !      call mpas_pool_get_field(domain%blocklist%allFields, smartFieldName, sendArrayReal1d)
-      !      WRITE(log_string,*) smartFieldName, 'retrieved from stream', sendArrayReal1d
-      !      err_client = client%put_tensor("send_array", sendArrayReal1d, shape(sendArrayReal1d))
-      !      if (err_client /= SRNoError) then
-      !         WRITE(log_string,*) 'Error put tensor:', smartFieldName
-      !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
-      !         ierr = ior(ierr, 1)
-      !      endif
-      !   endif
-      !else
-      !   WRITE(log_string,*) 'smartsend field', smartFieldName, 'is not active'
-      !   call mpas_log_write(log_string)
-      !endif
-      ! TODO add similar loop for stream smartrecv
-      !      err_client = client%unpack_tensor("send_array", recvArrayReal1d, shape(recvArrayReal1d))
-      !      if (err_client /= SRNoError) then
-      !         WRITE(log_string,*) 'Error unpack tensor:', smartFieldName
-      !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
-      !         ierr = ior(ierr, 1)
-      !      endif
-      !call mpas_get_package(domain%packages,'smartPKG',smartPKG)
-
 
       !-----------------------------------------------------------------
       ! Initialize data from external file input
@@ -532,6 +504,49 @@ module ocn_forward_mode
               MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
          return
       endif
+      call mpas_timer_start('smartsend_init')
+      !Note: these commands will get the field and not field%array
+      !>  call mpas_pool_get_field(domain%blocklist%allFields, RossbyRadius, RossbyRadius)
+      !>  call mpas_pool_get_field(domain%blocklist%allFields, RossbyRadius, sendArrayReal1d)
+      !call mpas_pool_get_subpool(domain % blocklist % structs, 'diagnostics', diagnosticsPool)
+      !call mpas_pool_get_array(diagnosticsPool, 'RossbyRadiusCell', &
+      !          RossbyRadiusCell)
+      ! TODO determine whether RKIND arrays can be assigned into c_float arrays
+      ! sendArrayReal1d is a c_float array and RossbyRadius is a RKIND array
+      !WRITE(log_string,*) smartFieldName, 'retrieved from stream', sendArrayReald
+      !err_client = client%put_tensor("send_array", sendArrayReal1d, shape(sendArrayReal1d))
+
+      ! TODO LATER: Move variable names into a stream and ensure that the array dimensions of 
+      ! the variable being sent to the database node match that of the source array
+      !call MPAS_stream_mgr_begin_iteration(domain%streamManager, 'smartsend', ierr)
+      !call MPAS_stream_mgr_get_next_field(domain%streamManager, 'smartsend', smartFieldName, isActive)
+      !if (isActive) then
+      !   call mpas_pool_get_field_info(domain%blocklist%allFields, smartFieldName, fieldInfo)
+      !   WRITE(log_string,*) smartFieldName, 'has type', fieldInfo%fieldType
+      !   call mpas_log_write(log_string)
+      !   if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
+      !      call mpas_pool_get_field(domain%blocklist%allFields, smartFieldName, sendArrayReal1d)
+      !      WRITE(log_string,*) smartFieldName, 'retrieved from stream', sendArrayReal1d
+      !      err_client = client%put_tensor("send_array", sendArrayReal1d, shape(sendArrayReal1d))
+      !      if (err_client /= SRNoError) then
+      !         WRITE(log_string,*) 'Error put tensor:', smartFieldName
+      !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
+      !         ierr = ior(ierr, 1)
+      !      endif
+      !   endif
+      !else
+      !   WRITE(log_string,*) 'smartsend field', smartFieldName, 'is not active'
+      !   call mpas_log_write(log_string)
+      !endif
+      ! TODO add similar loop for stream smartrecv
+      !      err_client = client%unpack_tensor("send_array", recvArrayReal1d, shape(recvArrayReal1d))
+      !      if (err_client /= SRNoError) then
+      !         WRITE(log_string,*) 'Error unpack tensor:', smartFieldName
+      !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
+      !         ierr = ior(ierr, 1)
+      !      endif
+
+      call mpas_timer_stop('smartsend_init')
 
    !--------------------------------------------------------------------
 
