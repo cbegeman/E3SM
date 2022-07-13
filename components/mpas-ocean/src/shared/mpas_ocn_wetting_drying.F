@@ -389,7 +389,7 @@ contains
              wettingVelocityFactor(:, iEdge) = 1.0_RKIND
           elseif (hEdgeTotal > hCrit .and. hEdgeTotal <= 2.0_RKIND*hCrit) then
              wettingVelocityFactor(:, iEdge) = 1.0_RKIND - &
-               TANH(50.0_RKIND * (hEdgeTotal - hCrit)/hCrit)
+               tanh(50.0_RKIND * (hEdgeTotal - hCrit)/hCrit)
           endif
         enddo
         !$omp end do
