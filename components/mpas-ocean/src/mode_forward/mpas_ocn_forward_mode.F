@@ -223,6 +223,8 @@ module ocn_forward_mode
             call mpas_log_write(log_string)!, &
                  !MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
             !ierr = ior(ierr, 1)
+         else
+            call mpas_log_write('Client initialized')
          endif
       endif
 
