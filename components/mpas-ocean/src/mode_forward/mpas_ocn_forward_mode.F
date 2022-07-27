@@ -543,19 +543,21 @@ module ocn_forward_mode
          return
       endif
       call mpas_timer_start('smartsend_init')
-      !Note: these commands will get the field and not field%array
-      !>  call mpas_pool_get_field(domain%blocklist%allFields, RossbyRadius, RossbyRadius)
-      !>  call mpas_pool_get_field(domain%blocklist%allFields, RossbyRadius, sendArrayReal1d)
-      !call mpas_pool_get_subpool(domain % blocklist % structs, 'diagnostics', diagnosticsPool)
-      !call mpas_pool_get_array(diagnosticsPool, 'RossbyRadiusCell', &
-      !          RossbyRadiusCell)
-      ! TODO determine whether RKIND arrays can be assigned into c_float arrays
-      ! sendArrayReal1d is a c_float array and RossbyRadius is a RKIND array
-      !WRITE(log_string,*) smartFieldName, 'retrieved from stream', sendArrayReald
-      !err_client = client%put_tensor("send_array", sendArrayReal1d, shape(sendArrayReal1d))
 
+      ! Since we use diagnostics_variables module, we do not need to fetch variables from pools
+      call mpas_log_write('Start smartsend for RossbyRadius')
+      err_client = client%put_tensor("send_array", RossbyRadius, shape(RossbyRadius))
+      call mpas_log_write('End smartsend for RossbyRadius')
+
+      ! TODO determine whether RKIND arrays can be assigned into c_float arrays
+      ! - according to Andrew Shao, this should be unnecessary
+      ! sendArrayReal1d is a c_float array and RossbyRadius is a RKIND array
+
+      !Note: these commands will get the field and not field%array
       ! TODO LATER: Move variable names into a stream and ensure that the array dimensions of 
       ! the variable being sent to the database node match that of the source array
+      ! Loop through variable names in stream and get from allFields rather
+      ! than hard-code variables in diagnosticsPool
       !call MPAS_stream_mgr_begin_iteration(domain%streamManager, 'smartsend', ierr)
       !call MPAS_stream_mgr_get_next_field(domain%streamManager, 'smartsend', smartFieldName, isActive)
       !if (isActive) then
