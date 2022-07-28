@@ -1256,6 +1256,7 @@ contains
       ! to prevent dry cells from determining minimum
       do iCell = 1, nCellsAll+1
          if (maxLevelCell(iCell) == 0) minLevelCell(iCell)=nVertLevels+1 
+         maxLevelCell(iCell) = min(nVertLevels, maxLevelCell(iCell))
       end do
       do iEdge = 1, nEdgesAll
          minLevelEdgeTop(iEdge) = &
