@@ -415,12 +415,12 @@ message(STATUS "Find smartredis lib")
 #set(SMARTREDIS_PATH "/turquoise/usr/projects/climate/cbegeman/soft/smartredis") # Alternative location on badger
 #set(SMARTREDIS_HOME ${CMAKE_CURRENT_SOURCE_DIR}/../../../externals/smartredis)
 #set(SMARTREDIS_PATH "/home/ac.cbegeman/soft/smartredis/0.3.0")
-if (DEFINED ENV{SMARTREDIS_PATH)
-  set(SMARTREDIS_PATH $ENV{SMARTREDIS_PATH})
-  message(STATUS "SMARTREDIS_PATH = $ENV{SMARTREDIS_PATH}")
-else()
-  message(STATUS "SMARTREDIS_PATH not defined")
-endif()
+#if (DEFINED $ENV{SMARTREDIS_PATH)
+set(SMARTREDIS_PATH $ENV{SMARTREDIS_PATH})
+message(STATUS "SMARTREDIS_PATH = $ENV{SMARTREDIS_PATH}")
+#else()
+#  message(STATUS "SMARTREDIS_PATH not defined")
+#endif()
 set(SMARTREDIS_LIB_DIR "${SMARTREDIS_PATH}/install/lib")
 message(STATUS "SMARTREDIS_LIB_DIR = ${SMARTREDIS_LIB_DIR}")
 set(SMARTREDIS_FTN_SRC "${SMARTREDIS_PATH}/src/fortran")
@@ -428,7 +428,8 @@ message(STATUS "SMARTREDIS_FTN_SRC = ${SMARTREDIS_FTN_SRC}")
 set(SMARTREDIS_INC "${SMARTREDIS_PATH}/install/include")
 message(STATUS "SMARTREDIS_INC = ${SMARTREDIS_INC}")
 list(APPEND INCLDIR "${SMARTREDIS_INC}")
-set(SLIBS "${SLIBS} ${SMARTREDIS_LIB_DIR}/libhiredis.a ${SMARTREDIS_LIB_DIR}/libredis++.a" ${SMARTREDIS_LIB_DIR}/libsmartredis.so) #plain
+#set(SLIBS "${SLIBS} ${SMARTREDIS_LIB_DIR}/libhiredis.a ${SMARTREDIS_LIB_DIR}/libredis++.a" ${SMARTREDIS_LIB_DIR}/libsmartredis.so ${SMARTREDIS_LIB_DIR}/libsmartredis-fortran.so) #plain
+set(SLIBS "${SLIBS} -L${SMARTREDIS_LIB_DIR} -lhiredis -lredis++ -lsmartredis-fortran") #plain
 
 list(APPEND INCLDIR "${INSTALL_SHAREDPATH}/include")
 
