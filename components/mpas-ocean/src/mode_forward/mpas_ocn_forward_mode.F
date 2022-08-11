@@ -211,12 +211,16 @@ module ocn_forward_mode
 
       call get_environment_variable('SSDB',log_string)
       call mpas_log_write('SSDB='//TRIM(log_string))
-      err_client = client%initialize(.false.)
-      call mpas_log_write('Client gives error:$i',intArgs=(/err_client/))
-      if (err_client /= SRNoError) then
-         call mpas_log_write('Error initializing redis client in init', &
-              MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
-         ierr = ior(ierr, 1)
+      if (len(TRIM(log_string)) < 5) then
+         call mpas_log_write('No SSDB')!, &
+      else
+         err_client = client%initialize(.false.)
+         if (err_client /= SRNoError) then
+            write(log_string,*) 'Error initializing redis client:',err_client
+            call mpas_log_write(log_string)
+         else
+            call mpas_log_write('Client initialized')
+         endif
       endif
 
       !-----------------------------------------------------------------
@@ -523,6 +527,51 @@ module ocn_forward_mode
               MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
          return
       endif
+      call mpas_timer_start('smartsend_init')
+
+      ! Since we use diagnostics_variables module, we do not need to fetch variables from pools
+      call mpas_log_write('Start smartsend for RossbyRadius')
+      err_client = client%put_tensor("send_array", RossbyRadius, shape(RossbyRadius))
+      call mpas_log_write('End smartsend for RossbyRadius')
+
+      ! TODO determine whether RKIND arrays can be assigned into c_float arrays
+      ! - according to Andrew Shao, this should be unnecessary
+      ! sendArrayReal1d is a c_float array and RossbyRadius is a RKIND array
+
+      !Note: these commands will get the field and not field%array
+      ! TODO LATER: Move variable names into a stream and ensure that the array dimensions of 
+      ! the variable being sent to the database node match that of the source array
+      ! Loop through variable names in stream and get from allFields rather
+      ! than hard-code variables in diagnosticsPool
+      !call MPAS_stream_mgr_begin_iteration(domain%streamManager, 'smartsend', ierr)
+      !call MPAS_stream_mgr_get_next_field(domain%streamManager, 'smartsend', smartFieldName, isActive)
+      !if (isActive) then
+      !   call mpas_pool_get_field_info(domain%blocklist%allFields, smartFieldName, fieldInfo)
+      !   WRITE(log_string,*) smartFieldName, 'has type', fieldInfo%fieldType
+      !   call mpas_log_write(log_string)
+      !   if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
+      !      call mpas_pool_get_field(domain%blocklist%allFields, smartFieldName, sendArrayReal1d)
+      !      WRITE(log_string,*) smartFieldName, 'retrieved from stream', sendArrayReal1d
+      !      err_client = client%put_tensor("send_array", sendArrayReal1d, shape(sendArrayReal1d))
+      !      if (err_client /= SRNoError) then
+      !         WRITE(log_string,*) 'Error put tensor:', smartFieldName
+      !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
+      !         ierr = ior(ierr, 1)
+      !      endif
+      !   endif
+      !else
+      !   WRITE(log_string,*) 'smartsend field', smartFieldName, 'is not active'
+      !   call mpas_log_write(log_string)
+      !endif
+      ! TODO add similar loop for stream smartrecv
+      !      err_client = client%unpack_tensor("send_array", recvArrayReal1d, shape(recvArrayReal1d))
+      !      if (err_client /= SRNoError) then
+      !         WRITE(log_string,*) 'Error unpack tensor:', smartFieldName
+      !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
+      !         ierr = ior(ierr, 1)
+      !      endif
+
+      call mpas_timer_stop('smartsend_init')
 
    !--------------------------------------------------------------------
 
