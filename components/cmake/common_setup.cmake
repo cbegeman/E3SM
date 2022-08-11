@@ -417,7 +417,8 @@ message(STATUS "SMARTREDIS_PATH = $ENV{SMARTREDIS_PATH}")
 #else()
 #  message(STATUS "SMARTREDIS_PATH not defined")
 #endif()
-set(SLIBS "${SLIBS} -L${SMARTREDIS_PATH}/lib -lhiredis -lredis++ -lsmartredis-fortran") #plain
+set(SLIBS "${SLIBS} ${SMARTREDIS_PATH}/lib/libhiredis.a ${SMARTREDIS_PATH}/lib/libredis++.a ${SMARTREDIS_PATH}/lib/libsmartredis-fortran.so") #plain
+#set(SLIBS "${SLIBS} -L${SMARTREDIS_PATH}/lib -lhiredis -lredis++ -lsmartredis-fortran") #plain
 
 list(APPEND INCLDIR "${INSTALL_SHAREDPATH}/include")
 
