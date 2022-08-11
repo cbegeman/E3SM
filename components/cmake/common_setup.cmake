@@ -417,14 +417,7 @@ message(STATUS "SMARTREDIS_PATH = $ENV{SMARTREDIS_PATH}")
 #else()
 #  message(STATUS "SMARTREDIS_PATH not defined")
 #endif()
-#set(SMARTREDIS_LIB_DIR "${SMARTREDIS_PATH}/install/lib")
-#message(STATUS "SMARTREDIS_LIB_DIR = ${SMARTREDIS_LIB_DIR}")
-#set(SMARTREDIS_FTN_SRC "${SMARTREDIS_PATH}/src/fortran")
-#message(STATUS "SMARTREDIS_FTN_SRC = ${SMARTREDIS_FTN_SRC}")
-#set(SMARTREDIS_INC "${SMARTREDIS_PATH}/install/include")
-#message(STATUS "SMARTREDIS_INC = ${SMARTREDIS_INC}")
-#list(APPEND INCLDIR "${SMARTREDIS_INC}")
-#set(SLIBS "${SLIBS} -L${SMARTREDIS_LIB_DIR} -lhiredis -lredis++ -lsmartredis-fortran") #plain
+set(SLIBS "${SLIBS} -L${SMARTREDIS_PATH}/lib -lhiredis -lredis++ -lsmartredis-fortran") #plain
 
 list(APPEND INCLDIR "${INSTALL_SHAREDPATH}/include")
 
