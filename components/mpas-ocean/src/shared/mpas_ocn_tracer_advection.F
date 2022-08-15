@@ -141,6 +141,7 @@ module ocn_tracer_advection
 
       err = 0 ! initialize error code to success
 
+      call mpas_log_write('Start tracer adv init')
       ! set some basic flags for options
       tracerAdvOff = config_disable_tr_adv
       if (config_flux_limiter == 'monotonic') then
@@ -153,10 +154,15 @@ module ocn_tracer_advection
       endif
 
       ! set all other options from submodule initialization routines
+      call mpas_log_write('Start tracer shared init')
       call ocn_tracer_advection_shared_init(err1)
+      call mpas_log_write('End shared init')
       call ocn_tracer_advection_std_init   (err2)
+      call mpas_log_write('End std init')
       call ocn_tracer_advection_mono_init  (err3)
+      call mpas_log_write('End mono init')
       call ocn_tracer_advection_vert_init  (err4)
+      call mpas_log_write('End vert init')
 
       ! if an error is returned from init routines, write an error
       ! message and return a non-zero error code

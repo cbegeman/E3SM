@@ -307,6 +307,7 @@ module ocn_forward_mode
       if(ierr.eq.1) then
           call mpas_log_write('An error was encountered in ocn_init_routines_block', MPAS_LOG_CRIT)
       endif
+      call mpas_log_write('Complete ocn_init_routines_block')
 
       xtime = startTimeStamp
 
@@ -409,6 +410,7 @@ module ocn_forward_mode
               MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
          return
       endif
+      call mpas_log_write('Complete vel tend modules')
 
       ! Initialize forcing modules
       call ocn_surface_bulk_forcing_init(err_tmp)
@@ -427,20 +429,27 @@ module ocn_forward_mode
               MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
          return
       endif
+      call mpas_log_write('Complete forcing modules')
 
       ! Initialize tracer tendencies
       call ocn_tracer_hmix_init(err_tmp)
       ierr = ior(ierr, err_tmp)
+      call mpas_log_write('End tracer hmix init')
       call ocn_tracer_hmix_redi_init(domain,err_tmp)
       ierr = ior(ierr, err_tmp)
+      call mpas_log_write('End tracer hmix redi init')
       call ocn_tracer_surface_flux_init(err_tmp)
       ierr = ior(ierr, err_tmp)
+      call mpas_log_write('End tracer surface flux init')
       call ocn_tracer_advection_init(err_tmp)
       ierr = ior(ierr,err_tmp)
+      call mpas_log_write('End tracer advection init')
       call ocn_tracer_short_wave_absorption_init(domain,err_tmp)
       ierr = ior(ierr,err_tmp)
+      call mpas_log_write('End tracer SW init')
       call ocn_gm_init(domain, err_tmp)
       ierr = ior(ierr,err_tmp)
+      call mpas_log_write('End gm init')
       call ocn_tracer_nonlocalflux_init(err_tmp)
       ierr = ior(ierr,err_tmp)
       call ocn_tracer_ecosys_init(domain, err_tmp)
@@ -459,6 +468,7 @@ module ocn_forward_mode
               MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
          return
       endif
+      call mpas_log_write('Complete tracer tend modules')
 
       ! Initialize other modules
       call ocn_vmix_init(domain, err_tmp)
@@ -476,6 +486,7 @@ module ocn_forward_mode
               MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
          return
       endif
+      call mpas_log_write('Complete ocn_forward_mode_init')
 
    !--------------------------------------------------------------------
 
