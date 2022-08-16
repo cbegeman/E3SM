@@ -21,12 +21,12 @@ message(STATUS "Include ${SMARTREDIS_INC}")
 list(APPEND INCLUDES "${SMARTREDIS_INC}")
 include_directories(SYSTEM "${SMARTREDIS_INC}")
 set(SMARTREDIS_FTN_SRC $ENV{SMARTREDIS_PATH}/../src/fortran)
-set(SMARTREDIS_FILES
-    ${SMARTREDIS_FTN_SRC}/fortran_c_interop.F90
-    ${SMARTREDIS_FTN_SRC}/dataset.F90
-    ${SMARTREDIS_FTN_SRC}/client.F90
-)
-list(APPEND SLIBS "-L${SMARTREDIS_PATH}/lib -lhiredis -lredis++ -lsmartredis-fortran") #plain
+#set(SMARTREDIS_FILES
+#    ${SMARTREDIS_FTN_SRC}/fortran_c_interop.F90
+#    ${SMARTREDIS_FTN_SRC}/dataset.F90
+#    ${SMARTREDIS_FTN_SRC}/client.F90
+#)
+list(APPEND SLIBS "-L${SMARTREDIS_PATH}/lib -lhiredis -lredis++ -lsmartredis -lsmartredis-fortran") #plain
 
 # driver (files live in E3SM)
 list(APPEND RAW_SOURCES
