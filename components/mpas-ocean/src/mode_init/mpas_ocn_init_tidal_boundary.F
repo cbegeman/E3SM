@@ -104,7 +104,7 @@ contains
     integer, dimension(:), pointer :: vegetationMask
     real (kind=RKIND), dimension(:), pointer :: vegetationHeight,vegetationDensity, vegetationDiameter
     real (kind=RKIND), dimension(:), pointer :: yCell, refBottomDepth, bottomDepth, vertCoordMovementWeights, dcEdge
-    real (kind=RKIND), dimension(:), pointer :: tidalInputMask
+    real (kind=RKIND), dimension(:), pointer :: tidalInputMask, riverRunoffFlux
     real (kind=RKIND), dimension(:), pointer :: bottomDrag
     real (kind=RKIND), dimension(:), pointer :: ssh
     real (kind=RKIND), dimension(:,:), pointer :: layerThickness, restingThickness
@@ -160,6 +160,7 @@ contains
       call mpas_pool_get_subpool(block_ptr % structs, 'mesh', meshPool)
       call mpas_pool_get_subpool(block_ptr % structs, 'forcing', forcingPool)
       call mpas_pool_get_array(forcingPool, 'tidalInputMask', tidalInputMask)
+      call mpas_pool_get_array(forcingPool, 'riverRunoffFlux', riverRunoffFlux)
 
       call mpas_pool_get_array(meshPool, 'yCell', yCell)
       call mpas_pool_get_subpool(block_ptr % structs, 'state', statePool)
@@ -406,6 +407,14 @@ contains
         ! spread it over multiple cells
         !if (yCell(iCell) > (25.0e3 - 3*dcEdgeMinGlobal)) then
         !  tidalInputMask(iCell) = exp(-((yCell(iCell)-25.0e3)/dcEdgeMinGlobal)**2.0)
+        end if
+      end do
+
+      ! Set river runoff
+      do iCell = 1, nCellsSolve
+        riverRunoffFlux(iCell) = 0.0_RKIND
+        if (yCell(iCell) < dcEdgeMinGlobal) then
+          riverRunoffFlux(iCell) = 1.0_RKIND
         end if
       end do
 
