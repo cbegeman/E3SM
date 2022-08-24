@@ -367,93 +367,62 @@ contains
 
       if (.not. config_zero_drying_velocity) return
 
-      if (config_zero_drying_velocity_ramp) then
-
-        ! Following O'Dea et al. (2021), if total upwinded wct is less than
-        ! 2*critical thickness, apply damping throughout the water column
-
-        !$omp parallel
-        !$omp do schedule(runtime) private(i, iEdge, k, divFlux, layerThickness)
-        do iCell = 1, nCellsAll
-          do k = minLevelCell(iCell), maxLevelCell(iCell)
-            divFlux = 0.0_RKIND
-            layerThickness = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
-            do i = 1, nEdgesOnCell(iCell)
-              iEdge = edgesOnCell(i, iCell)
-              if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
-                divFlux = divFlux + &
-                          normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
-                          layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
-                          invAreaCell(iCell)
-              end if
-            end do
-
-            layerThickness = layerThickness + dt * divFlux
-            if (layerThickness <= &
-                (config_drying_min_cell_height + config_drying_safety_height)) then
-              do i = 1, nEdgesOnCell(iCell)
-                iEdge = edgesOnCell(i, iCell)
-                if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
-                  if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                    wettingVelocityFactor(k, iEdge) = 1.0_RKIND
-                  end if
-                end if
-              end do
-            elseif (layerThickness > &
-                    (config_drying_min_cell_height + config_drying_safety_height) .and. &
-                    layerThickness <= &
-                    (config_zero_drying_velocity_ramp_hmax)) then
-              if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                wettingVelocityFactor(:, iEdge) = 1.0_RKIND - &
-                  tanh(50.0_RKIND * (hEdgeTotal - hCrit)/hCrit)
+      ! need predicted transport velocity to limit drying flux
+      !$omp parallel
+      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, layerThickness)
+      do iCell = 1, nCellsAll
+        do k = minLevelCell(iCell), maxLevelCell(iCell)
+          divOutFlux = 0.0_RKIND
+          layerThickness = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
+          do i = 1, nEdgesOnCell(iCell)
+            iEdge = edgesOnCell(i, iCell)
+            if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
+              ! only consider divergence flux leaving the cell
+              if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+                divOutFlux = divOutFlux + &
+                             normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
+                             layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
+                             invAreaCell(iCell)
               end if
             end if
-
           end do
-        end do
-        !$omp end do
-        !$omp end parallel
+          layerThickness = layerThickness + dt * divOutFlux
 
-      else
-
-        ! need predicted transport velocity to limit drying flux
-        !$omp parallel
-        !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, layerThickness)
-        do iCell = 1, nCellsAll
-          do k = minLevelCell(iCell), maxLevelCell(iCell)
-            divOutFlux = 0.0_RKIND
-            layerThickness = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
+          ! if layer thickness is too small, limit divergence flux outwards with
+          ! opposite velocity
+          if (layerThickness <= &
+              config_drying_min_cell_height + config_drying_safety_height) then
             do i = 1, nEdgesOnCell(iCell)
               iEdge = edgesOnCell(i, iCell)
               if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
-                ! only consider divergence flux leaving the cell
-                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
-                  divOutFlux = divOutFlux + &
-                               normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
-                               layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
-                               invAreaCell(iCell)
+                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+                end if
+              end if
+            end do
+          elseif (config_zero_drying_velocity_ramp .and. &
+                 (layerThickness > &
+                 config_drying_min_cell_height + config_drying_safety_height) .and. &
+                 (layerThickness <= config_zero_drying_velocity_ramp_hmax)) then
+
+            ! Following O'Dea et al. (2021), if total upwinded wct is less than
+            ! 2*critical thickness, apply damping throughout the water column
+            do i = 1, nEdgesOnCell(iCell)
+              iEdge = edgesOnCell(i, iCell)
+              if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
+                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+                  wettingVelocityFactor(:, iEdge) = 1.0_RKIND - &
+                    tanh(50.0_RKIND * (hEdgeTotal - hCrit)/hCrit)
                 end if
               end if
             end do
 
-            ! if layer thickness is too small, limit divergence flux outwards with opposite velocity
-            if ((layerThickness + dt * divOutFlux) <= &
-                (config_drying_min_cell_height + config_drying_safety_height)) then
-              do i = 1, nEdgesOnCell(iCell)
-                iEdge = edgesOnCell(i, iCell)
-                if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
-                  if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                    wettingVelocityFactor(k, iEdge) = 1.0_RKIND
-                  end if
-                end if
-              end do
-            end if
+          end if
 
-          end do
         end do
-        !$omp end do
-        !$omp end parallel
-      end if
+      end do
+      !$omp end do
+      !$omp end parallel
 
    end subroutine ocn_wetting_drying_wettingVelocity !}}}
 
