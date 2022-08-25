@@ -23,6 +23,7 @@ module ocn_forward_mode
    use mpas_kind_types
    use mpas_derived_types
    use mpas_pool_routines
+   #use mpas_client_routines
    use mpas_stream_manager
    use mpas_timekeeping
    use mpas_dmpar
@@ -155,18 +156,11 @@ module ocn_forward_mode
          maxDensity,       &! local max of mesh density
          maxDensity_global  ! global max of mesh density
 
-      real (kind=c_float), pointer :: &
-         sendArrayReal0d    ! pointer to float to send to orchestrator
-
-      real (kind=RKIND), dimension(:), pointer :: RossbyRadiusCell
-      real (kind=c_float), dimension(:), pointer :: &
-         sendArrayReal1d    ! pointer to array to send to orchestrator
-
-      real (kind=RKIND), pointer :: &
-         recvArrayReal0d    ! pointer to float to recv from orchestrator
-
-      real (kind=RKIND), dimension(:), pointer :: &
-         recvArrayReal1d    ! pointer to array to recv from orchestrator
+      ! Arrays to send/receive from orchestrator
+      real (kind=RKIND) :: &
+         sendArrayReal0d, recvArrayReal0d
+      real (kind=RKIND), dimension(:), allocatable :: &
+         sendArrayReal1d, recvArrayReal1d
 
       real (kind=RKIND), dimension(:), pointer :: &
          meshDensity        ! pointer to mesh density array
@@ -545,9 +539,24 @@ module ocn_forward_mode
       call mpas_timer_start('smartsend_init')
 
       ! Since we use diagnostics_variables module, we do not need to fetch variables from pools
-      call mpas_log_write('Start smartsend for RossbyRadius')
-      err_client = client%put_tensor("send_array", RossbyRadius, shape(RossbyRadius))
-      call mpas_log_write('End smartsend for RossbyRadius')
+      call mpas_log_write('Start smartsend at init')
+      allocate(sendArrayReal1d(10))
+      sendArrayReal1d(:) = 8.0_RKIND
+      err_client = client%put_tensor("init_array", dummy_array, shape(dummy_array))
+      if (err_client /= SRNoError) then
+         write(log_string,*) 'client%put_tensor failed with err:',err_client
+         call mpas_log_write(log_string)
+      else
+         call mpas_log_write('client%put_tensor successful')!TODO test pointer
+         err_client = client%unpack_tensor("send_array", recv_array_real_64, shape(recv_array_real_64))
+         if (err_client /= SRNoError) then
+            write(log_string,*) 'client%unpack_tensor failed with err:',err_client
+            call mpas_log_write(log_string)
+         else
+            call mpas_log_write('client%unpack_tensor successful')
+         endif
+      endif
+      call mpas_log_write('End smartsend for dummy_array')
 
       ! TODO determine whether RKIND arrays can be assigned into c_float arrays
       ! - according to Andrew Shao, this should be unnecessary
