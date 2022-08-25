@@ -23,7 +23,7 @@ module ocn_forward_mode
    use mpas_kind_types
    use mpas_derived_types
    use mpas_pool_routines
-   #use mpas_client_routines
+   !use mpas_client_routines
    use mpas_stream_manager
    use mpas_timekeeping
    use mpas_dmpar
@@ -150,6 +150,8 @@ module ocn_forward_mode
       integer :: err_tmp    ! local error codes from subroutine calls
       integer(kind=enum_kind) :: err_client
       character(len=100) :: log_string
+      character(len=*), parameter :: script_key = 'test_client_recv'
+      character(len=*), parameter :: script_file = '../../test_client_recv.py'
 
       real (kind=RKIND) :: &
          dt,               &! time step in seconds
@@ -229,6 +231,20 @@ module ocn_forward_mode
             !ierr = ior(ierr, 1)
          else
             call mpas_log_write('Client initialized')
+         endif
+         err_client = client%set_script_from_file(script_key, "CPU", script_file)
+         if (err_client /= SRNoError) then
+            write(log_string,*) 'Error setting client script:',err_client
+            call mpas_log_write(log_string)
+         else
+            call mpas_log_write('Client script set')
+         endif
+         err_client = client%run_script(script_key, "init_send", inputs, outputs)
+         if (err_client /= SRNoError) then
+            write(log_string,*) 'Error running client script:',err_client
+            call mpas_log_write(log_string)
+         else
+            call mpas_log_write('Client script run')
          endif
       endif
 
