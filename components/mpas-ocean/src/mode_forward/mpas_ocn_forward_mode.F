@@ -226,7 +226,7 @@ module ocn_forward_mode
       if (len(TRIM(log_string)) < 5) then
          call mpas_log_write('No SSDB')!, &
       else
-         err_client = client%initialize(.false.)
+         err_client = client%initialize(.true.)
          if (err_client /= SRNoError) then
             write(log_string,*) 'Error initializing redis client:',err_client
             call mpas_log_write(log_string)!, &
