@@ -23,7 +23,6 @@ module ocn_forward_mode
    use mpas_kind_types
    use mpas_derived_types
    use mpas_pool_routines
-   !use mpas_client_routines
    use mpas_stream_manager
    use mpas_timekeeping
    use mpas_dmpar
@@ -150,8 +149,11 @@ module ocn_forward_mode
       integer :: err_tmp    ! local error codes from subroutine calls
       integer(kind=enum_kind) :: err_client
       character(len=100) :: log_string
-      character(len=*), parameter :: script_key = 'test_client_recv'
-      character(len=*), parameter :: script_file = '../../test_client_recv.py'
+      character(len=*), parameter :: script_key = 'init_script'
+      character(len=*), parameter :: script_file = '/global/homes/c/cbegeman/E3SM-new/components/mpas-ocean/src/mode_forward/test_client_recv.txt'
+      character(len=255) :: in_key, script_out_key, out_key
+
+      character(len=255), dimension(1) :: inputs, outputs
 
       real (kind=RKIND) :: &
          dt,               &! time step in seconds
@@ -188,6 +190,7 @@ module ocn_forward_mode
 
       character (len=StrKIND) :: units
       type(client_type) :: client
+      logical :: is_error
 
       ! End preamble
       !-------------
@@ -232,21 +235,52 @@ module ocn_forward_mode
          else
             call mpas_log_write('Client initialized')
          endif
-         err_client = client%set_script_from_file(script_key, "CPU", script_file)
+
+         write(log_string,*) 'Before client: config_mom_del2', config_mom_del2
+         call mpas_log_write(log_string)
+         in_key = 'init_send'
+         script_out_key = 'init_recv'
+         out_key = 'init_recv'
+         inputs(1) = in_key
+         outputs(1) = script_out_key
+
+         allocate(sendArrayReal1d(1), recvArrayReal1d(1))
+         sendArrayReal1d(:) = 2.0_RKIND
+         recvArrayReal1d(:) = 0.0_RKIND
+         err_client = client%put_tensor(in_key, sendArrayReal1d, shape(sendArrayReal1d))
          if (err_client /= SRNoError) then
-            write(log_string,*) 'Error setting client script:',err_client
+            write(log_string,*) 'Error put tensor:',err_client
             call mpas_log_write(log_string)
          else
-            call mpas_log_write('Client script set')
+            call mpas_log_write('Put tensor')
          endif
-         err_client = client%run_script(script_key, "init_send", inputs, outputs)
+         !err_client = client%set_script_from_file(script_key, "CPU", script_file)
+         !if (err_client /= SRNoError) then
+         !   write(log_string,*) 'Error setting client script:',err_client
+         !   call mpas_log_write(log_string)
+         !else
+         !   call mpas_log_write('Client script set')
+         !endif
+         !err_client = client%run_script(script_key, "pre_process", inputs, outputs)
+         !if (err_client /= SRNoError) then
+         !   write(log_string,*) 'Error running client script:',err_client
+         !   call mpas_log_write(log_string)
+         !   is_error = client%SR_error_parser(err_client)
+         !else
+         !call mpas_log_write('Client script run')
+         err_client = client%unpack_tensor(outputs(1), recvArrayReal1d, shape(recvArrayReal1d))
          if (err_client /= SRNoError) then
-            write(log_string,*) 'Error running client script:',err_client
+            write(log_string,*) 'Error unpacking tensor init_recv:',err_client
             call mpas_log_write(log_string)
          else
-            call mpas_log_write('Client script run')
+            write(log_string,*) 'init_recv:',recvArrayReal1d(1)
+            call mpas_log_write(log_string)
          endif
+         !endif
       endif
+      config_mom_del2 = recvArrayReal1d(1)
+      write(log_string,*) 'After client: config_mom_del2', config_mom_del2
+      call mpas_log_write(log_string)
 
       !-----------------------------------------------------------------
       ! Initialize data from external file input
@@ -552,30 +586,28 @@ module ocn_forward_mode
               MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
          return
       endif
-      call mpas_timer_start('smartsend_init')
+      !call mpas_timer_start('smartsend_init')
 
-      ! Since we use diagnostics_variables module, we do not need to fetch variables from pools
-      call mpas_log_write('Start smartsend at init')
-      allocate(sendArrayReal1d(10))
-      sendArrayReal1d(:) = 8.0_RKIND
-      err_client = client%put_tensor("init_send_array", sendArrayReal1d, shape(sendArrayReal1d))
-      if (err_client /= SRNoError) then
-         write(log_string,*) 'client%put_tensor failed with err:',err_client
-         call mpas_log_write(log_string)
-      else
-         call mpas_log_write('client%put_tensor successful')!TODO test pointer
-      endif
-      err_client = client%unpack_tensor("init_recv_array", recvArrayReal0d, shape(recvArrayReal0d))
-      if (err_client /= SRNoError) then
-         write(log_string,*) 'client%unpack_tensor failed with err:',err_client
-         call mpas_log_write(log_string)
-      else
-         write(log_string,*) 'client%unpack_tensor succeeded:',recvArrayReal0d
-         call mpas_log_write(log_string)
-      endif
-      call mpas_log_write('End smartsend at init')
+      !! Since we use diagnostics_variables module, we do not need to fetch variables from pools
+      !call mpas_log_write('Start smartsend at init')
+      !err_client = client%put_tensor("init_send_array", sendArrayReal1d, shape(sendArrayReal1d))
+      !if (err_client /= SRNoError) then
+      !   write(log_string,*) 'client%put_tensor failed with err:',err_client
+      !   call mpas_log_write(log_string)
+      !else
+      !   call mpas_log_write('client%put_tensor successful')!TODO test pointer
+      !endif
+      !err_client = client%unpack_tensor("init_recv_array", recvArrayReal0d, shape(recvArrayReal0d))
+      !if (err_client /= SRNoError) then
+      !   write(log_string,*) 'client%unpack_tensor failed with err:',err_client
+      !   call mpas_log_write(log_string)
+      !else
+      !   write(log_string,*) 'client%unpack_tensor succeeded:',recvArrayReal0d
+      !   call mpas_log_write(log_string)
+      !endif
+      !call mpas_log_write('End smartsend at init')
 
-      call mpas_timer_stop('smartsend_init')
+      !call mpas_timer_stop('smartsend_init')
 
    !--------------------------------------------------------------------
 
@@ -948,8 +980,11 @@ module ocn_forward_mode
    function ocn_forward_mode_finalize(domain) result(iErr)!{{{
 
       type (domain_type), intent(inout) :: domain
-
+      character(len=100) :: log_string
       integer :: ierr
+
+      write(log_string,*) 'Finalize: config_mom_del2', config_mom_del2
+      call mpas_log_write(log_string)
 
       ! destroy the ocean mesh structure
       call ocn_meshDestroy(ierr)
