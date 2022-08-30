@@ -606,13 +606,14 @@ endif
 	LIBS += -L$(PNETCDF)/$(PNETCDFLIBLOC) -lpnetcdf
 endif
 
-#ifeq "$(USE_SMARTSIM)" "true"
-#override LIBS += -L$(SMARTREDIS_PATH)/lib
-#override LIBS += -lhiredis.a
-#override LIBS += -lredis++.a
-#override LIBS += -lsmartredis.so
-#override LIBS += -lsmartredis-fortran.so
-#endif
+ifeq "$(USE_SMARTSIM)" "true"
+	CPPINCLUDES += -I$(SMARTREDIS_PATH)/include
+	FCINCLUDES += -I$(SMARTREDIS_PATH)/include
+	LIBS += -L$(SMARTREDIS_PATH)/lib
+	LIBS += -lhiredis.a
+	LIBS += -lredis++.a
+	LIBS += -lsmartredis-fortran.a
+endif
 
 ifeq "$(USE_LAPACK)" "true"
 ifndef LAPACK

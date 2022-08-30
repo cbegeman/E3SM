@@ -30,7 +30,7 @@ module ocn_forward_mode
    use mpas_log
    use mpas_decomp
    use mpas_log
-!   use mpas_smart_routines
+   use mpas_smart_routines
 
    use ocn_analysis_driver
    use ocn_init_routines
@@ -107,8 +107,6 @@ module ocn_forward_mode
              ocn_forward_mode_finalize, &
              ocn_forward_mode_setup_clock
 
-#  include "../../../mpas-framework/src/framework/enum_fortran.inc"
-
 !***********************************************************************
 
    contains
@@ -170,6 +168,10 @@ module ocn_forward_mode
          sendArrayReal1d, recvArrayReal1d
       real (kind=RKIND), dimension(:,:), allocatable :: &
          sendArrayReal2d, recvArrayReal2d
+      real (kind=RKIND), dimension(:,:,:), allocatable :: &
+         sendArrayReal3d, recvArrayReal3d
+      real (kind=RKIND), dimension(:,:,:,:), allocatable :: &
+         sendArrayReal4d, recvArrayReal4d
       real (kind=RKIND) :: meta_scalar
       real (kind=RKIND), dimension(:), pointer :: &
          meshDensity        ! pointer to mesh density array
@@ -227,20 +229,12 @@ module ocn_forward_mode
       ! Currently only support one block per task
       block => domain % blocklist
 
-      call get_environment_variable('SSDB',log_string)
-      call mpas_log_write('SSDB='//TRIM(log_string))
-      if (len(TRIM(log_string)) < 5) then
-         call mpas_log_write('No SSDB')!, &
+      call mpas_smart_init(client, ierr)
+      if (ierr /= 0.0_RKIND) then
+         write(log_string,*) 'OCN: Error initializing redis client:',err_client
+         call mpas_log_write(log_string)
       else
-         err_client = client%initialize(.false.)
-         if (err_client /= SRNoError) then
-            write(log_string,*) 'Error initializing redis client:',err_client
-            call mpas_log_write(log_string)!, &
-                 !MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
-            !ierr = ior(ierr, 1)
-         else
-            call mpas_log_write('Client initialized')
-         endif
+         call mpas_log_write('OCN Client initialized')
 
          write(log_string,*) 'Before client: config_mom_del2', config_mom_del2
          call mpas_log_write(log_string)
@@ -774,6 +768,11 @@ module ocn_forward_mode
 
       type (MPAS_timeInterval_type) :: timeStep
 
+      logical :: validField
+      logical :: isActive
+      character(len=StrKind) :: fieldName
+      character(len=StrKIND) :: log_string
+
       ierr = 0
 
       ! Eventually, dt should be domain specific
@@ -949,26 +948,15 @@ module ocn_forward_mode
          ! the variable being sent to the database node match that of the source array
          ! Loop through variable names in stream and get from allFields rather
          ! than hard-code variables in diagnosticsPool
-         !call MPAS_stream_mgr_begin_iteration(domain%streamManager, 'smartsend', ierr)
-         !call MPAS_stream_mgr_get_next_field(domain%streamManager, 'smartsend', smartFieldName, isActive)
-         !if (isActive) then
-         !   call mpas_pool_get_field_info(domain%blocklist%allFields, smartFieldName, fieldInfo)
-         !   WRITE(log_string,*) smartFieldName, 'has type', fieldInfo%fieldType
-         !   call mpas_log_write(log_string)
-         !   if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
-         !      call mpas_pool_get_field(domain%blocklist%allFields, smartFieldName, sendArrayReal1d)
-         !      WRITE(log_string,*) smartFieldName, 'retrieved from stream', sendArrayReal1d
-         !      err_client = client%put_tensor("send_array", sendArrayReal1d, shape(sendArrayReal1d))
-         !      if (err_client /= SRNoError) then
-         !         WRITE(log_string,*) 'Error put tensor:', smartFieldName
-         !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
-         !         ierr = ior(ierr, 1)
-         !      endif
-         !   endif
-         !else
-         !   WRITE(log_string,*) 'smartsend field', smartFieldName, 'is not active'
-         !   call mpas_log_write(log_string)
-         !endif
+         call MPAS_stream_mgr_begin_iteration(domain%streamManager, &
+                                              'smartsend', ierr)
+         do while (MPAS_stream_mgr_get_next_field(domain%streamManager, &
+                               'smartsend', fieldName))!, isActive)
+            call mpas_smart_field_send(domain, fieldName, ierr)
+            !WRITE(log_string,*) 'smartsend field', fieldName, &
+            !                    'is not active'
+            !call mpas_log_write(log_string)
+         end do
          ! TODO add similar loop for stream smartrecv
          !      err_client = client%unpack_tensor("send_array", recvArrayReal1d, shape(recvArrayReal1d))
          !      if (err_client /= SRNoError) then
