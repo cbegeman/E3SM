@@ -23,3 +23,9 @@ if key_found:
     print('init_send_array=',dummy_array[0])
 else:
     print('key not found')
+
+mpas_dataset = client.get_dataset('example_fortran_dataset')
+mpas_tensor = mpas_dataset.get_tensor('dataset_send')
+print(f'dataset_send tensor={mpas_tensor[0,0]}')
+config_mom_del2 = mpas_dataset.get_meta_scalars('config_mom_del2')
+print(f'dataset config_mom_del2={config_mom_del2}')
