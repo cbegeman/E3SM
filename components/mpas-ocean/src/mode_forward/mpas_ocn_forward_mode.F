@@ -30,6 +30,7 @@ module ocn_forward_mode
    use mpas_log
    use mpas_decomp
    use mpas_log
+!   use mpas_smart_routines
 
    use ocn_analysis_driver
    use ocn_init_routines
@@ -96,6 +97,7 @@ module ocn_forward_mode
    use ocn_config
 
    use smartredis_client, only: client_type
+   use smartredis_dataset, only: dataset_type
 
    implicit none
    private
@@ -150,7 +152,8 @@ module ocn_forward_mode
       integer(kind=enum_kind) :: err_client
       character(len=100) :: log_string
       character(len=*), parameter :: script_key = 'init_script'
-      character(len=*), parameter :: script_file = '/global/homes/c/cbegeman/E3SM-new/components/mpas-ocean/src/mode_forward/test_client_recv.txt'
+      character(len=*), parameter :: script_file = &
+         'test_client_recv.txt'
       character(len=255) :: in_key, script_out_key, out_key
 
       character(len=255), dimension(1) :: inputs, outputs
@@ -165,7 +168,9 @@ module ocn_forward_mode
          sendArrayReal0d, recvArrayReal0d
       real (kind=RKIND), dimension(:), allocatable :: &
          sendArrayReal1d, recvArrayReal1d
-
+      real (kind=RKIND), dimension(:,:), allocatable :: &
+         sendArrayReal2d, recvArrayReal2d
+      real (kind=RKIND) :: meta_scalar
       real (kind=RKIND), dimension(:), pointer :: &
          meshDensity        ! pointer to mesh density array
 
@@ -190,6 +195,7 @@ module ocn_forward_mode
 
       character (len=StrKIND) :: units
       type(client_type) :: client
+      type(dataset_type) :: dataset
       logical :: is_error
 
       ! End preamble
@@ -226,7 +232,7 @@ module ocn_forward_mode
       if (len(TRIM(log_string)) < 5) then
          call mpas_log_write('No SSDB')!, &
       else
-         err_client = client%initialize(.true.)
+         err_client = client%initialize(.false.)
          if (err_client /= SRNoError) then
             write(log_string,*) 'Error initializing redis client:',err_client
             call mpas_log_write(log_string)!, &
@@ -245,15 +251,20 @@ module ocn_forward_mode
          outputs(1) = script_out_key
 
          allocate(sendArrayReal1d(1), recvArrayReal1d(1))
+         allocate(sendArrayReal2d(1,1), recvArrayReal2d(1,1))
          sendArrayReal1d(:) = 2.0_RKIND
          recvArrayReal1d(:) = 0.0_RKIND
+         sendArrayReal2d(1,1) = 2.0_RKIND
+         recvArrayReal2d(1,1) = 0.0_RKIND
          err_client = client%put_tensor(in_key, sendArrayReal1d, shape(sendArrayReal1d))
          if (err_client /= SRNoError) then
             write(log_string,*) 'Error put tensor:',err_client
             call mpas_log_write(log_string)
+            is_error = client%SR_error_parser(err_client)
          else
             call mpas_log_write('Put tensor')
          endif
+
          !err_client = client%set_script_from_file(script_key, "CPU", script_file)
          !if (err_client /= SRNoError) then
          !   write(log_string,*) 'Error setting client script:',err_client
@@ -272,15 +283,67 @@ module ocn_forward_mode
          if (err_client /= SRNoError) then
             write(log_string,*) 'Error unpacking tensor init_recv:',err_client
             call mpas_log_write(log_string)
+            is_error = client%SR_error_parser(err_client)
          else
             write(log_string,*) 'init_recv:',recvArrayReal1d(1)
             call mpas_log_write(log_string)
+            config_mom_del2 = recvArrayReal1d(1)
+            write(log_string,*) 'After client: config_mom_del2', config_mom_del2
+            call mpas_log_write(log_string)
          endif
          !endif
+
+         err_client = dataset%initialize("example_fortran_dataset")
+         if (err_client .ne. SRNoError) then
+            call mpas_log_write('dataset initialization failed')
+         else
+            call mpas_log_write('Dataset initialized')
+         endif
+
+         ! Add a tensor to the dataset and verify that we can retrieve it
+         err_client = dataset%add_tensor("dataset_send", sendArrayReal2d, &
+                                         shape(sendArrayReal2d))
+         if (err_client .ne. SRNoError) then
+            call mpas_log_write('dataset%add_tensor failed')
+         else
+            call mpas_log_write('Dataset tensor added')
+         endif
+         err_client = dataset%unpack_dataset_tensor( &
+                         "dataset_send",recvArrayReal2d, shape(recvArrayReal2d))
+         if (err_client .ne. SRNoError) then
+            write(log_string,*) 'dataset%unpack_dataset_tensor failed:',err_client
+            call mpas_log_write(log_string)
+         else
+            write(log_string,*) 'Dataset tensor received:',recvArrayReal2d(1,1)
+            call mpas_log_write(log_string)
+         endif
+
+         ! Add metascalars to the dataset and verify that we can retrieve them
+         err_client = dataset%add_meta_scalar('config_mom_del2', config_mom_del2)
+         if (err_client .ne. SRNoError) then
+            write(log_string,*) 'dataset%add_meta_scalar failed:',err_client
+            call mpas_log_write(log_string)
+         else
+            call mpas_log_write('Dataset metascalar added')
+         endif
+         
+         !err_client = dataset%get_meta_scalars('config_mom_del2', meta_scalar)
+         !if (err_client .ne. SRNoError) then
+         !   write(log_string,*) 'dataset%get_meta_scalar failed:',err_client
+         !   call mpas_log_write(log_string)
+         !else
+         !   write(log_string,*) 'Dataset metascalar received:',meta_scalar
+         !   call mpas_log_write(log_string)
+         !endif
+         err_client = client%put_dataset(dataset)
+         if (err_client .ne. SRNoError) then
+            write(log_string,*) 'client%put_dataset failed:',err_client
+            call mpas_log_write(log_string)
+         else
+            call mpas_log_write('Dataset put')
+         endif
+
       endif
-      config_mom_del2 = recvArrayReal1d(1)
-      write(log_string,*) 'After client: config_mom_del2', config_mom_del2
-      call mpas_log_write(log_string)
 
       !-----------------------------------------------------------------
       ! Initialize data from external file input
