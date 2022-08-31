@@ -15,10 +15,11 @@ module ocn_gm
 
    use ocn_constants
    use ocn_config
+   use ocn_mesh
    use ocn_diagnostics_variables
 
    implicit none
-   private
+   public
    save
 
    !--------------------------------------------------------------------
@@ -136,7 +137,7 @@ contains
       real(kind=RKIND) :: dcEdgeInv, drhoDx, drhoDT, drhoDS, dTdx, dSdx
       real(kind=RKIND) :: slopeTaperUp, slopeTaperDown, sfcTaperUp, sfcTaperDown, invAreaCell
       real(kind=RKIND) :: lt1, lt2, c_min
-      real(kind=RKIND) :: sigma, Lr, Length, L_rhines, mekeEdge, shearEdgeInv, Velocity
+      real(kind=RKIND) :: sigma, Length, L_rhines, mekeEdge, shearEdgeInv, Velocity
       real(kind=RKIND) :: eddyLength, eddyTime
       real(kind=RKIND) :: gmBolusKappaDia
       real(kind=RKIND), dimension(:), allocatable :: dzTop, dTdzTop, dSdzTop, k33Norm
@@ -158,6 +159,7 @@ contains
       real(kind=RKIND), dimension(:, :, :), pointer :: activeTracers
       integer, pointer :: indexTemperature, indexSalinity
       integer :: timeLevel
+      character(len=100) :: log_string
 
       if (present(timeLevelIn)) then
          timeLevel = timeLevelIn
@@ -655,20 +657,32 @@ contains
          if (local_config_GM_compute_EdenGreatbatch) then
            call mpas_pool_get_array(meshPool, 'fEdge', fEdge)
 
-           if (config_prognostic_meke .and. config_use_prognostic_meke) then
-              call mpas_log_write('Assigning gmKappaScaling based on meke')
+           if (config_prognostic_meke .or. config_use_prognostic_meke) then
+              !$omp parallel
+              !$omp do schedule(runtime)
+              do iEdge = 1,nEdges
+                 if (sphereRadius == 0.0_RKIND) then
+                    LrEdge(iEdge) = cGMphaseSpeed(iEdge) / (1.0E-15_RKIND + abs(fEdge(iEdge)))
+                 else
+                    LrEdge(iEdge) = min(cGMphaseSpeed(iEdge) / (1.0E-15_RKIND + abs(fEdge(iEdge))), &
+                          sqrt(cGMphaseSpeed(iEdge) / (2.0_RKIND*betaEdge(iEdge))))
+                 endif
+              enddo
+              !$omp end do
+              !$omp end parallel
+           endif
+           if (config_use_prognostic_meke) then
               !$omp parallel
               !$omp do schedule(runtime) private(cell1, cell2, &
-              !$omp             Lr, Length, mekeEdge, Velocity)
+              !$omp             Length, mekeEdge, Velocity)
               do iEdge = 1,nEdges
                  cell1 = cellsOnEdge(1, iEdge)
                  cell2 = cellsOnEdge(2, iEdge)
-                 Lr = min(cGMphaseSpeed(iEdge) / (1.0E-15_RKIND + abs(fEdge(iEdge))), &
-                          sqrt(cGMphaseSpeed(iEdge) / (2.0_RKIND*betaEdge(iEdge))))
+                 call mpas_log_write('Assigning gmKappaScaling based on meke')
                  do k = minLevelEdgeBot(iEdge)+1,maxLevelEdgeTop(iEdge)
                     mekeEdge = 0.5_RKIND*(meke(k,cell1) + meke(k,cell2))
                     Velocity = mekeEdge**0.5_RKIND
-                    Length = min((Velocity/betaEdge(iEdge))**0.5_RKIND, Lr)
+                    Length = min((Velocity/betaEdge(iEdge))**0.5_RKIND, LrEdge(iEdge))
                     gmKappaScaling(k,iEdge) = max(config_GM_spatially_variable_min_kappa, &
                                                   min(config_GM_spatially_variable_max_kappa, &
                                                       Length*Velocity) &
@@ -680,12 +694,10 @@ contains
            else
               !$omp parallel
               !$omp do schedule(runtime) private(cell1, cell2, sigma, RiTopOfEdge, &
-              !$omp             L_rhines, Lr, Length, BruntVaisalaFreqTopEdge, shearEdgeInv)
+              !$omp             L_rhines, Length, BruntVaisalaFreqTopEdge, shearEdgeInv)
               do iEdge=1,nEdges
                  cell1 = cellsOnEdge(1, iEdge)
                  cell2 = cellsOnEdge(2, iEdge)
-                 Lr = min(cGMphaseSpeed(iEdge) / (1.0E-15_RKIND + abs(fEdge(iEdge))), &
-                          sqrt(cGMphaseSpeed(iEdge) / (2.0_RKIND*betaEdge(iEdge))))
                  do k=minLevelEdgeBot(iEdge)+1,maxLevelEdgeTop(iEdge)
                     BruntVaisalaFreqTopEdge = 0.5_RKIND*(max(BruntVaisalaFreqTop(k,cell1),0.0_RKIND) + &
                                              max(BruntVaisalaFreqTop(k,cell2),0.0_RKIND))
@@ -697,7 +709,7 @@ contains
                     sigma = max(abs(fEdge(iEdge)),sqrt(2.0_RKIND*betaEdge(iEdge)* &
                                 cGMphaseSpeed(iEdge))) / sqrt(RiTopOfEdge + config_GM_EG_riMin)
                     L_rhines = sigma / (1.0E-18_RKIND + betaEdge(iEdge))
-                    Length = min(config_GM_EG_Rossby_factor*Lr,config_GM_EG_Rhines_factor*L_rhines)
+                    Length = min(config_GM_EG_Rossby_factor*LrEdge(iEdge),config_GM_EG_Rhines_factor*L_rhines)
                     !For compatibility with other schemes, we normalize by the 2-D kappa field, which will
                     !be removed below in the computation of the stream function
                     gmKappaScaling(k,iEdge) = max(config_GM_spatially_variable_min_kappa, min(config_GM_EG_kappa_factor* &
@@ -1023,6 +1035,8 @@ contains
       real(kind=RKIND), pointer :: sphere_radius
       real(kind=RKIND), dimension(:), pointer   :: latEdge, fEdge
       integer, dimension(:, :), pointer :: cellsOnEdge
+      real(kind=RKIND), dimension(:), allocatable :: Lr
+      character(len=100) :: log_string
 
       err = 0
 
