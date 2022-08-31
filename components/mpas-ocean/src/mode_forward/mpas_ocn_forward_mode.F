@@ -151,8 +151,8 @@ module ocn_forward_mode
       character(len=100) :: log_string
       character(len=*), parameter :: script_key = 'init_script'
       character(len=*), parameter :: script_file = &
-         'test_client_recv.txt'
-      character(len=255) :: in_key, script_out_key, out_key
+         'data_processing_script.txt'
+      character(len=255) :: script_in_key, script_out_key
 
       character(len=255), dimension(1) :: inputs, outputs
 
@@ -236,13 +236,15 @@ module ocn_forward_mode
       else
          call mpas_log_write('OCN Client initialized')
 
+         ! Send config option to client
          write(log_string,*) 'Before client: config_mom_del2', config_mom_del2
          call mpas_log_write(log_string)
-         in_key = 'init_send'
-         script_out_key = 'init_recv'
-         out_key = 'init_recv'
-         inputs(1) = in_key
-         outputs(1) = script_out_key
+         call mpas_smart_config_send(domain, 'config_mom_del2', ierr)
+         if (ierr /= 0.0_RKIND) then
+            call mpas_log_write('Error put config')
+         else
+            call mpas_log_write('Put config')
+         endif
 
          allocate(sendArrayReal1d(1), recvArrayReal1d(1))
          allocate(sendArrayReal2d(1,1), recvArrayReal2d(1,1))
@@ -250,29 +252,36 @@ module ocn_forward_mode
          recvArrayReal1d(:) = 0.0_RKIND
          sendArrayReal2d(1,1) = 2.0_RKIND
          recvArrayReal2d(1,1) = 0.0_RKIND
-         err_client = client%put_tensor(in_key, sendArrayReal1d, shape(sendArrayReal1d))
+         script_in_key = 'init_send_script'
+         script_out_key = 'init_recv_script'
+         inputs(1) = script_in_key
+         outputs(1) = script_out_key
+         allocate(sendArrayReal4d(1,1,28,28))
+         call random_number(sendArrayReal4d)
+         !sendArrayReal4d(:,:,:,:) = 2.0_RKIND
+         err_client = client%put_tensor(script_in_key, sendArrayReal4d, shape(sendArrayReal4d))
          if (err_client /= SRNoError) then
-            write(log_string,*) 'Error put tensor:',err_client
+            write(log_string,*) 'Error put tensor for script:',err_client
+            call mpas_log_write(log_string)
+         else
+            call mpas_log_write('Put tensor for script set')
+         endif
+         err_client = client%set_script_from_file(script_key, "CPU", script_file)
+         if (err_client /= SRNoError) then
+            write(log_string,*) 'Error setting client script:',err_client
+            call mpas_log_write(log_string)
+         else
+            call mpas_log_write('Client script set')
+         endif
+         err_client = client%run_script(script_key, "pre_process", inputs, outputs)
+         if (err_client /= SRNoError) then
+            write(log_string,*) 'Error running client script:',err_client
             call mpas_log_write(log_string)
             is_error = client%SR_error_parser(err_client)
          else
-            call mpas_log_write('Put tensor')
+            call mpas_log_write('Client script run')
          endif
 
-         !err_client = client%set_script_from_file(script_key, "CPU", script_file)
-         !if (err_client /= SRNoError) then
-         !   write(log_string,*) 'Error setting client script:',err_client
-         !   call mpas_log_write(log_string)
-         !else
-         !   call mpas_log_write('Client script set')
-         !endif
-         !err_client = client%run_script(script_key, "pre_process", inputs, outputs)
-         !if (err_client /= SRNoError) then
-         !   write(log_string,*) 'Error running client script:',err_client
-         !   call mpas_log_write(log_string)
-         !   is_error = client%SR_error_parser(err_client)
-         !else
-         !call mpas_log_write('Client script run')
          err_client = client%unpack_tensor(outputs(1), recvArrayReal1d, shape(recvArrayReal1d))
          if (err_client /= SRNoError) then
             write(log_string,*) 'Error unpacking tensor init_recv:',err_client

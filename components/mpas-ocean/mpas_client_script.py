@@ -16,10 +16,10 @@ print(f'SSDB in client script {SSDB}')
 client = Client(address=SSDB, cluster=False)
 recv_array = 20*numpy.ones(1)
 err = client.put_tensor("init_recv", recv_array)
-key_found = client.poll_key("init_send", 200, 10000)
+key_found = client.poll_key("config_mom_del2", 20, 10000)
 print('key_found',key_found)
 if key_found:
-    dummy_array = client.get_tensor("init_send")
+    dummy_array = client.get_tensor("config_mom_del2")
     print('init_send_array=',dummy_array[0])
 else:
     print('key not found')
