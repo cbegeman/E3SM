@@ -115,7 +115,7 @@ contains
 
     iErr = 0
 
-    call mpas_log_write('here')
+    call mpas_log_write('Start tidal boundary setup')
     if(config_init_configuration .ne. trim('tidal_boundary')) return
 
     call mpas_pool_get_subpool(domain % blocklist % structs, 'mesh', meshPool)
@@ -460,6 +460,7 @@ contains
     end do
 
     deallocate(interfaceLocations)
+    call mpas_log_write('end tidal boundary setup')
 
     !--------------------------------------------------------------------
 
