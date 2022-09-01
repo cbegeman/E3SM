@@ -352,7 +352,7 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: cell1, cell2, iEdge, iCell, k, i
+      integer :: cell1, cell2, iEdge, iCell, k, i, nRamp
 
       real (kind=RKIND) :: divFlux, divOutFlux
       real (kind=RKIND) :: layerThickness
@@ -366,6 +366,7 @@ contains
 
       if (.not. config_zero_drying_velocity) return
 
+      nRamp = 0
       ! need predicted transport velocity to limit drying flux
       !$omp parallel
       !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, layerThickness)
@@ -405,6 +406,7 @@ contains
                  (layerThickness <= config_zero_drying_velocity_ramp_hmax)) then
 
             hRampMin = config_zero_drying_velocity_ramp_hmin
+            nRamp = nRamp + 1
             ! Following O'Dea et al. (2021), if total upwinded wct is less than
             ! 2*critical thickness, apply damping at each edge
             do i = 1, nEdgesOnCell(iCell)
@@ -423,6 +425,12 @@ contains
       end do
       !$omp end do
       !$omp end parallel
+      if (config_zero_drying_velocity_ramp .and. nRamp == 0) &
+         call mpas_log_write('Ramp active and unused')
+      if (config_zero_drying_velocity_ramp .and. nRamp > 0) then
+         write(log_string,*) 'nRamp = ',nRamp
+         call mpas_log_write(log_string)
+      endif
 
    end subroutine ocn_wetting_drying_wettingVelocity !}}}
 
