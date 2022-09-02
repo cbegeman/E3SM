@@ -275,11 +275,19 @@ module ocn_forward_mode
          endif
          err_client = client%run_script(script_key, "pre_process", inputs, outputs)
          if (err_client /= SRNoError) then
-            write(log_string,*) 'Error running client script:',err_client
+            write(log_string,*) 'Error running script pre_process:',err_client
             call mpas_log_write(log_string)
             is_error = client%SR_error_parser(err_client)
          else
-            call mpas_log_write('Client script run')
+            call mpas_log_write('Pre_process script run')
+         endif
+         err_client = client%run_script(script_key, "post_process", inputs, outputs)
+         if (err_client /= SRNoError) then
+            write(log_string,*) 'Error running script post_process:',err_client
+            call mpas_log_write(log_string)
+            is_error = client%SR_error_parser(err_client)
+         else
+            call mpas_log_write('Post_process script run')
          endif
 
          err_client = client%unpack_tensor(outputs(1), recvArrayReal1d, shape(recvArrayReal1d))
