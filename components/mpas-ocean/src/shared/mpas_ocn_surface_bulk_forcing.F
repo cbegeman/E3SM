@@ -310,6 +310,7 @@ contains
       real (kind=RKIND), dimension(:), pointer :: evaporationFlux, snowFlux
       real (kind=RKIND), dimension(:), pointer :: seaIceFreshWaterFlux, icebergFreshWaterFlux, riverRunoffFlux, iceRunoffFlux
       real (kind=RKIND), dimension(:), pointer :: rainFlux
+      character(len=100) :: log_string
 
       err = 0
 
@@ -327,6 +328,7 @@ contains
 
       nCells = nCellsHalo( 2 )
 
+      call mpas_log_write('Apply river bulk thickness forcing')
       ! Build surface fluxes at cell centers
 #ifdef MPAS_OPENACC
       !$acc enter data copyin(evaporationFlux, snowFlux, seaIceFreshWaterFlux, icebergFreshWaterFlux, &
@@ -336,17 +338,21 @@ contains
       !$acc     present(surfaceThicknessFlux, surfaceThicknessFluxRunoff, evaporationFlux, snowFlux, &
       !$acc     seaIceFreshWaterFlux, icebergFreshWaterFlux, riverRunoffFlux, iceRunoffFlux, rainFlux)
 #else
-      !$omp parallel
-      !$omp do schedule(runtime)
+      !!$omp parallel
+      !!$omp do schedule(runtime)
 #endif
       do iCell = 1, nCells
         surfaceThicknessFlux(iCell) = surfaceThicknessFlux(iCell) + ( snowFlux(iCell) + rainFlux(iCell) + evaporationFlux(iCell) &
                                     + seaIceFreshWaterFlux(iCell) + icebergFreshWaterFlux(iCell) + iceRunoffFlux(iCell) ) / rho_sw
         surfaceThicknessFluxRunoff(iCell) = riverRunoffFlux(iCell) / rho_sw
+        if (riverRunoffFlux(iCell)>0.0_RKIND) then
+           write(log_string,*) 'riverRunoffFlux, surfThickFluxRunoff',riverRunoffFlux(iCell), surfaceThicknessFluxRunoff(iCell)
+           call mpas_log_write(log_string)
+        endif
       end do
 #ifndef MPAS_OPENACC
-      !$omp end do
-      !$omp end parallel
+      !!$omp end do
+      !!$omp end parallel
 #endif
 
 #ifdef MPAS_OPENACC
@@ -545,10 +551,11 @@ contains
       ! Only include this heat forcing when bulk thickness is turned on
       ! indices on tracerGroup are (iTracer, iLevel, iCell)
       if (.not. bulkThicknessFluxOff) then
+         call mpas_log_write('Apply riverRunoffFlux tracers')
          !$omp parallel
          !$omp do schedule(runtime) private(surfaceTemperatureFluxWithoutRunoff)
          do iCell = 1, nCells
-
+           if (riverRunoffFlux(iCell)>0.0_RKIND) call mpas_log_write('riverRunoffFlux>0')
            ! Accumulate fluxes that use the surface temperature
            rainTemperatureFlux(iCell) = rainFlux(iCell) * tracerGroup(index_temperature_flux,minLevelCell(iCell),iCell) / rho_sw
            evapTemperatureFlux(iCell) = evaporationFlux(iCell) * tracerGroup(index_temperature_flux,minLevelCell(iCell),iCell) / rho_sw
