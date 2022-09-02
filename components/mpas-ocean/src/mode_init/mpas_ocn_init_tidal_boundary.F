@@ -80,8 +80,8 @@ contains
 
     type (domain_type), intent(inout) :: domain
     integer, intent(out) :: iErr
-    real (kind=RKIND) :: yMin, yMax, dcEdgeMin
-    real (kind=RKIND) :: yMinGlobal, yMaxGlobal, dcEdgeMinGlobal
+    real (kind=RKIND) :: yMin, yMax, dcEdgeMin, dcEdgeMax
+    real (kind=RKIND) :: yMinGlobal, yMaxGlobal, dcEdgeMinGlobal, dcEdgeMaxGlobal
     real (kind=RKIND) :: plugWidth
     real (kind=RKIND) :: slopeCenter, slopeWidth, depCenter, depWidth
 
@@ -100,6 +100,7 @@ contains
     integer, pointer :: index_temperature, index_salinity, index_tracer1
 
     ! Define arrays
+
     integer, dimension(:), pointer :: minLevelCell, maxLevelCell
     integer, dimension(:), pointer :: vegetationMask
     real (kind=RKIND), dimension(:), pointer :: vegetationHeight,vegetationDensity, vegetationDiameter
@@ -112,7 +113,7 @@ contains
     real (kind=RKIND), dimension(:), pointer :: interfaceLocations
     real (kind=RKIND),  parameter :: eps=1.0e-12
     real (kind=RKIND) :: cff1,cff2,cff3, dep_mark1, dep_mark2 ! intermediate variables
-
+    character(len=100) :: log_string
     iErr = 0
 
     call mpas_log_write('Start tidal boundary setup')
@@ -128,6 +129,7 @@ contains
     yMin = 1.0E10_RKIND
     yMax = -1.0E10_RKIND
     dcEdgeMin = 1.0E10_RKIND
+    dcEdgeMax = -1.0E10_RKIND
 
     ! Determine local min and max y value.
     block_ptr => domain % blocklist
@@ -143,6 +145,7 @@ contains
       yMin = min( yMin, minval(yCell(1:nCellssolve)))
       yMax = max( yMax, maxval(yCell(1:nCellssolve)))
       dcEdgeMin = min( dcEdgeMin, minval(dcEdge(1:nEdgesSolve)))
+      dcEdgeMax = max( dcEdgeMax, maxval(dcEdge(1:nEdgesSolve)))
 
       block_ptr => block_ptr % next
     end do
@@ -152,9 +155,19 @@ contains
     call mpas_dmpar_min_real(domain % dminfo, yMin, yMinGlobal)
     call mpas_dmpar_max_real(domain % dminfo, yMax, yMaxGlobal)
     call mpas_dmpar_min_real(domain % dminfo, dcEdgeMin, dcEdgeMinGlobal)
+    call mpas_dmpar_max_real(domain % dminfo, dcEdgeMax, dcEdgeMaxGlobal)
+    write(log_string,*) 'yMinGlobal=',yMinGlobal
+    call mpas_log_write(log_string)
+    write(log_string,*) 'yMaxGlobal=',yMaxGlobal
+    call mpas_log_write(log_string)
+    write(log_string,*) 'dcEdgeMinGlobal=',dcEdgeMinGlobal
+    call mpas_log_write(log_string)
+    write(log_string,*) 'dcEdgeMaxGlobal=',dcEdgeMaxGlobal
+    call mpas_log_write(log_string)
 
     plugWidth = (yMaxGlobal - yMinGlobal) * config_tidal_boundary_plug_width_frac
 
+    call mpas_log_write('Assign pointers')
     block_ptr => domain % blocklist
     do while(associated(block_ptr))
       call mpas_pool_get_subpool(block_ptr % structs, 'mesh', meshPool)
@@ -188,6 +201,7 @@ contains
       call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
 
 
+      call mpas_log_write('check configs')
       if (config_tidal_boundary_right_bottom_depth < config_tidal_boundary_left_bottom_depth) then
         call mpas_log_write('Right boundary must be deeper than left boundary!', MPAS_LOG_CRIT)
       end if
@@ -411,12 +425,16 @@ contains
       end do
 
       ! Set river runoff
-      do iCell = 1, nCellsSolve
-        riverRunoffFlux(iCell) = 0.0_RKIND
-        if (yCell(iCell) < dcEdgeMinGlobal) then
-          riverRunoffFlux(iCell) = 1.0_RKIND
-        end if
-      end do
+      if (associated(riverRunoffFlux)) then
+         call mpas_log_write('set river runoff')
+         do iCell = 1, nCellsSolve
+           riverRunoffFlux(iCell) = 0.0_RKIND
+           if (yCell(iCell) < (yMinGlobal + dcEdgeMaxGlobal*1.5_RKIND)) then
+             riverRunoffFlux(iCell) = 10.0_RKIND
+           end if
+         end do
+         call mpas_log_write('complete set river runoff')
+      endif
 
       ! check that there is some tidalInputMask 
       if (.not. sum(tidalInputMask) > 0) then
