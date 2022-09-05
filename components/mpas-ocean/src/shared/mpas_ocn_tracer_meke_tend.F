@@ -126,7 +126,6 @@ contains
 
       ! mekeSourceTopOfEdge comes from diagnostics_variables
       ! first, interpolate mekeSourceTopOfEdge to mekeSourceEdge
-      call mpas_log_write('Interpolate meke source to mid-edge')
       !$omp parallel
       !$omp do schedule(runtime) private(k)
       do iEdge = 1, nEdges
@@ -139,10 +138,8 @@ contains
       end do
       !$omp end do
       !$omp end parallel
-      call mpas_log_write('... completed')
 
       ! second, interpolate mekeSourceEdge to cell centers
-      call mpas_log_write('Interpolate meke source to cell center')
       !$omp parallel
       !$omp do schedule(runtime) private(k)
       do iCell = 1, nCells
@@ -156,9 +153,7 @@ contains
       end do
       !$omp end do
       !$omp end parallel
-      call mpas_log_write('... completed')
 
-      call mpas_log_write('Compute meke source tend')
       !$omp parallel
       !$omp do schedule(runtime) private(k)
       do iCell = 1, nCells
@@ -170,7 +165,6 @@ contains
       end do
       !$omp end do
       !$omp end parallel
-      call mpas_log_write('... completed')
 
       call mpas_timer_stop('MEKE source')
 
@@ -227,11 +221,12 @@ contains
       integer :: cell1, cell2, iCell, iEdge, j, k, nCells, nEdges
       real(kind=RKIND), parameter :: c_diss = 0.1_RKIND
       real(kind=RKIND) :: Lr, Velocity, Length, betaCell
-      real (kind=RKIND), dimension(:), allocatable :: &
-         LrEdge
       character(len=100) :: log_string
 
       call mpas_log_write('MEKE sink start')
+      iCell = 10
+      write(log_string,*) 'meke =',meke(1,iCell)
+      call mpas_log_write(log_string)
       err = 0
 
       if (.not. config_prognostic_meke) return
@@ -241,28 +236,31 @@ contains
       nCells = nCellsOwned
       nEdges = nEdgesOwned
 
-      allocate(LrEdge(nEdges))
-
       !$omp parallel
       !$omp do schedule(runtime) private(iEdge, j, k, Lr, betaCell, Velocity, Length)
       do iCell=1,nCells
+         Lr = 0.0_RKIND
+         do j = 1,nEdgesOnCell(iCell)
+            iEdge = edgesOnCell(j,iCell)
+            Lr = Lr + LrEdge(iEdge)*edgeAreaFractionOfCell(j, iCell)
+         enddo
+         if (sphereRadius == 0.0_RKIND) then
+            betaCell = 1e-20_RKIND
+         else
+            betaCell = 2.0_RKIND*omega*cos(latCell(iCell)) / sphereRadius
+         endif
          do k = minLevelCell(iCell),maxLevelCell(iCell)
-            Lr = 0.0_RKIND
-            do j = 1,nEdgesOnCell(iCell)
-               iEdge = edgesOnCell(j,iCell)
-               Lr = Lr + LrEdge(iEdge)*edgeAreaFractionOfCell(j, iCell)
-            enddo
-            if (sphereRadius == 0.0_RKIND) then
-               betaCell = 1e-20_RKIND
-            else
-               betaCell = 2.0_RKIND*omega*cos(latCell(iCell)) / sphereRadius
-            endif
             Velocity = meke(k,iCell)**0.5_RKIND
-            Length = max(1e-10_RKIND, min((Velocity/betaCell)**0.5_RKIND, Lr))
+            if (sphereRadius == 0.0_RKIND) then
+               Length = Lr
+            else
+               Length = min((Velocity/betaCell)**0.5_RKIND, Lr)
+            endif
+            Length = max(1e-10_RKIND, Length)
             mekeSink(k,iCell) = c_diss * &
                                 (meke(k,iCell)/layerThickness(k,iCell))**1.5_RKIND / &
                                 Length
-            if (mekeSink(k,iCell) > 1.0_RKIND) then
+            if (mekeSink(k,iCell) > 1.0_RKIND .or. (iCell == 10 .and. k==1)) then
                write(log_string,*) 'Lr', Lr
                call mpas_log_write(log_string)
                write(log_string,*) 'omega, sphereRadius', omega, sphereRadius
@@ -280,6 +278,9 @@ contains
       enddo
       !$omp end do
       !$omp end parallel
+      iCell = 10
+      write(log_string,*) 'mekeTend =',tend(1,iCell)
+      call mpas_log_write(log_string)
       call mpas_timer_stop('MEKE sink')
       call mpas_log_write('MEKE sink end')
 

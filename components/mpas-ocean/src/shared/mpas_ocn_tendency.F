@@ -1371,6 +1371,7 @@ contains
       real (kind=RKIND), dimension(:,:), allocatable :: &
          normalThicknessFlux  ! Flux of thickness through edge (m^2/s)
 
+      character(len=100) :: log_string
       ! these variables input from shared diagnostics module:
       !    normalTransportVelocity - transport velocity across edge
       !    layerThickEdgeFlux      - flux-related layer thickness on edge
@@ -1379,6 +1380,7 @@ contains
       !-----------------------------------------------------------------
       ! Begin code
 
+      call mpas_log_write("ocn_tend_meke")
       call mpas_timer_start("ocn_tend_meke")
  
       ! set time level to default 1 or override with input arg
@@ -1395,6 +1397,9 @@ contains
                                mekeTend)
       call mpas_pool_get_array(statePool, 'layerThickness', &
                                            layerThickness, timeLevel)
+      iCell = 10
+      write(log_string,*) 'meke, mekeTend =',meke(1,iCell),mekeTend(1,iCell)
+      call mpas_log_write(log_string)
  
       allocate(meke3d    (1, nVertLevels, nCellsAll+1), &
                mekeTend3d(1, nVertLevels, nCellsAll+1))
@@ -1472,13 +1477,23 @@ contains
       end do
       !$omp end do
       !$omp end parallel
+      iCell = 10
+      write(log_string,*) 'After adv mekeTend =',mekeTend(1,iCell)
+      call mpas_log_write(log_string)
  
       call mpas_log_write('MEKE source')
       call ocn_tracer_meke_source_tend(layerThickness, dt, mekeTend, err)
       call mpas_log_write('... completed')
+      iCell = 10
+      write(log_string,*) 'After source mekeTend =',mekeTend(1,iCell)
+      call mpas_log_write(log_string)
+ 
       call mpas_log_write('MEKE sink')
       call ocn_tracer_meke_sink_tend(meke, layerThickness, dt, mekeTend, err)
       call mpas_log_write('... completed')
+      iCell = 10
+      write(log_string,*) 'After sink meke, mekeTend =',meke(1,iCell),mekeTend(1,iCell)
+      call mpas_log_write(log_string)
 
       call mpas_timer_stop("ocn_tend_meke")
 
