@@ -52,7 +52,6 @@ module ocn_time_integration_rk4
    ! Public parameters
    !
    !--------------------------------------------------------------------
-
    !--------------------------------------------------------------------
    !
    ! Public member functions
@@ -60,6 +59,8 @@ module ocn_time_integration_rk4
    !--------------------------------------------------------------------
 
    public :: ocn_time_integrator_rk4
+
+   character(len=100) :: log_string
 
    contains
 
@@ -244,13 +245,11 @@ module ocn_time_integration_rk4
          call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityNew, 2)
          call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessCur, 1)
          call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessNew, 2)
-         call mpas_log_write('Start get MEKE vars')
          call mpas_pool_get_package(ocnPackages, 'MEKEActive', MEKEActive)
          if (MEKEActive) then
             call mpas_pool_get_array(statePool, 'meke', mekeCur, 1)
             call mpas_pool_get_array(statePool, 'meke', mekeNew, 2)
          endif
-         call mpas_log_write('End get MEKE vars')
 
          call mpas_pool_get_array(statePool, 'highFreqThickness', highFreqThicknessCur, 1)
          call mpas_pool_get_array(statePool, 'highFreqThickness', highFreqThicknessNew, 2)
@@ -302,7 +301,6 @@ module ocn_time_integration_rk4
                end if
             end if
          end do
-         call mpas_log_write('Start update MEKE vars')
          if ( associated(mekeCur) .and. associated(mekeNew) ) then
             !$omp parallel
             !$omp do schedule(runtime) private(k)
@@ -313,8 +311,10 @@ module ocn_time_integration_rk4
             end do
             !$omp end do
             !$omp end parallel
+            iCell = 10
+            write(log_string,*) 'RK4 update layerThick: mekeCur, mekeNew =',mekeCur(1,iCell),mekeNew(1,iCell)
+            call mpas_log_write(log_string)
          end if
-         call mpas_log_write('End update MEKE vars')
 
          if (associated(highFreqThicknessCur)) then
               !$omp parallel
@@ -651,11 +651,9 @@ module ocn_time_integration_rk4
          end if
       end do
 
-      call mpas_log_write('Start MEKE halo')
       if (associated(mekeNew)) then
          call mpas_dmpar_field_halo_exch(domain, 'meke', timeLevel=2)
       endif
-      call mpas_log_write('End MEKE halo')
 
       call mpas_timer_stop("RK4-implicit vert mix halos")
 
@@ -1469,13 +1467,13 @@ module ocn_time_integration_rk4
       call mpas_pool_get_array(meshPool, 'minLevelCell', minLevelCell)
       call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
 
-      call mpas_log_write('Start Get meke variables in RK4')
       call mpas_pool_get_package(ocnPackages, 'MEKEActive', MEKEActive)
       if (MEKEActive) then
          call mpas_pool_get_array(tendPool, 'meke', mekeTend)
          call mpas_pool_get_array(statePool, 'meke', mekeNew, 2)
-      else
-         call mpas_log_write('MEKE not active')
+         iCell = 10
+         write(log_string,*) 'RK4 diag: mekeTend, mekeNew =',mekeTend(1,iCell),mekeNew(1,iCell)
+         call mpas_log_write(log_string)
       endif
       call mpas_log_write('Completed')
 
@@ -1523,7 +1521,6 @@ module ocn_time_integration_rk4
          end if
       end do
 
-      call mpas_log_write('Start meke update substep in RK4')
       if (associated(mekeNew)) then
          !$omp parallel
          !$omp do schedule(runtime) private(k)
@@ -1535,8 +1532,10 @@ module ocn_time_integration_rk4
          end do
          !$omp end do
          !$omp end parallel
+         iCell = 10
+         write(log_string,*) 'RK4 substep: mekeNew =',mekeNew(1,iCell)
+         call mpas_log_write(log_string)
       end if
-      call mpas_log_write('End meke update substep in RK4')
 
       if (associated(highFreqThicknessNew)) then
          !$omp parallel
@@ -1628,14 +1627,13 @@ module ocn_time_integration_rk4
           call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
           call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
       endif
-      call mpas_log_write('Start get meke RK4 cleanup')
       call mpas_pool_get_package(ocnPackages, 'MEKEActive', MEKEActive)
       if (MEKEActive) then
          call mpas_pool_get_array(statePool, 'meke', mekeNew, 2)
-      else
-         call mpas_log_write('MEKE not active')
+         iCell = 10
+         write(log_string,*) 'RK4 cleanup: mekeNew =',mekeNew(1,iCell)
+         call mpas_log_write(log_string)
       endif
-      call mpas_log_write('End get meke RK4 cleanup')
 
       call mpas_pool_begin_iteration(tracersPool)
       do while ( mpas_pool_get_next_member(tracersPool, groupItr) )
@@ -1655,7 +1653,6 @@ module ocn_time_integration_rk4
          end if
       end do
 
-      call mpas_log_write('Start division meke RK4 cleanup')
       if ( associated(mekeNew) ) then
          !$omp parallel
          !$omp do schedule(runtime) private(k)
@@ -1666,8 +1663,10 @@ module ocn_time_integration_rk4
          end do
          !$omp end do
          !$omp end parallel
+         iCell = 10
+         write(log_string,*) 'RK4 cleanup division: mekeNew =',mekeNew(1,iCell)
+         call mpas_log_write(log_string)
       end if
-      call mpas_log_write('End division meke RK4 cleanup')
 #ifdef MPAS_OPENACC
       !$acc enter data copyin(layerThicknessNew, normalVelocityNew)
       !$acc update device (normalTransportVelocity, &

@@ -273,6 +273,7 @@ module ocn_time_integration_split
       ! Remap variables
       real (kind=RKIND), dimension(:,:), pointer :: &
          layerThicknessLagNew
+      character(len=100) :: log_string
 
       ! These are public variables used from the diagnostics module
       ! indexSurfaceVelocityZonal, indexSurfaceVelocityMeridional
@@ -371,6 +372,9 @@ module ocn_time_integration_split
                                               mekeCur, 1)
          call mpas_pool_get_array(statePool, 'meke', &
                                               mekeNew, 2)
+         iCell = 10
+         write(log_string,*) 'SE start: mekeCur, mekeNew', mekeCur(1,iCell), mekeNew(1,iCell)
+         call mpas_log_write(log_string)
       else
          call mpas_log_write('MEKE not active')
       endif
@@ -576,7 +580,6 @@ module ocn_time_integration_split
       endif
 
       if (associated(mekeNew)) then
-         if (mekeCur(1,1)>0) call mpas_log_write('mekeCur is nonzero')
          !$omp parallel
          !$omp do schedule(runtime) private(k)
          do iCell = 1, nCellsAll
@@ -587,6 +590,9 @@ module ocn_time_integration_split
          end do
          !$omp end do
          !$omp end parallel
+         iCell = 10
+         write(log_string,*) 'SE prep: mekeCur, mekeNew', mekeCur(1,iCell), mekeNew(1,iCell)
+         call mpas_log_write(log_string)
       end if
 
       call mpas_timer_stop("se prep")
@@ -1816,6 +1822,10 @@ module ocn_time_integration_split
                                                    mekeNew, 2)
             call mpas_pool_get_array(tendPool,    'meke', &
                                                    mekeTend)
+            iCell = 10
+            write(log_string,*) 'SE after tend: mekeCur, mekeNew', mekeCur(1,iCell), mekeNew(1,iCell)
+            write(log_string,*) 'SE after tend: mekeTend', mekeTend(1,iCell)
+            call mpas_log_write(log_string)
          endif
          call mpas_pool_get_array(tracersTendPool,'activeTracersTend', &
                                                    activeTracersTend)
@@ -1943,6 +1953,9 @@ module ocn_time_integration_split
                end do ! iCell
                !$omp end do
                !$omp end parallel
+               iCell = 10
+               write(log_string,*) 'SE update: mekeCur, mekeNew', mekeCur(1,iCell), mekeNew(1,iCell)
+               call mpas_log_write(log_string)
             end if
 
 #ifdef MPAS_OPENACC
@@ -2297,6 +2310,9 @@ module ocn_time_integration_split
                end do
                !$omp end do
                !$omp end parallel
+               iCell = 10
+               write(log_string,*) 'SE update division: mekeCur, mekeNew', mekeCur(1,iCell), mekeNew(1,iCell)
+               call mpas_log_write(log_string)
             end if
 
             ! Recompute final u to go on to next step.
