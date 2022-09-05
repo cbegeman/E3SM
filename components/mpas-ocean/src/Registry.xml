@@ -2825,6 +2825,9 @@
 			description="phase speed for the bolus velocity calculation"
 			packages="forwardMode;analysisMode"
 		/>
+		<var name="LrEdge" type="real" dimensions="nEdges" units="m"
+			 description="Length scale for Eden and Greatbatch GM."
+		/>
 		<var name="betaEdge" type="real" dimensions="nEdges Time" units="m^{-1} s^{-1}"
 			description="meridional gradient of the coriolis parameter, used in the mesoscale eddy parameterization schemes"
 		/>

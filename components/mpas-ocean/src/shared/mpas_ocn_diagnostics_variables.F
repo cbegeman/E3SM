@@ -144,6 +144,7 @@ module ocn_diagnostics_variables
    real (kind=RKIND), dimension(:,:,:), pointer :: activeTracerHorMixTendency
    real (kind=RKIND), dimension(:,:), pointer :: temperatureShortWaveTendency
    real (kind=RKIND), dimension(:), pointer :: RediKappa
+   real (kind=RKIND), dimension(:), pointer :: LrEdge
 
    ! pointers for tendencies used in diagnostic budget computation
    real (kind=RKIND), dimension(:,:,:), pointer, contiguous :: &
@@ -265,6 +266,8 @@ contains
                    gmHorizontalTaper)
          call mpas_pool_get_array(diagnosticsPool, 'RossbyRadius', &
                    RossbyRadius)
+         call mpas_pool_get_array(diagnosticsPool, 'LrEdge', &
+                   LrEdge)
       end if
 
       if ( config_prognostic_meke ) then
@@ -754,6 +757,7 @@ contains
       if (config_use_GM.or.config_use_Redi) then
          !$acc enter data create(                   &
          !$acc                   RediKappa,         &
+         !$acc                   LrEdge,            &
          !$acc                   gmBolusKappa,      &
          !$acc                   gmKappaScaling,    &
          !$acc                   RediKappaScaling,  &
@@ -994,6 +998,7 @@ contains
       if (config_use_GM.or.config_use_Redi) then
          !$acc exit data delete(                    &
          !$acc                   RediKappa,         &
+         !$acc                   LrEdge,            &
          !$acc                   gmBolusKappa,      &
          !$acc                   gmKappaScaling,    &
          !$acc                   RediKappaScaling,  &
@@ -1188,6 +1193,7 @@ contains
       end if
       if (config_use_GM.or.config_use_Redi) then
          nullify(RediKappa,         &
+                 LrEdge,            &
                  gmBolusKappa,      &
                  gmKappaScaling,    &
                  RediKappaScaling,  &
