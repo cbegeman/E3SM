@@ -321,7 +321,7 @@ contains
        real (kind=RKIND), dimension(:,:), intent(in) :: &
          layerThicknessProvis    !< Input: provisional layer thickness
 
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
+      real (kind=RKIND), dimension(:,:), intent(inout) :: &
          layerThickEdgeFlux  !< Input: flux-related layerThickness at an edge
 
       real (kind=RKIND), dimension(:,:), intent(in) :: &
@@ -357,8 +357,8 @@ contains
 
       integer :: cell1, cell2, iEdge, iCell, k, i
 
-      real (kind=RKIND) :: divFlux, divOutFlux
-      real (kind=RKIND) :: layerThickness
+      real (kind=RKIND) :: divInFlux, divOutFlux, divOutFluxDrying, divFluxDrying
+      real (kind=RKIND) :: layerThickness, layerThickEdgeFactor
       real (kind=RKIND) :: hCrit, hEdgeTotal
 
       character (len=100) :: log_string
@@ -371,16 +371,22 @@ contains
 
       ! need predicted transport velocity to limit drying flux
       !$omp parallel
-      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, layerThickness)
+      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, divInFlux, divFluxDrying, divOutFluxDrying, layerThickEdgeFactor, layerThickness)
       do iCell = 1, nCellsAll
         do k = minLevelCell(iCell), maxLevelCell(iCell)
+          divInFlux = 0.0_RKIND
           divOutFlux = 0.0_RKIND
           layerThickness = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
               ! only consider divergence flux leaving the cell
-              if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+              if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) > 0.0_RKIND ) then
+                divInFlux = divInFlux + &
+                             normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
+                             layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
+                             invAreaCell(iCell)
+              elseif ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
                 divOutFlux = divOutFlux + &
                              normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
                              layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
@@ -420,6 +426,39 @@ contains
             end do
 
           end if
+
+          ! If layerThickness would drop below minimum thickness, bring the thickness
+          ! right to the minimum thickness by reducing layerThickEdgeFlux
+          if (config_limit_drying_layerThickEdgeFlux) then
+            if (layerThickness + dt * divInFlux <= &
+                config_drying_min_cell_height + config_drying_safety_height) then
+              ! compute the divergence that would bring the thickness to the minimum thickness
+              divFluxDrying = ((layerThickness + dt * divInFlux) - &
+                              config_drying_min_cell_height)/dt
+              ! keeping the flow into the cell the same, compute the modified outward divergence
+              divOutFluxDrying = divFluxDrying - divInFlux
+              ! scale the layerThickEdgeFluxes by the modified outward divergence
+              layerThickEdgeFactor = divOutFluxDrying/(divOutFlux*wettingVelocityFactor(k,iEdge))
+              write(log_string,*) 'Drying layer: k,iCell',k,iCell
+              call mpas_log_write(log_string)
+              write(log_string,*) 'Drying layer: layerThickness',layerThickness
+              call mpas_log_write(log_string)
+              write(log_string,*) 'Drying layer: divOutFlux,divInFlux',divOutFlux,divInFlux
+              call mpas_log_write(log_string)
+              write(log_string,*) 'Drying layer: divFluxDrying,divOutFluxDrying',divFluxDrying,divOutFluxDrying
+              call mpas_log_write(log_string)
+              write(log_string,*) 'Drying layer: layerThickEdgeFactor', layerThickEdgeFactor
+              call mpas_log_write(log_string)
+              do i = 1, nEdgesOnCell(iCell)
+                iEdge = edgesOnCell(i, iCell)
+                if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
+                  if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+                    layerThickEdgeFlux(k,iEdge) = layerThickEdgeFlux(k,iEdge)/layerThickEdgeFactor
+                  endif
+                endif
+              enddo
+            endif
+          endif
 
         end do
       end do
