@@ -386,14 +386,17 @@ contains
             kmax = maxLevelEdgeBot(iEdge)
             cell1 = cellsOnEdge(1,iEdge)
             cell2 = cellsOnEdge(2,iEdge)
-            if (k <= kmax .and. k >= kmin) then
+            if (k <= maxLevelEdgeTop(iEdge) .and. k >= minLevelEdgeBot(iEdge)) then
               ! only consider divergence flux leaving the cell
               if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) > 0.0_RKIND ) then
                 divInFlux = divInFlux + &
                              normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
                              layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
                              invAreaCell(iCell)
-              elseif ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+              end if
+            end if
+            if (k <= kmax .and. k >= kmin) then
+              if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
                 divOutFlux = divOutFlux + &
                              normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
                              layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
@@ -463,7 +466,7 @@ contains
               call mpas_log_write(log_string)
               do i = 1, nEdgesOnCell(iCell)
                 iEdge = edgesOnCell(i, iCell)
-                if (k <= kmax .and. k >= kmin) then
+                if (k <= maxLevelEdgeTop(iEdge) .and. k >= minLevelEdgeBot(iEdge)) then
                   if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
                     layerThickEdgeFlux(k,iEdge) = layerThickEdgeFlux(k,iEdge)/layerThickEdgeFactor
                   endif
