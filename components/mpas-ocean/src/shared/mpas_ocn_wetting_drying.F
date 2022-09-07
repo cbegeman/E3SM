@@ -269,7 +269,7 @@ contains
                                                   layerThicknessCur)
 
      call ocn_wetting_drying_wettingVelocity(layerThickEdgeFlux, layerThicknessCur, &
-                                             layerThicknessProvis, normalTransportVelocity, &
+                                             layerThicknessProvis, normalVelocity, &
                                              ssh, rkSubstepWeight, wettingVelocityFactor, err)
 
      ! prevent drying from happening with selective wettingVelocityFactor
