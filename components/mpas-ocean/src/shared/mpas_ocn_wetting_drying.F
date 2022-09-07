@@ -265,6 +265,8 @@ contains
 
      ! ensure cells stay wet by selectively damping cells with a damping tendency to make 
      ! sure tendency doesn't dry cells
+     call ocn_diagnostic_solve_layerThicknessEdge(normalVelocity, &
+                                                  layerThicknessCur)
 
      call ocn_wetting_drying_wettingVelocity(layerThickEdgeFlux, layerThicknessCur, &
                                              layerThicknessProvis, normalTransportVelocity, &
@@ -372,7 +374,7 @@ contains
       nRamp = 0
       ! need predicted transport velocity to limit drying flux
       !$omp parallel
-      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, divInFlux, divFluxDrying, divOutFluxDrying, layerThickEdgeFactor, layerThickness)
+      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, divInFlux, divFluxDrying, divOutFluxDrying, layerThickEdgeFactor,layerThickness, cell1, cell2)
       do iCell = 1, nCellsAll
         do k = minLevelCell(iCell), maxLevelCell(iCell)
           divInFlux = 0.0_RKIND
@@ -380,7 +382,7 @@ contains
           layerThickness = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
-            if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
+            if (k <= maxLevelEdgeTop(iEdge) .or. k >= minLevelEdgeBot(iEdge)) then
               ! only consider divergence flux leaving the cell
               if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) > 0.0_RKIND ) then
                 divInFlux = divInFlux + &
@@ -440,13 +442,38 @@ contains
               ! keeping the flow into the cell the same, compute the modified outward divergence
               divOutFluxDrying = divFluxDrying - divInFlux
               ! scale the layerThickEdgeFluxes by the modified outward divergence
-              layerThickEdgeFactor = divOutFluxDrying/(divOutFlux*wettingVelocityFactor(k,iEdge))
+              if (wettingVelocityFactor(k,iEdge)>0.0_RKIND) then
+                 layerThickEdgeFactor = divOutFluxDrying/(divOutFlux*wettingVelocityFactor(k,iEdge))
+              else
+                 layerThickEdgeFactor = divOutFluxDrying/divOutFlux
+              endif
               write(log_string,*) 'Drying layer: k,iCell',k,iCell
               call mpas_log_write(log_string)
               write(log_string,*) 'Drying layer: layerThickness',layerThickness
               call mpas_log_write(log_string)
               write(log_string,*) 'Drying layer: divOutFlux,divInFlux',divOutFlux,divInFlux
               call mpas_log_write(log_string)
+              if (abs(divInFlux) > 1.0_RKIND) then
+                write(log_string,*) 'divInFlux: divInFlux',divInFlux
+                call mpas_log_write(log_string)
+                do i = 1, nEdgesOnCell(iCell)
+                  iEdge = edgesOnCell(i, iCell)
+                  cell1 = cellsOnEdge(1,iEdge)
+                  cell2 = cellsOnEdge(2,iEdge)
+                  if (k <= maxLevelEdgeTop(iEdge) .or. k >= minLevelEdgeBot(iEdge)) then
+                    if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) > 0.0_RKIND ) then
+                      write(log_string,*) 'divInFlux: normalVelocity',normalVelocity(k,iEdge)
+                      call mpas_log_write(log_string)
+                      write(log_string,*) 'divInFlux: layerThickEdgeFlux',layerThickEdgeFlux(k,iEdge)
+                      call mpas_log_write(log_string)
+                      write(log_string,*) 'divInFlux: layerThickCell1,layerThickCell2',layerThicknessCur(k,cell1),layerThicknessCur(k,cell2)
+                      call mpas_log_write(log_string)
+                      write(log_string,*) 'layerThickProvisCell1,layerThickProvisCell2',layerThicknessProvis(k,cell1),layerThicknessProvis(k,cell2)
+                      call mpas_log_write(log_string)
+                    end if
+                  end if
+                end do
+              endif
               write(log_string,*) 'Drying layer: divFluxDrying,divOutFluxDrying',divFluxDrying,divOutFluxDrying
               call mpas_log_write(log_string)
               write(log_string,*) 'Drying layer: layerThickEdgeFactor', layerThickEdgeFactor
