@@ -269,7 +269,7 @@ contains
      ! ensure cells stay wet by selectively damping cells with a damping tendency to make 
      ! sure tendency doesn't dry cells
      call ocn_wetting_drying_wettingVelocity(layerThicknessCur, &
-                                             layerThicknessProvis, normalVelocity, &
+                                             layerThicknessProvis, normalTransportVelocity, &
                                              ssh, rkSubstepWeight, wettingVelocityFactor, err)
 
      ! prevent drying from happening with selective wettingVelocityFactor
@@ -354,7 +354,7 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: cell1, cell2, iEdge, iCell, k, i, nRamp
+      integer :: cell1, cell2, iEdge, iCell, k, kmin, kmax, i, nRamp
 
       real (kind=RKIND) :: divInFlux, divOutFlux, divOutFluxDrying, divFluxDrying
       real (kind=RKIND) :: layerThickness, layerThickEdgeFactor
@@ -386,7 +386,7 @@ contains
             kmax = maxLevelEdgeBot(iEdge)
             cell1 = cellsOnEdge(1,iEdge)
             cell2 = cellsOnEdge(2,iEdge)
-            if (k <= kmax .and. k >= kmin) then
+            if (k <= kmax .or. k >= kmin) then
               ! only consider divergence flux leaving the cell
               if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) > 0.0_RKIND ) then
                 divInFlux = divInFlux + &
@@ -409,7 +409,7 @@ contains
               hCrit + config_drying_safety_height) then
             do i = 1, nEdgesOnCell(iCell)
               iEdge = edgesOnCell(i, iCell)
-              if (k <= kmax .and. k >= kmin) then
+              if (k <= kmax .or. k >= kmin) then
                 if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND
                 end if
@@ -425,7 +425,7 @@ contains
             ! 2*critical thickness, apply damping at each edge
             do i = 1, nEdgesOnCell(iCell)
               iEdge = edgesOnCell(i, iCell)
-              if (k <= kmax .and. k >= kmin) then
+              if (k <= kmax .or. k >= kmin) then
                 if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
                     tanh(50.0_RKIND * (layerThickness - hCrit)/hCrit)
@@ -463,7 +463,7 @@ contains
               call mpas_log_write(log_string)
               do i = 1, nEdgesOnCell(iCell)
                 iEdge = edgesOnCell(i, iCell)
-                if (k <= kmax .and. k >= kmin) then
+                if (k <= kmax .or. k >= kmin) then
                   if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
                     layerThickEdgeFlux(k,iEdge) = layerThickEdgeFlux(k,iEdge)/layerThickEdgeFactor
                   endif
