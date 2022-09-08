@@ -26,7 +26,7 @@ include_directories(SYSTEM "${SMARTREDIS_INC}")
 #    ${SMARTREDIS_FTN_SRC}/dataset.F90
 #    ${SMARTREDIS_FTN_SRC}/client.F90
 #)
-list(APPEND SLIBS "-L${SMARTREDIS_PATH}/lib -lhiredis -lredis++ -lsmartredis -lsmartredis-fortran") #plain
+#list(APPEND SLIBS "-L${SMARTREDIS_PATH}/lib -lhiredis -lredis++ -lsmartredis -lsmartredis-fortran") #plain
 
 # driver (files live in E3SM)
 list(APPEND RAW_SOURCES
