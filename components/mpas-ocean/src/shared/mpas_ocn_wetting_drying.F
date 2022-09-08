@@ -395,12 +395,24 @@ contains
                              invAreaCell(iCell)
               end if
             end if
-            if (k <= kmax .and. k >= kmin) then
+            if (k <= maxLevelEdgeTop(iEdge) .and. k >= minLevelEdgeBot(iEdge)) then
               if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
                 divOutFlux = divOutFlux + &
                              normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
                              layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
                              invAreaCell(iCell)
+                if (divOutFlux > 1e3_RKIND) then
+                  write(log_string,*) 'WD: k, iEdge',k,iEdge
+                  call mpas_log_write(log_string)
+                  write(log_string,*) 'WD: maxLevelEdgeTop, maxLevelEdgeBot',maxLevelEdgeTop(iEdge),kmax
+                  call mpas_log_write(log_string)
+                  write(log_string,*) 'WD: normalVelocity',normalVelocity(k, iEdge)
+                  call mpas_log_write(log_string)
+                  write(log_string,*) 'WD: layerThickEdgeFlux',layerThickEdgeFlux(k, iEdge)
+                  call mpas_log_write(log_string)
+                  write(log_string,*) 'WD: divOutFlux', divOutFlux
+                  call mpas_log_write(log_string)
+                endif
               end if
             end if
           end do
@@ -431,7 +443,7 @@ contains
               if (k <= kmax .and. k >= kmin) then
                 if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                    tanh(50.0_RKIND * (layerThickness - hCrit)/hCrit)
+                    tanh(50.0_RKIND * (layerThickness - (hCrit/5))/(hCrit/5))
                 end if
               end if
             end do
@@ -441,7 +453,8 @@ contains
           ! If layerThickness would drop below minimum thickness, bring the thickness
           ! right to the minimum thickness by reducing layerThickEdgeFlux
           if (config_limit_drying_layerThickEdgeFlux) then
-            if (layerThickness + dt * divInFlux <= &
+            if (abs(divOutFlux) > 0.0_RKIND .and. &
+                layerThickness + dt * divInFlux <= &
                 config_drying_min_cell_height + config_drying_safety_height) then
               ! compute the divergence that would bring the thickness to the minimum thickness
               divFluxDrying = ((layerThickness + dt * divInFlux) - &
