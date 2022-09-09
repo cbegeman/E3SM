@@ -403,12 +403,12 @@ contains
                  (layerThickness <= config_zero_drying_velocity_ramp_hmax)) then
 
             ! Following O'Dea et al. (2021), if total upwinded wct is less than
-            ! 2*critical thickness, apply damping throughout the water column
+            ! 2*critical thickness, apply damping at each edge
             do i = 1, nEdgesOnCell(iCell)
               iEdge = edgesOnCell(i, iCell)
               if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
                 if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                  wettingVelocityFactor(:, iEdge) = 1.0_RKIND - &
+                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
                     tanh(50.0_RKIND * (hEdgeTotal - hCrit)/hCrit)
                 end if
               end if
