@@ -266,7 +266,7 @@ contains
      ! ensure cells stay wet by selectively damping cells with a damping tendency to make 
      ! sure tendency doesn't dry cells
 
-     call ocn_wetting_drying_wettingVelocity(layerThickEdgeFlux, layerThicknessCur, &
+     call ocn_wetting_drying_wettingVelocity(layerThicknessCur, &
                                              layerThicknessProvis, normalTransportVelocity, &
                                              ssh, rkSubstepWeight, wettingVelocityFactor, err)
 
@@ -305,7 +305,7 @@ contains
 !>  to prevent cells from drying.
 !
 !-----------------------------------------------------------------------
-   subroutine ocn_wetting_drying_wettingVelocity(layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
+   subroutine ocn_wetting_drying_wettingVelocity(layerThicknessCur, layerThicknessProvis, &
 
        normalVelocity, ssh, dt, wettingVelocityFactor, err)!{{{
 
@@ -320,9 +320,6 @@ contains
 
        real (kind=RKIND), dimension(:,:), intent(in) :: &
          layerThicknessProvis    !< Input: provisional layer thickness
-
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
-         layerThickEdgeFlux  !< Input: flux-related layerThickness at an edge
 
       real (kind=RKIND), dimension(:,:), intent(in) :: &
          normalVelocity     !< Input: transport
