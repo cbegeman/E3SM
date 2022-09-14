@@ -164,6 +164,10 @@
 					possible_values="Any positive integer value greater than 0."
 					mode="forward;analysis;init"
 		/>
+		<nml_option name="config_use_smartsim" type="logical" default_value=".false." units="unitless"
+					description="Logical flag determining whether a smartredis client should be initialized. Relies on use of the SMARTSIM flag in the model build"
+					possible_values=".true. or .false."
+		/>
 	</nml_record>
 	<nml_record name="decomposition" mode="forward;analysis;init">
 		<nml_option name="config_num_halos" type="integer" default_value="3"
