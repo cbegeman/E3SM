@@ -106,6 +106,7 @@ contains
 
       integer :: iCell, k, nCells
       real (kind=RKIND), dimension(:,:), pointer :: tidalLayerThicknessTendency
+      character(len=100) :: log_string
 
       err = 0
 
@@ -132,6 +133,8 @@ contains
 #endif
       do iCell = 1, nCells
         do k = minLevelCell(iCell), maxLevelCell(iCell)
+          !write(log_string,*) 'tidal: tidalLayerThicknessTendency', tidalLayerThicknessTendency(k,iCell)
+          !call mpas_log_write(log_string)
           layerThicknessTend(k,iCell) = layerThicknessTend(k,iCell) + &
                                         tidalLayerThicknessTendency(k,iCell)
 
@@ -204,6 +207,7 @@ contains
 
       real (kind=RKIND), dimension(:,:), pointer :: tidalLayerThicknessTendency
       real (kind=RKIND), dimension(:), pointer :: tidalInputMask
+      real (kind=RKIND), dimension(:), pointer :: riverRunoffFlux
       real (kind=RKIND), dimension(:), pointer :: tidalBCValue
       real (kind=RKIND), dimension(:), pointer :: bottomDepth
 
@@ -211,13 +215,14 @@ contains
       integer, dimension(:), pointer :: nCellsArray
       integer, pointer, dimension(:) :: minLevelCell, maxLevelCell
 
-      real (kind=RKIND), pointer, dimension(:)     :: ssh
+      real (kind=RKIND), pointer, dimension(:)     :: ssh,yCell
       real (kind=RKIND), pointer, dimension(:,:)   :: layerThickness
 
       ! local variables
       real (kind=RKIND) :: totalDepth, tidalHeight
 
       character (len=StrKIND), pointer :: xtime
+      character(len=100) :: log_string
 
       if ( .not. tidalfluxOn ) return
 
@@ -226,15 +231,19 @@ contains
       call mpas_pool_get_array(forcingPool, 'tidalLayerThicknessTendency', &
                                              tidalLayerThicknessTendency)
       call mpas_pool_get_array(forcingPool, 'tidalInputMask', tidalInputMask)
+      call mpas_pool_get_array(forcingPool, 'riverRunoffFlux', riverRunoffFlux)
       call mpas_pool_get_array(forcingPool, 'tidalBCValue', tidalBCValue)
 
       call mpas_pool_get_array(meshPool, 'bottomDepth', bottomDepth)
+      call mpas_pool_get_array(meshPool, 'yCell', yCell)
       call mpas_pool_get_array(meshPool, 'minLevelCell', minLevelCell)
       call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
       call mpas_pool_get_dimension(meshPool, 'nCellsArray', nCellsArray)
 
       ! tidal fields are needed only over 0 and 1 halos
-      nCells = nCellsArray( 2 )
+      nCells = nCellsAll
+      write(log_string,*) 'tidal: nCells, yCell(nCells)',nCells,yCell(nCells)
+      call mpas_log_write(log_string)
 
       ! loop over all columns
       do iCell = 1, nCells
@@ -254,6 +263,8 @@ contains
 
         ! ensure tidalHeight can't push flow below anticipated minimum
         if (config_use_wetting_drying .and. tidalInputMask(iCell) == 1.0_RKIND) then
+          write(log_string,*) 'tidal: iCell, tidalInputMask, yCell',iCell, tidalInputMask(iCell), yCell(iCell)
+          call mpas_log_write(log_string)
           ! ensure that tidal height can't force below total minimum thickness
           ! condition wrong to ensure that there isn't any drying according to criteria
           tidalHeight = max(-bottomDepth(iCell) + (float(maxLevelCell(iCell))+1.0_RKIND)*config_drying_min_cell_height, tidalHeight)
@@ -279,6 +290,8 @@ contains
 
         ! store tidal boundary cell values (e.g., for config_tidal_forcing_type == 'direct')
         tidalBCValue(iCell) = tidalHeight
+        !write(log_string,*) 'tidal: tidalBCValue, tidalInputMask',tidalBCValue(iCell), tidalInputMask(iCell)
+        !call mpas_log_write(log_string)
 
       end do   ! do iCell = 1, nCells
 

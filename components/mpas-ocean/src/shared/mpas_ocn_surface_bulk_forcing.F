@@ -326,7 +326,9 @@ contains
       call mpas_pool_get_array(forcingPool, 'iceRunoffFlux', iceRunoffFlux)
       call mpas_pool_get_array(forcingPool, 'rainFlux', rainFlux)
 
-      nCells = nCellsHalo( 2 )
+      nCells = nCellsAll
+      write(log_string,*) 'river: nCells',nCells
+      call mpas_log_write(log_string)
 
       call mpas_log_write('Apply river bulk thickness forcing')
       ! Build surface fluxes at cell centers
@@ -346,9 +348,9 @@ contains
                                     + seaIceFreshWaterFlux(iCell) + icebergFreshWaterFlux(iCell) + iceRunoffFlux(iCell) ) / rho_sw
         surfaceThicknessFluxRunoff(iCell) = riverRunoffFlux(iCell) / rho_sw
         if (riverRunoffFlux(iCell)>0.0_RKIND) then
-           write(log_string,*) 'riverRunoffFlux, surfThickFluxRunoff',riverRunoffFlux(iCell), surfaceThicknessFluxRunoff(iCell)
-           call mpas_log_write(log_string)
-        endif
+          write(log_string,*) 'river: iCell, riverRunoffFlux',iCell, riverRunoffFlux(iCell)
+          call mpas_log_write(log_string)
+        end if
       end do
 #ifndef MPAS_OPENACC
       !!$omp end do

@@ -416,7 +416,7 @@ contains
       ! Set tidal boundary mask
       do iCell = 1, nCellsSolve
         tidalInputMask(iCell) = 0.0_RKIND
-        if (yCell(iCell) > (yMax - dcEdgeMinGlobal/2.0_RKIND)) then
+        if (yCell(iCell) > (yMax - dcEdgeMinGlobal*10.0_RKIND)) then
           tidalInputMask(iCell) = 1.0_RKIND
         ! spread it over multiple cells
         !if (yCell(iCell) > (25.0e3 - 3*dcEdgeMinGlobal)) then
@@ -428,9 +428,12 @@ contains
       if (associated(riverRunoffFlux)) then
          call mpas_log_write('set river runoff')
          do iCell = 1, nCellsSolve
+           !riverRunoffFlux(iCell) = 1.0_RKIND
            riverRunoffFlux(iCell) = 0.0_RKIND
-           if (yCell(iCell) < (yMinGlobal + dcEdgeMaxGlobal*1.5_RKIND)) then
-             riverRunoffFlux(iCell) = 10.0_RKIND
+           if (yCell(iCell) < (yMinGlobal + dcEdgeMaxGlobal*10.0_RKIND)) then
+             write(log_string,*) 'init: iCell, yCell',iCell, yCell(iCell)
+             call mpas_log_write(log_string)
+             riverRunoffFlux(iCell) = 1.0_RKIND
            end if
          end do
          call mpas_log_write('complete set river runoff')
