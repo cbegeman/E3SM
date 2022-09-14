@@ -166,7 +166,7 @@ module ocn_time_integration_rk4
       real (kind=RKIND), dimension(:,:), pointer :: layerThicknessCur, layerThicknessNew
       real (kind=RKIND), dimension(:,:), pointer :: highFreqThicknessCur, highFreqThicknessNew
       real (kind=RKIND), dimension(:,:), pointer :: lowFreqDivergenceCur, lowFreqDivergenceNew
-      real (kind=RKIND), dimension(:), pointer :: sshCur, sshNew
+      real (kind=RKIND), dimension(:), pointer :: sshCur, sshNew, yCell
 
       real (kind=RKIND), dimension(:,:,:), pointer :: tracerGroup, tracersCur, tracersNew
 
@@ -190,6 +190,8 @@ module ocn_time_integration_rk4
       real (kind=RKIND), dimension(:,:), pointer :: restingThickness
       real (kind=RKIND) :: totalDepth
 
+      real (kind=RKIND), dimension(:), pointer :: riverRunoffFlux
+
       real (kind=RKIND), dimension(:), pointer :: &
         seaIcePressure, atmosphericPressure
 
@@ -197,6 +199,7 @@ module ocn_time_integration_rk4
         frazilSurfacePressure, landIcePressure, landIceDraft
 
       real (kind=RKIND), dimension(:,:,:), pointer :: activeTracersNew
+      character(len=100) :: log_string
 
       ! Get config options
       call mpas_pool_get_config(domain % configs, 'config_mom_del4', config_mom_del4)
@@ -649,6 +652,7 @@ module ocn_time_integration_rk4
          call mpas_pool_get_array(meshPool, 'bottomDepth', bottomDepth)
          call mpas_pool_get_array(meshPool, 'minLevelCell', minLevelCell)
          call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
+         call mpas_pool_get_array(meshPool, 'yCell', yCell)
 
          call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityCur, 1)
          call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocityNew, 2)
@@ -658,6 +662,8 @@ module ocn_time_integration_rk4
          call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
          call mpas_pool_get_array(forcingPool, 'tidalInputMask', tidalInputMask)
          call mpas_pool_get_array(forcingPool, 'tidalBCValue', tidalBCValue)
+
+         call mpas_pool_get_array(forcingPool, 'riverRunoffFlux', riverRunoffFlux)
 
          call mpas_pool_get_array(tracersPool, 'activeTracers',activeTracersNew, 2)
 
@@ -683,9 +689,17 @@ module ocn_time_integration_rk4
 
          ! direct application of tidal boundary condition
          if (config_use_tidal_forcing .and. trim(config_tidal_forcing_type) == 'direct') then
+           write(log_string,*) 'RK4: nCells, yCell(nCells)', nCells, yCell(nCells)
+           call mpas_log_write(log_string)
            do iCell=1, nCells
+             if (riverRunoffFlux(iCell) > 0.0_RKIND) then
+               write(log_string,*) 'RK4: iCell, riverRunoffFlux',iCell, riverRunoffFlux(iCell), yCell(iCell)
+               call mpas_log_write(log_string)
+             endif
              ! artificially assumes boolean mask for now, could generalize to tappered sponge layer
              if (tidalInputMask(iCell) == 1.0_RKIND) then
+               write(log_string,*) 'RK4: iCell, tidalInputMask',iCell, tidalInputMask(iCell), yCell(iCell)
+               call mpas_log_write(log_string)
                ! compute total depth for relative thickness contribution
                totalDepth = 0.0_RKIND
                do k = minLevelCell(iCell), maxLevelCell(iCell)
@@ -696,6 +710,8 @@ module ocn_time_integration_rk4
                do k = minLevelCell(iCell), maxLevelCell(iCell)
                  layerThicknessNew(k, iCell) = tidalInputMask(iCell)*(tidalBCValue(iCell) + bottomDepth(iCell))*(restingThickness(k,iCell)/totalDepth)
                  !(1.0_RKIND - tidalInputMask(iCell))*layerThicknessNew(k, iCell)  ! generalized tappered assumption code
+                 write(log_string,*) 'RK4: tidalInputMask,layerThicknessNew',tidalInputMask(iCell), layerThicknessNew(k, iCell)
+                 call mpas_log_write(log_string)
                end do
              end if
            end do
