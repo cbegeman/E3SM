@@ -229,22 +229,19 @@ module ocn_forward_mode
       ! Currently only support one block per task
       block => domain % blocklist
 
-      call mpas_smart_init(client, ierr)
-      if (ierr /= 0.0_RKIND) then
-         write(log_string,*) 'OCN: Error initializing redis client:',err_client
-         call mpas_log_write(log_string)
-      else
-         call mpas_log_write('OCN Client initialized')
-
-         ! Send config option to client
-         write(log_string,*) 'Before client: config_mom_del2', config_mom_del2
-         call mpas_log_write(log_string)
-         call mpas_smart_config_send(domain, 'config_mom_del2', ierr)
+      if (config_use_smartsim) then
+         call mpas_smart_init(client, ierr)
          if (ierr /= 0.0_RKIND) then
-            call mpas_log_write('Error put config')
-         else
-            call mpas_log_write('Put config')
+            call mpas_log_write('Error initializing smartredis client', &
+                                MPAS_LOG_CRIT)
          endif
+
+         ! ---- Example: Send config option to client ----
+         ! configName = 'config_mom_del2'
+         ! call mpas_smart_config_send(domain, configName, ierr)
+         ! if (ierr /= 0.0_RKIND) then
+         !    call mpas_log_write('Error: Smartsim put config at initialization')
+         ! endif
 
          allocate(sendArrayReal1d(1), recvArrayReal1d(1))
          allocate(sendArrayReal2d(1,1), recvArrayReal2d(1,1))
@@ -266,42 +263,28 @@ module ocn_forward_mode
          else
             call mpas_log_write('Put tensor for script set')
          endif
-         err_client = client%set_script_from_file(script_key, "CPU", script_file)
-         if (err_client /= SRNoError) then
-            write(log_string,*) 'Error setting client script:',err_client
-            call mpas_log_write(log_string)
-         else
-            call mpas_log_write('Client script set')
-         endif
-         err_client = client%run_script(script_key, "pre_process", inputs, outputs)
-         if (err_client /= SRNoError) then
-            write(log_string,*) 'Error running script pre_process:',err_client
-            call mpas_log_write(log_string)
-            is_error = client%SR_error_parser(err_client)
-         else
-            call mpas_log_write('Pre_process script run')
-         endif
-         err_client = client%run_script(script_key, "post_process", inputs, outputs)
-         if (err_client /= SRNoError) then
-            write(log_string,*) 'Error running script post_process:',err_client
-            call mpas_log_write(log_string)
-            is_error = client%SR_error_parser(err_client)
-         else
-            call mpas_log_write('Post_process script run')
-         endif
-
-         err_client = client%unpack_tensor(outputs(1), recvArrayReal1d, shape(recvArrayReal1d))
-         if (err_client /= SRNoError) then
-            write(log_string,*) 'Error unpacking tensor init_recv:',err_client
-            call mpas_log_write(log_string)
-            is_error = client%SR_error_parser(err_client)
-         else
-            write(log_string,*) 'init_recv:',recvArrayReal1d(1)
-            call mpas_log_write(log_string)
-            config_mom_del2 = recvArrayReal1d(1)
-            write(log_string,*) 'After client: config_mom_del2', config_mom_del2
-            call mpas_log_write(log_string)
-         endif
+         !err_client = client%set_script_from_file(script_key, "CPU", script_file)
+         !if (err_client /= SRNoError) then
+         !   write(log_string,*) 'Error setting client script:',err_client
+         !   call mpas_log_write(log_string)
+         !else
+         !   call mpas_log_write('Client script set')
+         !endif
+         !err_client = client%run_script(script_key, "pre_process", inputs, outputs)
+         !if (err_client /= SRNoError) then
+         !   write(log_string,*) 'Error running script pre_process:',err_client
+         !   call mpas_log_write(log_string)
+         !   is_error = client%SR_error_parser(err_client)
+         !else
+         !   call mpas_log_write('Pre_process script run')
+         !endif
+         !err_client = client%run_script(script_key, "post_process", inputs, outputs)
+         !if (err_client /= SRNoError) then
+         !   write(log_string,*) 'Error running script post_process:',err_client
+         !   call mpas_log_write(log_string)
+         !   is_error = client%SR_error_parser(err_client)
+         !else
+         !   call mpas_log_write('Post_process script run')
          !endif
 
          err_client = dataset%initialize("example_fortran_dataset")
@@ -965,22 +948,26 @@ module ocn_forward_mode
          ! the variable being sent to the database node match that of the source array
          ! Loop through variable names in stream and get from allFields rather
          ! than hard-code variables in diagnosticsPool
+         call mpas_timer_start('smartsim i/o')
          call MPAS_stream_mgr_begin_iteration(domain%streamManager, &
                                               'smartsend', ierr)
          do while (MPAS_stream_mgr_get_next_field(domain%streamManager, &
-                               'smartsend', fieldName))!, isActive)
+                               'smartsend', fieldName))
             call mpas_smart_field_send(domain, fieldName, ierr)
-            !WRITE(log_string,*) 'smartsend field', fieldName, &
-            !                    'is not active'
-            !call mpas_log_write(log_string)
+            if (ierr /= 0.0_RKIND) then
+               call mpas_log_write('MPAS I/O error in smartsend stream')
+            endif
          end do
-         ! TODO add similar loop for stream smartrecv
-         !      err_client = client%unpack_tensor("send_array", recvArrayReal1d, shape(recvArrayReal1d))
-         !      if (err_client /= SRNoError) then
-         !         WRITE(log_string,*) 'Error unpack tensor:', smartFieldName
-         !         call mpas_log_write(log_string, MPAS_LOG_ERR, masterOnly=.true., flushNow=.true.)
-         !         ierr = ior(ierr, 1)
-         !      endif
+         call MPAS_stream_mgr_begin_iteration(domain%streamManager, &
+                                              'smartrecv', ierr)
+         do while (MPAS_stream_mgr_get_next_field(domain%streamManager, &
+                               'smartrecv', fieldName))
+            call mpas_smart_field_recv(domain, fieldName, ierr)
+            if (ierr /= 0.0_RKIND) then
+               call mpas_log_write('MPAS I/O error in smartrecv stream')
+            endif
+         end do
+         call mpas_timer_stop('smartsim i/o')
 
 
          call mpas_timer_start('reset_io_alarms')
@@ -1050,9 +1037,6 @@ module ocn_forward_mode
       type (domain_type), intent(inout) :: domain
       character(len=100) :: log_string
       integer :: ierr
-
-      write(log_string,*) 'Finalize: config_mom_del2', config_mom_del2
-      call mpas_log_write(log_string)
 
       ! destroy the ocean mesh structure
       call ocn_meshDestroy(ierr)
