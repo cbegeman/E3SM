@@ -41,6 +41,13 @@ module mpas_smart_routines
       module procedure mpas_smart_field_client_send_4d
    end interface
 
+   interface mpas_smart_field_client_recv
+      module procedure mpas_smart_field_client_recv_1d
+      module procedure mpas_smart_field_client_recv_2d
+      module procedure mpas_smart_field_client_recv_3d
+      module procedure mpas_smart_field_client_recv_4d
+   end interface
+
    contains
 
    subroutine mpas_smart_init(client_out, ierr)
@@ -231,6 +238,54 @@ module mpas_smart_routines
 
    end subroutine mpas_smart_field_send
 
+   subroutine mpas_smart_field_recv(domain, fieldName, ierr)
+
+      type (domain_type), intent(in) :: domain
+      character(len=StrKIND), intent(in) :: fieldName
+      integer, intent(out), optional :: ierr
+
+      type (mpas_pool_field_info_type) :: fieldInfo
+      type (field1DReal), pointer :: field_real1d_ptr
+      type (field2DReal), pointer :: field_real2d_ptr
+      type (field3DReal), pointer :: field_real3d_ptr
+      type (field4DReal), pointer :: field_real4d_ptr
+      character(len=StrKIND) :: log_string
+
+      call mpas_pool_get_field_info(domain%blocklist%allFields, &
+                                    fieldName, fieldInfo)
+      call mpas_log_write(log_string)
+      if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
+         if ( fieldInfo % nDims == 1 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real1d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_field_client_recv(field_real1d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 2 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real2d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_field_client_recv(field_real2d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 3 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real3d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_field_client_recv(field_real3d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 4 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real4d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_field_client_recv(field_real4d_ptr, ierr)
+         else
+            call mpas_log_write(trim(fieldName)// &
+                                ' is not of a supported dimension')
+         endif
+      else
+         call mpas_log_write(trim(fieldName)//' is not real')
+      endif
+
+   end subroutine mpas_smart_field_recv
+
+
 !  INTERFACE mpas_smart_field_client_send
 !  TODO add optional argument to provide a different key
    subroutine mpas_smart_field_client_send_1d(field_ptr, ierr)
@@ -354,5 +409,127 @@ module mpas_smart_routines
       deallocate(field_temp)
 
    end subroutine mpas_smart_field_client_send_4d
+
+!  INTERFACE mpas_smart_field_client_recv
+!  TODO add optional argument to provide a different key
+   subroutine mpas_smart_field_client_send_1d(field_ptr, ierr)
+
+      type (field1dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:), allocatable :: field_temp
+      integer, dimension(1) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1)))
+
+      err_client = client%unpack_tensor(trim(field_ptr % fieldName), &
+                                     field_temp, &
+                                     shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      field_ptr % array = field_temp
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_field_client_recv_1d
+
+   subroutine mpas_smart_field_client_recv_2d(field_ptr, ierr)
+
+      type (field2dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:), allocatable :: field_temp
+      integer, dimension(2) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1), field_dims(2)))
+
+      err_client = client%unpack_tensor(trim(field_ptr % fieldName), &
+                                        field_temp, &
+                                        shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'Error unpack tensor:', &
+                             trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      field_ptr % array = field_temp
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_field_client_recv_2d
+
+   subroutine mpas_smart_field_client_recv_3d(field_ptr, ierr)
+
+      type (field3dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:,:), allocatable :: field_temp
+      integer, dimension(3) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1), field_dims(2), field_dims(3)))
+
+      err_client = client%unpack_tensor(trim(field_ptr % fieldName), &
+                                        field_temp, &
+                                        shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'Error unpack tensor:', &
+                             trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      field_ptr % array = field_temp
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_field_client_recv_3d
+
+   subroutine mpas_smart_field_client_recv_4d(field_ptr, ierr)
+
+      type (field4dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:,:,:), allocatable :: field_temp
+      integer, dimension(4) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1), field_dims(2), field_dims(3), &
+               field_dims(4)))
+
+      err_client = client%unpack_tensor(trim(field_ptr % fieldName), &
+                                        field_temp, &
+                                        shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'Error unpack tensor:', &
+                             trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'Unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      field_ptr % array = field_temp
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_field_client_recv_4d
 
 end module mpas_smart_routines
