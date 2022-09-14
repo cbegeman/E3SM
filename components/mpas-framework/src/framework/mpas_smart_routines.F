@@ -191,6 +191,35 @@ module mpas_smart_routines
 
    end subroutine mpas_smart_config_send
 
+   subroutine mpas_smart_config_recv(domain, configName, ierr)
+
+      type (domain_type), intent(in) :: domain
+      character(len=*), intent(in) :: configName
+      integer, intent(out), optional :: ierr
+
+      type (mpas_pool_field_info_type) :: fieldInfo
+      real (kind=RKIND), pointer :: config_ptr
+      real (kind=RKIND), dimension(1) :: config_temp
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+
+      call mpas_pool_get_config(domain % configs, &
+                                trim(configName), &
+                                config_ptr)
+      err_client = client%unpack_tensor(trim(configName), &
+                                        config_temp, shape(config_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error unpack config:', trim(configName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: unpack config:', trim(configName)
+         call mpas_log_write(trim(log_string))
+      endif
+      config_ptr = config_temp(1)
+
+   end subroutine mpas_smart_config_recv
+
    subroutine mpas_smart_field_send(domain, fieldName, ierr)
 
       type (domain_type), intent(in) :: domain
@@ -412,7 +441,7 @@ module mpas_smart_routines
 
 !  INTERFACE mpas_smart_field_client_recv
 !  TODO add optional argument to provide a different key
-   subroutine mpas_smart_field_client_send_1d(field_ptr, ierr)
+   subroutine mpas_smart_field_client_recv_1d(field_ptr, ierr)
 
       type (field1dReal), pointer, intent(in) :: field_ptr
       integer, intent(out), optional :: ierr
