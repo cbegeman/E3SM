@@ -23,6 +23,7 @@ module mpas_smart_routines
    use mpas_threading
    use mpas_log
    use smartredis_client, only: client_type
+   use smartredis_dataset, only: dataset_type
 
    implicit none
    save
@@ -46,6 +47,20 @@ module mpas_smart_routines
       module procedure mpas_smart_field_client_recv_2d
       module procedure mpas_smart_field_client_recv_3d
       module procedure mpas_smart_field_client_recv_4d
+   end interface
+
+   interface mpas_smart_dataset_add_field_real
+      module procedure mpas_smart_dataset_add_field_real_1d
+      module procedure mpas_smart_dataset_add_field_real_2d
+      module procedure mpas_smart_dataset_add_field_real_3d
+      module procedure mpas_smart_dataset_add_field_real_4d
+   end interface
+
+   interface mpas_smart_dataset_recv_field_real
+      module procedure mpas_smart_dataset_recv_field_real_1d
+      module procedure mpas_smart_dataset_recv_field_real_2d
+      module procedure mpas_smart_dataset_recv_field_real_3d
+      module procedure mpas_smart_dataset_recv_field_real_4d
    end interface
 
    contains
@@ -79,15 +94,16 @@ module mpas_smart_routines
 
    end subroutine mpas_smart_init
 
-   subroutine mpas_smart_database_init(ierr)
+   subroutine mpas_smart_dataset_init(dataset_name, dataset, ierr)
 
-      !implicit none
-
+      character(len=strKIND), intent(in) :: dataset_name
+      type(dataset_type), intent(out) :: dataset
       integer, intent(out), optional :: ierr
 
       character(len=100) :: log_string
       integer(kind=enum_kind) :: err_client
 
+      err_client = dataset%initialize(dataset_name)
       if (err_client /= SRNoError) then
          write(log_string,*) 'FWK: Error initializing redis database:', &
                               err_client
@@ -97,7 +113,25 @@ module mpas_smart_routines
          call mpas_log_write('FWK: Database initialized')
       endif
 
-   end subroutine mpas_smart_database_init
+   end subroutine mpas_smart_dataset_init
+
+   subroutine mpas_smart_dataset_put(dataset, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      integer, intent(out), optional :: ierr
+
+      integer(kind=enum_kind) :: err_client
+
+      err_client = client%put_dataset(dataset)
+      if (err_client /= SRNoError) then
+         call mpas_log_write('FWK: Error putting redis dataset: $i', &
+                              intArgs=(/err_client/))
+         ierr = ior(ierr, 1)
+      else
+         call mpas_log_write('FWK: Dataset put')
+      endif
+
+   end subroutine mpas_smart_dataset_put
 
 !   --------------------------------------------------------------------
 !    SUBROUTINE mpas_smart_stream_send
@@ -314,6 +348,161 @@ module mpas_smart_routines
 
    end subroutine mpas_smart_field_recv
 
+   subroutine mpas_smart_dataset_config_send(dataset, domain, configName, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (domain_type), intent(in) :: domain
+      character(len=*), intent(in) :: configName
+      integer, intent(out), optional :: ierr
+
+      type (mpas_pool_field_info_type) :: fieldInfo
+      real (kind=RKIND), pointer :: config_ptr
+      real (kind=RKIND), dimension(1) :: config_temp
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+
+      call mpas_pool_get_config(domain % configs, &
+                                trim(configName), &
+                                config_ptr)
+      config_temp(1) = config_ptr
+      err_client = dataset%add_meta_scalar(trim(configName), &
+                                           config_temp)
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error put config in dataset:', trim(configName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Put config in dataset:', trim(configName)
+         call mpas_log_write(trim(log_string))
+      endif
+
+   end subroutine mpas_smart_dataset_config_send
+
+   subroutine mpas_smart_dataset_config_recv(dataset, domain, configName, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (domain_type), intent(in) :: domain
+      character(len=*), intent(in) :: configName
+      integer, intent(out), optional :: ierr
+
+      type (mpas_pool_field_info_type) :: fieldInfo
+      real (kind=RKIND), pointer :: config_ptr
+      real (kind=RKIND), dimension(1) :: config_temp
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+
+      call mpas_pool_get_config(domain % configs, &
+                                trim(configName), &
+                                config_ptr)
+      config_temp(1) = config_ptr
+      err_client = dataset%get_meta_scalar(trim(configName), &
+                                           config_temp)
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error put config in dataset:', trim(configName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Put config in dataset:', trim(configName)
+         call mpas_log_write(trim(log_string))
+      endif
+
+   end subroutine mpas_smart_dataset_config_recv
+
+   subroutine mpas_smart_dataset_add_field(dataset, domain, fieldName, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (domain_type), intent(in) :: domain
+      character(len=StrKIND), intent(in) :: fieldName
+      integer, intent(out), optional :: ierr
+
+      type (mpas_pool_field_info_type) :: fieldInfo
+      type (field1DReal), pointer :: field_real1d_ptr
+      type (field2DReal), pointer :: field_real2d_ptr
+      type (field3DReal), pointer :: field_real3d_ptr
+      type (field4DReal), pointer :: field_real4d_ptr
+      character(len=StrKIND) :: log_string
+
+      call mpas_pool_get_field_info(domain%blocklist%allFields, &
+                                    fieldName, fieldInfo)
+      call mpas_log_write(log_string)
+      if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
+         if ( fieldInfo % nDims == 1 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real1d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_dataset_add_field_real(dataset, field_real1d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 2 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real2d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_dataset_add_field_real(dataset, field_real2d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 3 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real3d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_dataset_add_field_real(dataset, field_real3d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 4 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real4d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_dataset_add_field_real(dataset, field_real4d_ptr, ierr)
+         else
+            call mpas_log_write(trim(fieldName)// &
+                                ' is not of a supported dimension')
+         endif
+      else
+         call mpas_log_write(trim(fieldName)//' is not real')
+      endif
+
+   end subroutine mpas_smart_dataset_add_field
+
+   subroutine mpas_smart_dataset_recv_field(dataset, domain, fieldName, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (domain_type), intent(in) :: domain
+      character(len=StrKIND), intent(in) :: fieldName
+      integer, intent(out), optional :: ierr
+
+      type (mpas_pool_field_info_type) :: fieldInfo
+      type (field1DReal), pointer :: field_real1d_ptr
+      type (field2DReal), pointer :: field_real2d_ptr
+      type (field3DReal), pointer :: field_real3d_ptr
+      type (field4DReal), pointer :: field_real4d_ptr
+      character(len=StrKIND) :: log_string
+
+      call mpas_pool_get_field_info(domain%blocklist%allFields, &
+                                    fieldName, fieldInfo)
+      call mpas_log_write(log_string)
+      if ( fieldInfo % fieldType == MPAS_POOL_REAL ) then
+         if ( fieldInfo % nDims == 1 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real1d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_dataset_recv_field_real(dataset, field_real1d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 2 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real2d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_dataset_recv_field_real(dataset, field_real2d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 3 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real3d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_dataset_recv_field_real(dataset, field_real3d_ptr, ierr)
+         elseif ( fieldInfo % nDims == 4 ) then
+            call mpas_pool_get_field(domain%blocklist%allFields, &
+                                     trim(fieldName), field_real4d_ptr)
+            call mpas_log_write(trim(fieldName)//' retrieved')
+            call mpas_smart_dataset_recv_field_real(dataset, field_real4d_ptr, ierr)
+         else
+            call mpas_log_write(trim(fieldName)// &
+                                ' is not of a supported dimension')
+         endif
+      else
+         call mpas_log_write(trim(fieldName)//' is not real')
+      endif
+
+   end subroutine mpas_smart_dataset_recv_field
 
 !  INTERFACE mpas_smart_field_client_send
 !  TODO add optional argument to provide a different key
@@ -560,5 +749,239 @@ module mpas_smart_routines
       deallocate(field_temp)
 
    end subroutine mpas_smart_field_client_recv_4d
+
+!  INTERFACE mpas_smart_dataset_add_field_real
+   subroutine mpas_smart_dataset_add_field_real_1d(dataset, field_ptr, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (field1dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:), allocatable :: field_temp
+      integer, dimension(1) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1)))
+
+      err_client = dataset%add_tensor(trim(field_ptr % fieldName), &
+                                      field_temp, &
+                                      shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error dataset add tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Added tensor to dataset:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_dataset_add_field_real_1d
+
+   subroutine mpas_smart_dataset_add_field_real_2d(dataset, field_ptr, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (field2dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:), allocatable :: field_temp
+      integer, dimension(2) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1),field_dims(2)))
+
+      err_client = dataset%add_tensor(trim(field_ptr % fieldName), &
+                                      field_temp, &
+                                      shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error dataset add tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Added tensor to dataset:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_dataset_add_field_real_2d
+
+   subroutine mpas_smart_dataset_add_field_real_3d(dataset, field_ptr, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (field3dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:,:), allocatable :: field_temp
+      integer, dimension(3) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1),field_dims(2),field_dims(3)))
+
+      err_client = dataset%add_tensor(trim(field_ptr % fieldName), &
+                                      field_temp, &
+                                      shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error dataset add tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Added tensor to dataset:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_dataset_add_field_real_3d
+
+   subroutine mpas_smart_dataset_add_field_real_4d(dataset, field_ptr, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (field4dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:,:,:), allocatable :: field_temp
+      integer, dimension(4) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1),field_dims(2),field_dims(3),field_dims(4)))
+
+      err_client = dataset%add_tensor(trim(field_ptr % fieldName), &
+                                      field_temp, &
+                                      shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error dataset add tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Added tensor to dataset:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_dataset_add_field_real_4d
+
+!  INTERFACE mpas_smart_dataset_recv_field_real
+   subroutine mpas_smart_dataset_recv_field_real_1d(dataset, field_ptr, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (field1dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:), allocatable :: field_temp
+      integer, dimension(1) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1)))
+
+      err_client = dataset%unpack_dataset_tensor(trim(field_ptr % fieldName), &
+                                      field_temp, &
+                                      shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error dataset unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Added tensor to dataset:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_dataset_recv_field_real_1d
+
+   subroutine mpas_smart_dataset_recv_field_real_2d(dataset, field_ptr, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (field2dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:), allocatable :: field_temp
+      integer, dimension(2) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1),field_dims(2)))
+
+      err_client = dataset%unpack_dataset_tensor(trim(field_ptr % fieldName), &
+                                      field_temp, &
+                                      shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error dataset unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Added tensor to dataset:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_dataset_recv_field_real_2d
+
+   subroutine mpas_smart_dataset_recv_field_real_3d(dataset, field_ptr, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (field3dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:,:), allocatable :: field_temp
+      integer, dimension(3) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1),field_dims(2),field_dims(3)))
+
+      err_client = dataset%unpack_dataset_tensor(trim(field_ptr % fieldName), &
+                                      field_temp, &
+                                      shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error dataset unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Added tensor to dataset:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_dataset_recv_field_real_3d
+
+   subroutine mpas_smart_dataset_recv_field_real_4d(dataset, field_ptr, ierr)
+
+      type(dataset_type), intent(in) :: dataset
+      type (field4dReal), pointer, intent(in) :: field_ptr
+      integer, intent(out), optional :: ierr
+
+      character(len=StrKIND) :: log_string
+      integer(kind=enum_kind) :: err_client
+      real (kind=RKIND), dimension(:,:,:,:), allocatable :: field_temp
+      integer, dimension(4) :: field_dims
+
+      field_dims = field_ptr % dimSizes
+      allocate(field_temp(field_dims(1),field_dims(2),field_dims(3),field_dims(4)))
+
+      err_client = dataset%unpack_dataset_tensor(trim(field_ptr % fieldName), &
+                                      field_temp, &
+                                      shape(field_temp))
+      if (err_client /= SRNoError) then
+         WRITE(log_string,*) 'FWK: Error dataset unpack tensor:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+         ierr = ior(ierr, 1)
+      else
+         WRITE(log_string,*) 'FWK: Added tensor to dataset:', trim(field_ptr % fieldName)
+         call mpas_log_write(trim(log_string))
+      endif
+      deallocate(field_temp)
+
+   end subroutine mpas_smart_dataset_recv_field_real_4d
 
 end module mpas_smart_routines

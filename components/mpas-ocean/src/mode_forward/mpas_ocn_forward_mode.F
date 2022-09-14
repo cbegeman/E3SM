@@ -149,6 +149,7 @@ module ocn_forward_mode
       integer :: err_tmp    ! local error codes from subroutine calls
       integer(kind=enum_kind) :: err_client
       character(len=100) :: log_string
+      character(len=StrKIND) :: datasetName, fieldName
       character(len=*), parameter :: script_key = 'init_script'
       character(len=*), parameter :: script_file = &
          'data_processing_script.txt'
@@ -231,7 +232,7 @@ module ocn_forward_mode
 
       if (config_use_smartsim) then
          call mpas_smart_init(client, ierr)
-         if (ierr /= 0.0_RKIND) then
+         if (ierr /= 0) then
             call mpas_log_write('Error initializing smartredis client', &
                                 MPAS_LOG_CRIT)
          endif
@@ -239,7 +240,7 @@ module ocn_forward_mode
          ! ---- Example: Send config option to client ----
          ! configName = 'config_mom_del2'
          ! call mpas_smart_config_send(domain, configName, ierr)
-         ! if (ierr /= 0.0_RKIND) then
+         ! if (ierr /= 0) then
          !    call mpas_log_write('Error: Smartsim put config at initialization')
          ! endif
 
@@ -287,49 +288,28 @@ module ocn_forward_mode
          !   call mpas_log_write('Post_process script run')
          !endif
 
-         err_client = dataset%initialize("example_fortran_dataset")
-         if (err_client .ne. SRNoError) then
-            call mpas_log_write('dataset initialization failed')
-         else
-            call mpas_log_write('Dataset initialized')
-         endif
+         datasetName = 'example_fortran_dataset'
+         call mpas_smart_dataset_init(datasetName, dataset, ierr)
+         fieldName = 'ssh'
 
          ! Add a tensor to the dataset and verify that we can retrieve it
-         err_client = dataset%add_tensor("dataset_send", sendArrayReal2d, &
-                                         shape(sendArrayReal2d))
-         if (err_client .ne. SRNoError) then
+         call mpas_smart_dataset_add_field(dataset, domain, fieldName, ierr)
+         if (ierr /= 0) then
             call mpas_log_write('dataset%add_tensor failed')
-         else
-            call mpas_log_write('Dataset tensor added')
          endif
-         err_client = dataset%unpack_dataset_tensor( &
-                         "dataset_send",recvArrayReal2d, shape(recvArrayReal2d))
-         if (err_client .ne. SRNoError) then
-            write(log_string,*) 'dataset%unpack_dataset_tensor failed:',err_client
-            call mpas_log_write(log_string)
-         else
-            write(log_string,*) 'Dataset tensor received:',recvArrayReal2d(1,1)
-            call mpas_log_write(log_string)
+         call mpas_smart_dataset_recv_field(dataset, domain, fieldName, ierr)
+         if (ierr /= 0) then
+            call mpas_log_write('dataset%unpack_dataset_tensor failed')
          endif
-
-         ! Add metascalars to the dataset and verify that we can retrieve them
-         err_client = dataset%add_meta_scalar('config_mom_del2', config_mom_del2)
-         if (err_client .ne. SRNoError) then
-            write(log_string,*) 'dataset%add_meta_scalar failed:',err_client
-            call mpas_log_write(log_string)
-         else
-            call mpas_log_write('Dataset metascalar added')
+         call mpas_smart_dataset_config_send(dataset, domain, configName, ierr)
+         if (ierr /= 0) then
+            call mpas_log_write('dataset%add_meta_scalar failed')
          endif
-         
-         !err_client = dataset%get_meta_scalars('config_mom_del2', meta_scalar)
-         !if (err_client .ne. SRNoError) then
-         !   write(log_string,*) 'dataset%get_meta_scalar failed:',err_client
-         !   call mpas_log_write(log_string)
-         !else
-         !   write(log_string,*) 'Dataset metascalar received:',meta_scalar
-         !   call mpas_log_write(log_string)
-         !endif
-         err_client = client%put_dataset(dataset)
+         call mpas_smart_dataset_config_recv(dataset, domain, configName, ierr)
+         if (ierr /= 0) then
+            call mpas_log_write('dataset%get_meta_scalar failed')
+         endif
+         call mpas_smart_dataset_put(dataset, ierr)
          if (err_client .ne. SRNoError) then
             write(log_string,*) 'client%put_dataset failed:',err_client
             call mpas_log_write(log_string)
