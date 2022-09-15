@@ -359,7 +359,7 @@ contains
 
       real (kind=RKIND) :: divFlux, divOutFlux
       real (kind=RKIND) :: layerThickness
-      real (kind=RKIND) :: hCrit, hEdgeTotal
+      real (kind=RKIND) :: hCrit, hRampMin, hEdgeTotal
 
       character (len=100) :: log_string
 
@@ -407,6 +407,7 @@ contains
                  hCrit + config_drying_safety_height) .and. &
                  (layerThickness <= config_zero_drying_velocity_ramp_hmax)) then
 
+            hRampMin = config_zero_drying_velocity_ramp_hmin
             ! Following O'Dea et al. (2021), if total upwinded wct is less than
             ! 2*critical thickness, apply damping at each edge
             do i = 1, nEdgesOnCell(iCell)
@@ -414,7 +415,7 @@ contains
               if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
                 if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                    tanh(50.0_RKIND * (layerThickness - hCrit)/hCrit)
+                    tanh(50.0_RKIND * (layerThickness - hRampMin)/hRampMin)
                 end if
               end if
             end do
