@@ -265,6 +265,7 @@ contains
 
      ! ensure cells stay wet by selectively damping cells with a damping tendency to make 
      ! sure tendency doesn't dry cells
+     call ocn_diagnostic_solve_layerThicknessEdge(normalVelocity, layerThicknessCur)
 
      call ocn_wetting_drying_wettingVelocity(layerThicknessCur, &
                                              layerThicknessProvis, normalTransportVelocity, &
