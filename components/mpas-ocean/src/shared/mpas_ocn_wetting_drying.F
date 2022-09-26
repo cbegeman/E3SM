@@ -269,7 +269,7 @@ contains
 
      call ocn_wetting_drying_wettingVelocity(layerThicknessCur, &
                                              layerThicknessProvis, normalTransportVelocity, &
-                                             ssh, rkSubstepWeight, wettingVelocityFactor, err)
+                                             ssh, dt, wettingVelocityFactor, err)
 
      ! prevent drying from happening with selective wettingVelocityFactor
      if (config_zero_drying_velocity) then
