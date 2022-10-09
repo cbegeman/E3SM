@@ -743,7 +743,12 @@ module ocn_time_integration_split
                cell2 = cellsOnEdge(2,iEdge)
                ! could put this after with uTemp(maxleveledgetop+1:nvertlevels)=0
                uTemp(:,iEdge) = 0.0_RKIND
-               do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
+               ! Consider adding wettingVelocityFactorBaroclinic to
+               !    uTemp = normalBaroclinicVelocityCur + wettingVelocityFactorBaroclinic*(…)
+               ! Or
+               !     wettingVelocityFactorBaroclinic*(uTemp(k) - dt * barotropicForcing(iEdge))
+               ! wettingVelocityFactorBaroclinic will be computed from the mean of the wettingVelocityFactorBarotropic values on the last substep
+                  do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
 
                   ! normalBaroclinicVelocityNew =
                   ! normalBaroclinicVelocityOld +
@@ -1314,6 +1319,15 @@ module ocn_time_integration_split
                      ! normalBarotropicVelocityOld + dt/J*
                      !     (-f*normalBarotropicVelocityoldPerp
                      !      - g*grad(SSH) + G)
+
+                     ! Add wettingVelocityFactorBarotropic multiplication here
+                     ! in order to get the correct SSH correction
+                     ! Compute wettingVelocityFactorBarotropic using
+                     ! --- normalBarotropicVelocitySubcycleCur, 
+                     ! --- sshSubcycleCur (not upwinded),
+                     ! --- new variable sshSubcycleFluxCur (upwinded based on 
+                     !     normalBarotropicVelocitySubcycleCur)
+
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                           temp_mask * &
                           (normalBarotropicVelocitySubcycleCur(iEdge) &
