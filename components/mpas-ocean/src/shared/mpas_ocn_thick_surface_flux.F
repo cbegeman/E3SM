@@ -116,6 +116,7 @@ contains
       integer :: iCell, k
 
       real (kind=RKIND) :: remainingFlux, remainingFluxRunoff
+      character (len=100) :: log_string
 
       err = 0
 
@@ -153,6 +154,10 @@ contains
           tend(maxLevelCell(iCell), iCell) = tend(maxLevelCell(iCell), iCell) &
              + remainingFluxRunoff * surfaceThicknessFluxRunoff(iCell)
         end if
+        if (abs(surfaceThicknessFluxRunoff(iCell))>0.0_RKIND) then
+           write(log_string,*) 'surfThickFluxRunoff, tend=', surfaceThicknessFluxRunoff(iCell), tend(1,iCell)
+           call mpas_log_write(log_string)
+        endif
       end do
 #ifndef MPAS_OPENACC
       !$omp end do
