@@ -435,6 +435,9 @@ contains
              call mpas_log_write(log_string)
              riverRunoffFlux(iCell) = 1.0e-3_RKIND
            end if
+           if (yCell(iCell) > (yMax - dcEdgeMinGlobal/2.0_RKIND)) then
+              riverRunoffFlux(iCell) = 0.0_RKIND
+           end if
          end do
          call mpas_log_write('complete set river runoff')
       else
