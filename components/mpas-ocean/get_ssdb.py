@@ -1,6 +1,6 @@
 import shutil, time, sys, os, subprocess, fileinput
 
-with open('db_debug.log') as f:
+with open('/global/homes/c/cbegeman/E3SM-new/components/mpas-ocean/db_debug.log') as f:
     lines = f.readlines()
     for line in lines:
        if 'SSDB' in line:

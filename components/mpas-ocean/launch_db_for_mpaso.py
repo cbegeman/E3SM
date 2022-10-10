@@ -5,8 +5,7 @@ from smartsim.log import get_logger, log_to_file
 import time
 import os
 
-MPASO_DIR="/global/cscratch1/sd/cbegeman/MPAS-Ocean-test-case-output/smartsim/ocean/baroclinic_channel/10km/default"
-
+BUILD_DIR="/global/homes/c/cbegeman/E3SM-new/components/mpas-ocean/"
 print('Create Experiment object')
 exp = Experiment("mpas-ocean_simulation", launcher="slurm")
 print('Create database')
@@ -19,9 +18,9 @@ db = exp.create_database(db_nodes=1,
                          partition="standard",
                          batch_args={"C":"haswell"})
 
-if os.path.exists('{}/db_debug.log'.format(MPASO_DIR)):
-    os.system('rm {}/db_debug.log'.format(MPASO_DIR))
-log_to_file('{}/db_debug.log'.format(MPASO_DIR))
+if os.path.exists('{}/db_debug.log'.format(BUILD_DIR)):
+    os.system('rm {}/db_debug.log'.format(BUILD_DIR))
+log_to_file('{}/db_debug.log'.format(BUILD_DIR))
 logger = get_logger('db_launcher')
 
 # define how simulation should be executed
