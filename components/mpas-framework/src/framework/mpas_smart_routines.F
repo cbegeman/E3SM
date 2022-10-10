@@ -85,6 +85,7 @@ module mpas_smart_routines
             write(log_string,*) 'FWK: Error initializing redis client:', &
                                  err_client
             call mpas_log_write(log_string)
+            err_client = client%SR_error_parser(err_client)
             ierr = ior(ierr, 1)
          else
             call mpas_log_write('FWK: Client initialized')
