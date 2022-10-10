@@ -149,7 +149,7 @@ module ocn_forward_mode
       integer :: err_tmp    ! local error codes from subroutine calls
       integer(kind=enum_kind) :: err_client
       character(len=100) :: log_string
-      character(len=StrKIND) :: datasetName, fieldName
+      character(len=StrKIND) :: datasetName, configName, fieldName
       character(len=*), parameter :: script_key = 'init_script'
       character(len=*), parameter :: script_file = &
          'data_processing_script.txt'
@@ -231,7 +231,7 @@ module ocn_forward_mode
       block => domain % blocklist
 
       if (config_use_smartsim) then
-         call mpas_smart_init(client, ierr)
+         call mpas_smart_client_init(client, ierr)
          if (ierr /= 0) then
             call mpas_log_write('Error initializing smartredis client', &
                                 MPAS_LOG_CRIT)
@@ -301,6 +301,7 @@ module ocn_forward_mode
          if (ierr /= 0) then
             call mpas_log_write('dataset%unpack_dataset_tensor failed')
          endif
+         configName = 'config_mom_del2'
          call mpas_smart_dataset_config_send(dataset, domain, configName, ierr)
          if (ierr /= 0) then
             call mpas_log_write('dataset%add_meta_scalar failed')

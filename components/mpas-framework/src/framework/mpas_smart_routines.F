@@ -28,7 +28,7 @@ module mpas_smart_routines
    implicit none
    save
 
-   public :: mpas_smart_init
+   public :: mpas_smart_client_init, mpas_smart_dataset_init
 
 #  include "enum_fortran.inc"
 
@@ -65,7 +65,7 @@ module mpas_smart_routines
 
    contains
 
-   subroutine mpas_smart_init(client_out, ierr)
+   subroutine mpas_smart_client_init(client_out, ierr)
 
       !implicit none
 
@@ -92,7 +92,7 @@ module mpas_smart_routines
          endif
       endif
 
-   end subroutine mpas_smart_init
+   end subroutine mpas_smart_client_init
 
    subroutine mpas_smart_dataset_init(dataset_name, dataset, ierr)
 
@@ -366,7 +366,7 @@ module mpas_smart_routines
                                 config_ptr)
       config_temp(1) = config_ptr
       err_client = dataset%add_meta_scalar(trim(configName), &
-                                           config_temp)
+                                           config_ptr)
       if (err_client /= SRNoError) then
          WRITE(log_string,*) 'FWK: Error put config in dataset:', trim(configName)
          call mpas_log_write(trim(log_string))
@@ -387,15 +387,14 @@ module mpas_smart_routines
 
       type (mpas_pool_field_info_type) :: fieldInfo
       real (kind=RKIND), pointer :: config_ptr
-      real (kind=RKIND), dimension(1) :: config_temp
+      real (kind=RKIND), dimension(:), pointer :: config_temp
       character(len=StrKIND) :: log_string
       integer(kind=enum_kind) :: err_client
 
       call mpas_pool_get_config(domain % configs, &
                                 trim(configName), &
                                 config_ptr)
-      config_temp(1) = config_ptr
-      err_client = dataset%get_meta_scalar(trim(configName), &
+      err_client = dataset%get_meta_scalars(trim(configName), &
                                            config_temp)
       if (err_client /= SRNoError) then
          WRITE(log_string,*) 'FWK: Error put config in dataset:', trim(configName)
@@ -405,6 +404,7 @@ module mpas_smart_routines
          WRITE(log_string,*) 'FWK: Put config in dataset:', trim(configName)
          call mpas_log_write(trim(log_string))
       endif
+      config_ptr = config_temp(1)
 
    end subroutine mpas_smart_dataset_config_recv
 
@@ -526,7 +526,7 @@ module mpas_smart_routines
                                      field_temp, &
                                      shape(field_temp))
       if (err_client /= SRNoError) then
-         WRITE(log_string,*) 'FWK: Error put tensor:', trim(field_ptr % fieldName)
+         WRITE(log_string,*) 'FWK: Error put tensor:', trim(field_ptr % fieldName), err_client
          call mpas_log_write(trim(log_string))
          ierr = ior(ierr, 1)
       else
@@ -556,7 +556,7 @@ module mpas_smart_routines
                                      shape(field_temp))
       if (err_client /= SRNoError) then
          WRITE(log_string,*) 'Error put tensor:', &
-                             trim(field_ptr % fieldName)
+                             trim(field_ptr % fieldName), err_client
          call mpas_log_write(trim(log_string))
          ierr = ior(ierr, 1)
       else
@@ -586,7 +586,7 @@ module mpas_smart_routines
                                      shape(field_temp))
       if (err_client /= SRNoError) then
          WRITE(log_string,*) 'Error put tensor:', &
-                             trim(field_ptr % fieldName)
+                             trim(field_ptr % fieldName), err_client
          call mpas_log_write(trim(log_string))
          ierr = ior(ierr, 1)
       else
@@ -617,7 +617,7 @@ module mpas_smart_routines
                                      shape(field_temp))
       if (err_client /= SRNoError) then
          WRITE(log_string,*) 'Error put tensor:', &
-                             trim(field_ptr % fieldName)
+                             trim(field_ptr % fieldName), err_client
          call mpas_log_write(trim(log_string))
          ierr = ior(ierr, 1)
       else
