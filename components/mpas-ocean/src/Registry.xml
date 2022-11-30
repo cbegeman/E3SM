@@ -1103,6 +1103,10 @@
 					description="If true, prevent cells from drying past config_min_cell_height."
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_drying_layerwise" type="logical" default_value=".true."
+					description="Whether to evaluate thickness thresholds for each layer separately or over whole column"
+					possible_values="any positive real, typically 1.0e-3"
+		/>
 		<nml_option name="config_drying_min_cell_height" type="real" default_value="1.0e-3" units="m"
 					description="Minimum allowable cell height under drying.  Cell to be kept wet to at least this thickness. When ramp is applied this is the min edge height"
 					possible_values="any positive real, typically 1.0e-3"

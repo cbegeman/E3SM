@@ -356,8 +356,10 @@ contains
 
       integer :: cell1, cell2, iEdge, iCell, k, i
 
-      real (kind=RKIND) :: divFlux, divOutFlux
+      real (kind=RKIND), dimension(:,:), allocatable :: layerThicknessPredicted
+
       real (kind=RKIND) :: layerThickness
+      real (kind=RKIND) :: divFlux, divOutFlux
       real (kind=RKIND) :: hCrit, hRampMin, hEdgeTotal
 
       character (len=100) :: log_string
@@ -366,15 +368,18 @@ contains
 
       hCrit = config_drying_min_cell_height
 
+      allocate(layerThicknessPredicted(nVertLevels, nCellsAll))
+
       if (.not. config_zero_drying_velocity) return
 
       ! need predicted transport velocity to limit drying flux
       !$omp parallel
-      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, layerThickness)
+      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux)
       do iCell = 1, nCellsAll
         do k = minLevelCell(iCell), maxLevelCell(iCell)
           divOutFlux = 0.0_RKIND
-          layerThickness = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
+          layerThicknessPredicted(k, iCell) = min(layerThicknessProvis(k, iCell), &
+                                                  layerThicknessCur(k, iCell))
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if (k <= maxLevelEdgeBot(iEdge) .or. k >= minLevelEdgeTop(iEdge)) then
@@ -387,8 +392,21 @@ contains
               end if
             end if
           end do
-          layerThickness = layerThickness + dt * divOutFlux
+          layerThicknessPredicted(k, iCell) = layerThicknessPredicted(k, iCell) + dt * divOutFlux
+        end do
+      end do
+      !$omp end do
+      !$omp end parallel
 
+      !$omp parallel
+      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, layerThickness)
+      do iCell = 1, nCellsAll
+        do k = minLevelCell(iCell), maxLevelCell(iCell)
+          if (config_drying_layerwise) then
+            layerThickness = layerThicknessPredicted(k, iCell)
+          else
+            layerThickness = minval(layerThicknessPredicted(:, iCell))
+          end if
           ! if layer thickness is too small, limit divergence flux outwards with
           ! opposite velocity
           if (layerThickness <= &
