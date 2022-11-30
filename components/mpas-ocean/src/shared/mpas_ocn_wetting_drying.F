@@ -321,9 +321,6 @@ contains
          layerThicknessProvis    !< Input: provisional layer thickness
 
       real (kind=RKIND), dimension(:,:), intent(in) :: &
-         layerThickEdgeFlux  !< Input: flux-related layerThickness at an edge
-
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
          normalVelocity     !< Input: transport
 
       real (kind=RKIND), dimension(:), intent(in) :: ssh
@@ -339,6 +336,9 @@ contains
 
       real (kind=RKIND), dimension(:,:), intent(inout) :: &
          wettingVelocityFactor          !< Input/Output: velocity wettingVelocityFactor
+
+      real (kind=RKIND), dimension(:,:), intent(inout) :: &
+         layerThickEdgeFlux  !< Input: flux-related layerThickness at an edge
 
       !-----------------------------------------------------------------
       !
