@@ -1096,7 +1096,7 @@ contains
           call mpas_pool_get_array(landIceInitPool, 'landIceDraftObserved', landIceDraftObserved)
           call mpas_pool_get_array(landIceInitPool, 'landIceThkObserved', landIceThkObserved)
           call mpas_pool_get_array(landIceInitPool, 'landIceFracObserved', landIceFracObserved)
-          call mpas_pool_get_array(landIceInitPool, 'landIceFloatingFracObserved', landIceFloatingFracObserved)
+          call mpas_pool_get_array(landIceInitPool, 'landIceFracObserved', landIceFloatingFracObserved)
           call mpas_pool_get_array(landIceInitPool, 'landIceGroundedFracObserved', landIceGroundedFracObserved)
 
           if (config_global_ocean_topography_method .eq. "nearest_neighbor") then
@@ -1187,8 +1187,10 @@ contains
           call mpas_pool_get_array(landIceInitPool, 'landIceGroundedFracObserved', landIceGroundedFracObserved)
           call mpas_pool_get_array(statePool, 'ssh', ssh, 1)
           call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
+          call mpas_pool_get_array(forcingPool, 'landIceFloatingMask', landIceFloatingMask)
           call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
           call mpas_pool_get_array(forcingPool, 'landIceFraction', landIceFraction)
+          call mpas_pool_get_array(forcingPool, 'landIceFloatingFraction', landIceFloatingFraction)
 
           ssh(:) = 0.0_RKIND
           landIceFraction(:) = 0.0_RKIND
@@ -1199,9 +1201,11 @@ contains
              if(landIceMask(iCell) == 1) then
                 landIceFraction(iCell) = landIceFracObserved(iCell)
              end if
+             call mpas_log_write( 'Define landIceFloatingFraction')
              if(landIceFloatingMask(iCell) == 1) then
                 landIceFloatingFraction(iCell) = landIceFloatingFracObserved(iCell)
              end if
+             call mpas_log_write( 'End Define landIceFloatingFraction')
 
              ! nothing to do here if the cell is land
              if (maxLevelCell(iCell) <= 0) cycle
