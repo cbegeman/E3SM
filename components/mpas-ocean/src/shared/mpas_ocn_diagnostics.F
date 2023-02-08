@@ -166,6 +166,10 @@ contains
          call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
          call mpas_pool_get_array(forcingPool, 'landIceFloatingMask', landIceFloatingMask)
          call mpas_pool_get_array(forcingPool, 'landIceFraction', landIceFraction)
+         if (landIceFloatingMask(1) == -1) then
+            call mpas_log_write('landIceFloatingMask contains the default value which is invalid.', &
+                                MPAS_LOG_CRIT)
+         endif
       end if
 
       nEdges = nEdgesAll

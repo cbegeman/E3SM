@@ -1192,6 +1192,10 @@ contains
           call mpas_pool_get_array(forcingPool, 'landIceFraction', landIceFraction)
           call mpas_pool_get_array(forcingPool, 'landIceFloatingFraction', landIceFloatingFraction)
 
+          if (landIceFloatingMask(1) == -1) then
+             call mpas_log_write('landIceFloatingMask contains the default value which is invalid.', &
+                                 MPAS_LOG_CRIT)
+          endif
           ssh(:) = 0.0_RKIND
           landIceFraction(:) = 0.0_RKIND
           modifyLandIcePressureMask(:) = 0
