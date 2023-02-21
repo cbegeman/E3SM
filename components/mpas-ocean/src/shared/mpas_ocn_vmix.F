@@ -65,6 +65,7 @@ module ocn_vmix
 
    logical :: velVmixOn, tracerVmixOn
    real (kind=RKIND) :: implicitBottomDragCoef
+   real (kind=RKIND) :: bottom_roughness, implicitCd_min, implicitCd_max
    real (kind=RKIND) :: rayleighDampingCoef, rayleighBottomDampingCoef, &
                         rayleighDepthVariable
 
@@ -774,7 +775,7 @@ contains
       integer, dimension(:), pointer ::vegetationMask
       real (kind=RKIND) :: old_bottom_Cd, lambda, beta, alpha, total_h
       real (kind=RKIND) :: inundation_depth, von_karman, cff1, cff2, cff3, cff4
-      real (kind=RKIND) :: bottom_roughness, implicitCd_min, implicitCd_max, kappaSq
+      real (kind=RKIND) :: kappaSq
       integer :: iCell
 
       err = 0
@@ -845,7 +846,7 @@ contains
          cell2 = cellsOnEdge(2,iEdge)
 
          ! average cell-based implicit bottom drag to edges and convert Mannings n to Cd
-         if (config_use_implicit_bottom_roughness) then
+         if (config_use_loglaw_bottom_drag) then
            ! NCOM's formula for bottom drag coefficient
            ! The original formula is cb(i,j) = max(cbmin, (kappaSq/log(z/z0))**2 ))
            ! where kappaSq is the vonKarman coefficient squared, z0 is the roughness coefficient.
@@ -854,10 +855,7 @@ contains
            ! TODO replace layerThickEdgeMean with layerThickEdgeDrag.
            ! If this is extended to multi-layer formulation, use zMid.
            ! The solution is bracketed between implicitCd_min and implicitCd_max.
-           implicitCd_min = 0.0025_RKIND
-           implicitCd_max = 0.1_RKIND
            kappaSq = 0.16_RKIND
-           bottom_roughness = 1.0e-3_RKIND
            implicitCd = max(implicitCd_min, &
                             min(implicitCd_max, &
                                 kappaSq / &
@@ -1243,7 +1241,7 @@ contains
         call ocn_vel_vmix_tend_implicit_spatially_variable(bottomDrag, dt, kineticEnergyCell, &
           vertViscTopOfEdge, layerThickness, layerThickEdgeMean, normalVelocity, err)
       else if (config_use_implicit_bottom_drag_variable_mannings.or. &
-               config_use_implicit_bottom_roughness) then
+               config_use_loglaw_bottom_drag) then
         ! update bottomDrag via Cd=g*n^2*h^(-1/3)
         call ocn_vel_vmix_tend_implicit_spatially_variable_mannings(forcingPool, bottomDrag, &
           dt, kineticEnergyCell, &
@@ -1422,6 +1420,12 @@ contains
 
       if (config_use_implicit_bottom_drag) then
           implicitBottomDragCoef = config_implicit_bottom_drag_coeff
+      endif
+
+      if (config_use_loglaw_bottom_drag) then
+          implicitCd_min = config_loglaw_bottom_drag_min
+          implicitCd_max = config_loglaw_bottom_drag_max
+          bottom_roughness = config_loglaw_bottom_roughness
       endif
 
       call ocn_vmix_cvmix_init(domain,err_tmp)

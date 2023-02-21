@@ -1089,9 +1089,21 @@
 					description="Dimensionless bottom drag coefficient, $c_{drag}$."
 					possible_values="any positive real, typically 1.0e-3"
 		/>
-		<nml_option name="config_use_implicit_bottom_roughness" type="logical" default_value=".false."
-					description="If true, depends on bottom roughness z0"
+		<nml_option name="config_use_loglaw_bottom_drag" type="logical" default_value=".false."
+					description="If true, use a log-law for implicit bottom drag as a function of bottom roughness z0"
 					possible_values=".true. or .false."
+		/>
+		<nml_option name="config_loglaw_bottom_roughness" type="real" default_value="1.0e-3" units="m"
+					description="Bottom roughness, $z_0$, in meters."
+					possible_values="any positive real, typically 1.0e-3"
+		/>
+		<nml_option name="config_loglaw_bottom_drag_min" type="real" default_value="2.5e-3"
+					description="Dimensionless bottom drag minimum used in log-law parameterization."
+					possible_values="any positive real, typically 2.5e-3"
+		/>
+		<nml_option name="config_loglaw_bottom_drag_max" type="real" default_value="1.0e-1"
+					description="Dimensionless bottom drag maximum used in log-law parameterization."
+					possible_values="any positive real, typically 1.0e-1"
 		/>
 		<nml_option name="config_use_implicit_bottom_drag_variable" type="logical" default_value=".false."
 					description="If true, spatially-variable implicit bottom drag is used on the momentum equation."
