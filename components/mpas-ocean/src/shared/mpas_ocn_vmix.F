@@ -775,8 +775,9 @@ contains
       integer, dimension(:), pointer ::vegetationMask
       real (kind=RKIND) :: old_bottom_Cd, lambda, beta, alpha, total_h
       real (kind=RKIND) :: inundation_depth, von_karman, von_karman_sq, cff1, cff2, cff3, cff4
-      real (kind=RKIND) :: kineticEnergyTopOfEdge, zMidEdge
+      real (kind=RKIND) :: hPartial, kineticEnergyTopOfEdge, zMidEdge
       integer :: iCell
+      logical :: use_quadrature=.false.
 
       err = 0
       von_karman = 0.4_RKIND
@@ -858,22 +859,42 @@ contains
            ! The solution is bracketed between implicitCd_min and implicitCd_max.
            ! TODO remove implicitCd_max and config option
            CdTemp = 0.0_RKIND
-           do k = N, Nsurf, -1
-             zMidEdge = 0.5_RKIND * (bottomDepth(cell1) + bottomDepth(cell2) + zMid(k,cell1) + zMid(k,cell2))
-             if (k < N .and. zMidEdge > zDrag_max) exit
-             CdTemp(k) = min(implicitCd_max, &
-                          max(implicitCd_min, &
-                              von_karman_sq / &
-                              (log(1.0_RKIND + &
-                                   (zMidEdge/bottom_roughness)))**2))
-             ! For some reason we can use k-1 even when N=Nsurf
-             kineticEnergyTopOfEdge = 0.5_RKIND * (kineticEnergyCell(k,cell1) + kineticEnergyCell(k,cell2) + &
-                                                   kineticEnergyCell(k-1,cell1) + kineticEnergyCell(k-1,cell2))
-             vertViscTopOfEdge(k,iEdge) = max(vertViscTopOfEdge(k,iEdge), &
-                                              sqrt(CdTemp(k) * kineticEnergyTopOfEdge) * &
-                                              von_karman * (zMidEdge + bottom_roughness) &
-                                             )
-           enddo
+           if (use_quadrature) then
+             do k = N, Nsurf, -1
+               zMidEdge = 0.5_RKIND * (bottomDepth(cell1) + bottomDepth(cell2) + zMid(k,cell1) + zMid(k,cell2))
+               hPartial = layerThickEdgeMean(k,iEdge)/(2*3**0.5_RKIND)
+               if (k < N .and. zMidEdge > zDrag_max) exit
+               CdTemp(k) = min(implicitCd_max, &
+                            max(implicitCd_min, &
+                                0.5_RKIND * von_karman_sq * &
+                                (log(1.0_RKIND + (zMidEdge - hPartial)/bottom_roughness))**-0.5_RKIND + &
+                                (log(1.0_RKIND + (zMidEdge + hPartial)/bottom_roughness))**-0.5_RKIND))
+               ! For some reason we can use k-1 even when N=Nsurf
+               kineticEnergyTopOfEdge = 0.5_RKIND * (kineticEnergyCell(k,cell1) + kineticEnergyCell(k,cell2) + &
+                                                     kineticEnergyCell(k-1,cell1) + kineticEnergyCell(k-1,cell2))
+               vertViscTopOfEdge(k,iEdge) = max(vertViscTopOfEdge(k,iEdge), &
+                                                sqrt(CdTemp(k) * kineticEnergyTopOfEdge) * &
+                                                von_karman * (zMidEdge + bottom_roughness) &
+                                               )
+             enddo
+           else
+             do k = N, Nsurf, -1
+               zMidEdge = 0.5_RKIND * (bottomDepth(cell1) + bottomDepth(cell2) + zMid(k,cell1) + zMid(k,cell2))
+               if (k < N .and. zMidEdge > zDrag_max) exit
+               CdTemp(k) = min(implicitCd_max, &
+                            max(implicitCd_min, &
+                                von_karman_sq / &
+                                (log(1.0_RKIND + &
+                                     (zMidEdge/bottom_roughness)))**2))
+               ! For some reason we can use k-1 even when N=Nsurf
+               kineticEnergyTopOfEdge = 0.5_RKIND * (kineticEnergyCell(k,cell1) + kineticEnergyCell(k,cell2) + &
+                                                     kineticEnergyCell(k-1,cell1) + kineticEnergyCell(k-1,cell2))
+               vertViscTopOfEdge(k,iEdge) = max(vertViscTopOfEdge(k,iEdge), &
+                                                sqrt(CdTemp(k) * kineticEnergyTopOfEdge) * &
+                                                von_karman * (zMidEdge + bottom_roughness) &
+                                               )
+             enddo
+           endif
          elseif (config_use_vegetation_drag .AND. config_use_vegetation_manning_equation) then
            implicitCd = gravity*(0.5_RKIND*(vegetationManning(cell1) + vegetationManning(cell2)))**2 * &
             (0.5_RKIND * (ssh(cell1) + ssh(cell2) + bottomDepth(cell1) + bottomDepth(cell2)))**(-1.0_RKIND/3.0_RKIND)
