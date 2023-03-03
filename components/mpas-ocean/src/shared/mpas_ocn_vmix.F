@@ -850,13 +850,16 @@ contains
            ! where vonk=0.16, z0=0.001, bracketed between [0.0025, 0.1]
            ! The constant below is 250 = 0.5*0.5/z0 with the extra 0.5 from
            ! averaging the two bottomDepth cells.
+           call mpas_log_write('Log-law Cd')
            implicitCd = max(0.0025_RKIND, &
                         min(0.1_RKIND, &
                           0.16_RKIND/(log(250.0_RKIND*(bottomDepth(cell1)+bottomDepth(cell2))))**2 ))
          elseif (config_use_vegetation_drag .AND. config_use_vegetation_manning_equation) then
+           call mpas_log_write('Mannings Cd')
            implicitCd = gravity*(0.5_RKIND*(vegetationManning(cell1) + vegetationManning(cell2)))**2 * &
             (0.5_RKIND * (ssh(cell1) + ssh(cell2) + bottomDepth(cell1) + bottomDepth(cell2)))**(-1.0_RKIND/3.0_RKIND)
          else
+           call mpas_log_write('Variable Cd')
            implicitCd = gravity*(0.5_RKIND*(bottomDrag(cell1) + bottomDrag(cell2)))**2 * &
             (0.5_RKIND * (ssh(cell1) + ssh(cell2) + bottomDepth(cell1) + bottomDepth(cell2)))**(-1.0_RKIND/3.0_RKIND)
          endif
@@ -1229,23 +1232,31 @@ contains
       !$acc enter data copyin(layerThickness, normalVelocity)
 #endif
       if (config_use_implicit_bottom_drag_variable) then
+        call mpas_timer_start('vmix imp spatially variable', .false.)
         call ocn_vel_vmix_tend_implicit_spatially_variable(bottomDrag, dt, kineticEnergyCell, &
           vertViscTopOfEdge, layerThickness, layerThickEdgeMean, normalVelocity, err)
+        call mpas_timer_stop('vmix imp spatially variable')
       else if (config_use_implicit_bottom_drag_variable_mannings.or. &
                config_use_implicit_bottom_roughness) then
+        call mpas_timer_start('vmix imp mannings', .false.)
         ! update bottomDrag via Cd=g*n^2*h^(-1/3)
         call ocn_vel_vmix_tend_implicit_spatially_variable_mannings(forcingPool, bottomDrag, &
           dt, kineticEnergyCell, &
           vertViscTopOfEdge, layerThickness, layerThickEdgeMean, normalVelocity, &
           ssh, err)
+        call mpas_timer_stop('vmix imp mannings')
       else if (config_Rayleigh_friction.or. &
                config_Rayleigh_bottom_friction.or. &
                config_Rayleigh_damping_depth_variable) then
+        call mpas_timer_start('vmix imp rayleigh', .false.)
         call ocn_vel_vmix_tend_implicit_rayleigh(dt, kineticEnergyCell, &
           vertViscTopOfEdge, layerThickness, layerThickEdgeMean, normalVelocity, err)
+        call mpas_timer_stop('vmix imp rayleigh')
       else
+        call mpas_timer_start('vmix imp constant', .false.)
         call ocn_vel_vmix_tend_implicit(dt, kineticEnergyCell, &
           vertViscTopOfEdge, layerThickness, layerThickEdgeMean, normalVelocity, err)
+        call mpas_timer_stop('vmix imp constant')
       end if
 #ifdef MPAS_OPENACC
       !$acc exit data copyout(normalVelocity)
