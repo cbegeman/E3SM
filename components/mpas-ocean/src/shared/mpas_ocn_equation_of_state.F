@@ -72,6 +72,9 @@ module ocn_equation_of_state
       ocnEqStateTypeJM     = 2, &! Jackett-McDougall eqn of state
       ocnEqStateTypeWright = 3   ! Wright eqn of state
 
+   real :: ocnEqStateRhoRef      ! Reference density to use when tracers
+                                 ! are disabled
+
 !***********************************************************************
 
 contains
@@ -158,6 +161,14 @@ contains
       err = 0
 
       call mpas_timer_start("equation of state")
+      call mpas_log_write('Enter EOS openacc')
+
+      !*** initialize or extract relevant fields
+
+      if (config_disable_tr_all_tend) then
+        call mpas_log_write('Assign density to reference')
+        density(:,:) = ocnEqStateRhoRef
+      endif
 
       !*** initialize or extract relevant fields
 
@@ -307,8 +318,14 @@ contains
       err = 0
 
       call mpas_timer_start("equation of state")
+      call mpas_log_write('Enter EOS original')
 
       !*** initialize or extract relevant fields
+
+      if (config_disable_tr_all_tend) then
+        call mpas_log_write('Assign density to reference')
+        density(:,:) = ocnEqStateRhoRef
+      endif
 
       if (present(timeLevelIn)) then
          timeLevel = timeLevelIn
@@ -447,6 +464,8 @@ contains
       case ('linear','Linear','LINEAR')
 
          ocnEqStateChoice  = ocnEqStateTypeLinear
+         call mpas_log_write('Assign rhoRef to linear rhoRef')
+         ocnEqStateRhoRef = config_eos_linear_densityref
          call ocn_equation_of_state_linear_init(err)
 
       case ('jm','JM')
