@@ -1260,6 +1260,7 @@ module ocn_time_integration_rk4
                   !$omp do schedule(runtime) private(k)
                   do iCell = 1, nCells
                      do k = 1, maxLevelCell(iCell)
+                        if (config_disable_tr_all_tend) tracersGroupTend(:, k, iCell) = 0.0_RKIND
                         tracersGroupProvis(:, k, iCell) = ( layerThicknessCur(k, iCell) * tracersGroupCur(:, k, iCell)  &
                                                  + rkSubstepWeight * tracersGroupTend(:, k, iCell) &
                                                    ) / layerThicknessProvis(k, iCell)
@@ -1498,6 +1499,7 @@ module ocn_time_integration_rk4
                   !$omp do schedule(runtime) private(k)
                   do iCell = 1, nCells
                      do k = minLevelCell(iCell), maxLevelCell(iCell)
+                        if (config_disable_tr_all_tend) tracersGroupTend(:, k, iCell) = 0.0_RKIND
                         tracersGroupNew(:, k, iCell) = tracersGroupNew(:, k, iCell) + rkWeight &
                                                 * tracersGroupTend(:, k, iCell)
                      end do
