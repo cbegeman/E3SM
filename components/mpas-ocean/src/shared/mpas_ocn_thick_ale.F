@@ -187,7 +187,7 @@ contains
             kMin = minLevelCell(iCell)
    
             restingThicknessSum = 0.0_RKIND
-            weightedThicknessSum = 0.0_RKIND
+            weightedThicknessSum = 1e-14_RKIND
             do k = kMin, kMax
                restingThicknessSum = restingThicknessSum &
                             + restingThickness(k,iCell)
@@ -204,7 +204,7 @@ contains
             do k = kMin, kMax
                ALE_thickness(k, iCell) = restingThickness(k, iCell) &
                   + ( (SSH(iCell) + restingThicknessDiff) * vertCoordMovementWeights(k) * &
-                      restingThickness(k, iCell) ) / max(1e-14_RKIND, weightedThicknessSum)
+                      restingThickness(k, iCell) ) / weightedThicknessSum
             end do
          enddo
 #ifndef MPAS_OPENACC
