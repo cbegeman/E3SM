@@ -50,7 +50,8 @@ module ocn_wetting_drying
    !
    !--------------------------------------------------------------------
 
-   public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4
+   public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4, &
+             ocn_wetting_drying_init
 
    !--------------------------------------------------------------------
    !
@@ -354,7 +355,7 @@ contains
 
       real (kind=RKIND) :: divFlux, divOutFlux
       real (kind=RKIND) :: layerThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hEdgeTotal
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal
 
       character (len=100) :: log_string
 
@@ -397,24 +398,37 @@ contains
                 end if
               end if
             end do
-          elseif (config_zero_drying_velocity_ramp .and. &
-                 (layerThickness > &
-                 hCrit + config_drying_safety_height) .and. &
-                 (layerThickness <= config_zero_drying_velocity_ramp_hmax)) then
-
-            hRampMin = config_zero_drying_velocity_ramp_hmin
-            ! Following O'Dea et al. (2021), if total upwinded wct is less than
-            ! 2*critical thickness, apply damping at each edge
-            do i = 1, nEdgesOnCell(iCell)
-              iEdge = edgesOnCell(i, iCell)
-              if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                    tanh(50.0_RKIND * (layerThickness - hRampMin)/hRampMin)
-                end if
+          elseif (trim(config_zero_drying_velocity_ramp) /= 'none') then
+            if ((layerThickness > hCrit + config_drying_safety_height) .and. &
+                (layerThickness <= config_zero_drying_velocity_ramp_hmax)) then
+              hRampMin = config_zero_drying_velocity_ramp_hmin
+              if (trim(config_zero_drying_velocity_ramp) == 'linear') then
+                hRampMax = config_zero_drying_velocity_ramp_hmax
+                ! Following O'Dea et al. (2021), if total upwinded wct is less than
+                ! 2*critical thickness, apply damping at each edge
+                do i = 1, nEdgesOnCell(iCell)
+                  iEdge = edgesOnCell(i, iCell)
+                  if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
+                    if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+                      wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
+                        (layerThickness - hRampMin)/(hRampMax - hRampMin)
+                    end if
+                  end if
+                end do
+              elseif (trim(config_zero_drying_velocity_ramp) == 'tanh') then
+                ! Following O'Dea et al. (2021), if total upwinded wct is less than
+                ! 2*critical thickness, apply damping at each edge
+                do i = 1, nEdgesOnCell(iCell)
+                  iEdge = edgesOnCell(i, iCell)
+                  if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
+                    if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+                      wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
+                        tanh(50.0_RKIND * (layerThickness - hRampMin)/hRampMin)
+                    end if
+                  end if
+                end do
               end if
-            end do
-
+            end if
           end if
 
         end do
@@ -423,7 +437,33 @@ contains
       !$omp end parallel
 
    end subroutine ocn_wetting_drying_wettingVelocity !}}}
+!***********************************************************************
+!
+!  routine ocn_wetting_drying_init
+!
+!> \brief   Initializes flags used for wetting and drying.
+!> \author  Carolyn Begeman
+!> \date    April 2023
+!> \details
+!>  Initializes flags used for wetting and drying.
+!
+!-----------------------------------------------------------------------
+    subroutine ocn_wetting_drying_init(err)
 
+      integer, intent(out) :: err !< Output: Error flag
+
+      err = 0
+
+      if (config_use_wetting_drying .and. &
+          trim(config_thickness_flux_type) /= 'upwind') then
+         call mpas_log_write('Thickness flux option of ' //&
+              & trim(config_thickness_flux_type) // &
+              & 'is not supported for wetting and drying.', MPAS_LOG_CRIT)
+      endif
+
+! TODO add _init routine to check that config_zero_drying_velocity is one of 3 options
+
+    end subroutine ocn_wetting_drying_init
 
 end module ocn_wetting_drying
 

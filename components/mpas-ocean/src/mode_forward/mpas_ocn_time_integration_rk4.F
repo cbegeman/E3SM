@@ -1727,13 +1727,15 @@ module ocn_time_integration_rk4
       !-----------------------------------------------------------------
       type (block_type), pointer :: block
       type (mpas_pool_type), pointer :: meshPool
-      logical, pointer :: config_use_debugTracers
+      logical, pointer :: config_use_debugTracers, config_use_wetting_drying
       integer, pointer :: nVertLevels
+      integer :: err
       ! End preamble
       !-----------------------------------------------------------------
       ! Begin code
 
       call mpas_pool_get_config(domain % configs, 'config_use_debugTracers', config_use_debugTracers)
+      call mpas_pool_get_config(domain % configs, 'config_use_wetting_drying', config_use_wetting_drying)
       block => domain % blocklist
       do while (associated(block))
          call mpas_pool_get_subpool(block % structs, 'mesh', meshPool)
@@ -1745,6 +1747,10 @@ module ocn_time_integration_rk4
          endif
          block => block % next
       end do
+      if (config_use_wetting_drying) then
+         call ocn_wetting_drying_init(err)
+         if (err /= 0) call mpas_log_write('Error in wetting-and-drying initialization', MPAS_LOG_CRIT)
+      endif
 
    end subroutine ocn_time_integration_rk4_init
 
