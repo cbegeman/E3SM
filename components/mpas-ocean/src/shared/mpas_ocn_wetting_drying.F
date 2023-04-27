@@ -461,7 +461,15 @@ contains
               & 'is not supported for wetting and drying.', MPAS_LOG_CRIT)
       endif
 
-! TODO add _init routine to check that config_zero_drying_velocity is one of 3 options
+      if (config_zero_drying_velocity_ramp == 'none') then
+         call mpas_log_write('Wetting-drying ramp not applied')
+      elseif (config_zero_drying_velocity_ramp == 'linear') then
+         call mpas_log_write('Wetting-drying ramp is linear')
+      elseif (config_zero_drying_velocity_ramp == 'tanh') then
+         call mpas_log_write('Wetting-drying ramp is tanh')
+      else
+         call mpas_log_write('Wetting-drying ramp not supported')
+      endif
 
     end subroutine ocn_wetting_drying_init
 
