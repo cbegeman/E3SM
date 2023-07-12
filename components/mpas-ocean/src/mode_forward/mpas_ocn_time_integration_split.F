@@ -1653,12 +1653,41 @@ module ocn_time_integration_split
                                              nVertLevels)
             call ocn_MLE_add_to_transport_vel(normalTransportVelocity, nEdges)
 
+
+#ifdef MPAS_OPENACC
+            !$acc parallel loop &
+            !$acc    present(normalVelocity, layerThickness, &
+            !$acc            minLevelEdgeBot, maxLevelEdgeTop, &
+            !$acc            layerThickEdgeFlux, cellsOnEdge) &
+            !$acc    private(k, kmin, kmax, cell1, cell2)
+#else
             !$omp parallel
             !$omp do schedule(runtime) &
-            !$omp private(k, normalThicknessFluxSum, &
+            !$omp private(cell1, cell2, k, normalThicknessFluxSum, &
             !$omp         thicknessSum, normalVelocityCorrection)
             do iEdge = 1, nEdges
 
+#endif
+               if (thickEdgeFluxChoice == thickEdgeFluxUpwind) then
+                  cell1 = cellsOnEdge(1,iEdge)
+                  cell2 = cellsOnEdge(2,iEdge)
+                  do k=1,nVertLevels
+                     ! initialize layerThicknessEdgeFlux to avoid divide by
+                     ! zero and NaN problems.
+                     layerThickEdgeFlux(k,iEdge) = -1.0e34_RKIND
+                  end do
+                  do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
+                     if (uTemp(k,iEdge) > 0.0_RKIND) then
+                        layerThickEdgeFlux(k,iEdge) = layerThicknessCur(k,cell1)
+                     elseif (uTemp(k,iEdge) < 0.0_RKIND) then
+                        layerThickEdgeFlux(k,iEdge) = layerThicknessCur(k,cell2)
+                     else
+                        layerThickEdgeFlux(k,iEdge) = &
+                                            max(layerThicknessCur(k,cell1), &
+                                                layerThicknessCur(k,cell2))
+                     end if
+                  end do
+               endif
                ! thicknessSum is initialized outside the loop because
                ! on land boundaries maxLevelEdgeTop=0, but I want to
                ! initialize thicknessSum with a nonzero value to avoid
