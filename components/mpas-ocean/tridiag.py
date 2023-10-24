@@ -44,8 +44,8 @@ def _mpas_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
     print(C)
     print('rTemp')
     print(rTemp)
-    #print('bTemp')
-    #print(bTemp)
+    print('bTemp')
+    print(bTemp)
 
     A = ( -2. * dt * vertViscTopOfEdge[N] /
         (layerThickEdgeMean[N-1] + layerThickEdgeMean[N]) /
@@ -87,22 +87,29 @@ def _mod_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
 
     # first pass: set the coefficients
     for k in range(Nsurf+1, N):
-        A[k] = ( -2. * dt * vertViscTopOfEdge[k] /
-            (layerThickEdgeMean[k-1] + layerThickEdgeMean[k]) /
-             layerThickEdgeMean[k] )
+        A[k] = C[k-1]
         C[k] = ( -2. * dt * vertViscTopOfEdge[k+1] /
                (layerThickEdgeMean[k] + layerThickEdgeMean[k+1]) /
                layerThickEdgeMean[k] )
-        bTemp[k] = 1. - A[k] - alpha[k-1]
-        m = A[k] / bTemp[k-1]
-        # bTemp[k] = 1. - A - C[k] - m * C[k-1] # This is the same as the denominator in E14 of Schopf / h[k]
-        # bTemp[k] = 1. - A - A[k-1](1 - C[k-1]/bTemp[k-1]) # this isn't entirely correct because m = f(A[k])
-        # E[k] = C[k] / bTemp[k]
-        # bTemp[k] = 1. - A - A[k-1](1 - E[k-1])
+        # m = A[k] / bTemp[k-1]
         # E[k] = C[k] / (1. - A - C[k] - m * C[k-1]) # this is the version currently in MPAS
+        # bTemp[k] = 1. - A - C[k] - m * C[k-1] # This is the same as the denominator in E14 of Schopf / h[k]
+        # bTemp[k] = 1. - C[k-1] - C[k] - m * C[k-1] # This is the same as the denominator in E14 of Schopf / h[k]
+        # bTemp[k] = 1. - C[k] - C[k-1](1 - m) # this isn't entirely correct because m = f(A[k])
+        # bTemp[k] = 1. - C[k] - C[k-1](1 - A[k] / bTemp[k-1]) # this isn't entirely correct because m = f(A[k])
+        # E[k-1] = A[k] / bTemp[k-1] = C[k-1]/bTemp[k-1]
+        # m = E[k-1]
+        # bTemp[k] = 1. - C[k] - C[k-1](1 - E[k-1])
+        # alpha[k-1] = C[k-1](1-C[k-1]/bTemp[k-1])
+        bTemp[k] = 1. - C[k] - alpha[k-1] # /layerThickEdgeMean[k-1]?
+        m = C[k] / bTemp[k] # Seems like this shoud be bTemp[k] from E20
         rTemp[k] = normalVelocity[k] - m * rTemp[k-1]
+        # Consider: rTemp[k] = (layerThickEdgeMean[k] * normalVelocity[k] - C[k-1] * rTemp[k-1])/bTemp[k]
+        # rTemp[k] = normalVelocity[k] - rTemp[k-1] * C[k-1] / bTemp[k-1]
         # Prep for next iter
-        alpha[k] = A[k]* (layerThickEdgeMean[k]+alpha[k-1]) / (layerThickEdgeMean[k] + A[k] + alpha[k-1])
+        #alpha[k] = C[k] * (1. - alpha[k-1]) / bTemp[k]
+        alpha[k] = C[k](bTemp[k]-C[k-1])/bTemp[k-1]
+        #alpha[k] = A[k]* (layerThickEdgeMean[k]+alpha[k-1]) / (layerThickEdgeMean[k] + A[k] + alpha[k-1])
 
     print('C')
     print(C)
@@ -110,8 +117,8 @@ def _mod_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
     print(rTemp)
     print('alpha')
     print(alpha)
-    #print('btemp')
-    #print(btemp)
+    print('btemp')
+    print(bTemp)
 
     A = ( -2. * dt * vertViscTopOfEdge[N] /
         (layerThickEdgeMean[N-1] + layerThickEdgeMean[N]) /
@@ -129,7 +136,7 @@ def _mod_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
 
 def _schopf_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
 
-    # tridiagonal matrix algorithm currently in mpas-ocean
+    # tridiagonal matrix algorithm from Schopf and Longe
     # vertViscTopOfEdge
     # layerThickEdgeMean
     # dt
@@ -158,10 +165,12 @@ def _schopf_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
 
     # Using POP notation now:
 
-    # This time, we don't divide through by layerThickEdgeMean
+    # We reverse the direction of the k-index from that in Schopf to match MPAS
+    
+    # We also need to multiply by layerThickEdgeMean to match MPAS
     k = Nsurf
-    dz = (layerThickEdgeMean[k] + layerThickEdgeMean[k+1]) / 2.
-    A[k] = dt * vertViscTopOfEdge[k+1] / dz
+    # dz = (layerThickEdgeMean[k] + layerThickEdgeMean[k+1]) / 2.
+    # Before reversing k-direction: A[k] = dt * vertViscTopOfEdge[k+1] / dz
     alpha[k] = 0.0
     D[k] = h[k] * normalVelocity[k]
     DD[k] = h[k] + A[k] # POP: hfac_u(k) = dz(k)/c2dtu = dz/(2 * dt)
