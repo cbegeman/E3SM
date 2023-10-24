@@ -74,42 +74,24 @@ def _mod_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
     N = len(normalVelocity) - 1  # bottom index
 
     C = np.zeros((len(normalVelocity)))
-    A = np.zeros((len(normalVelocity)))
     bTemp = np.zeros((len(normalVelocity)))
     rTemp = np.zeros((len(normalVelocity)))
     alpha = np.zeros((len(normalVelocity)))
 
-    C[Nsurf] = ( -2. * dt * vertViscTopOfEdge[Nsurf+1] /
+    C[Nsurf] = ( 2. * dt * vertViscTopOfEdge[Nsurf+1] /
                (layerThickEdgeMean[Nsurf] + layerThickEdgeMean[Nsurf+1]) /
                layerThickEdgeMean[Nsurf] )
-    bTemp[Nsurf] = 1. - C[Nsurf]
+    bTemp[Nsurf] = 1. + C[Nsurf] # - alpha[k-1]
     rTemp[Nsurf] = normalVelocity[Nsurf]
-
+    alpha[Nsurf] = -C[Nsurf]*(1 + C[Nsurf]/bTemp[Nsurf])
     # first pass: set the coefficients
     for k in range(Nsurf+1, N):
-        A[k] = C[k-1]
-        C[k] = ( -2. * dt * vertViscTopOfEdge[k+1] /
+        C[k] = ( 2. * dt * vertViscTopOfEdge[k+1] /
                (layerThickEdgeMean[k] + layerThickEdgeMean[k+1]) /
                layerThickEdgeMean[k] )
-        # m = A[k] / bTemp[k-1]
-        # E[k] = C[k] / (1. - A - C[k] - m * C[k-1]) # this is the version currently in MPAS
-        # bTemp[k] = 1. - A - C[k] - m * C[k-1] # This is the same as the denominator in E14 of Schopf / h[k]
-        # bTemp[k] = 1. - C[k-1] - C[k] - m * C[k-1] # This is the same as the denominator in E14 of Schopf / h[k]
-        # bTemp[k] = 1. - C[k] - C[k-1](1 - m) # this isn't entirely correct because m = f(A[k])
-        # bTemp[k] = 1. - C[k] - C[k-1](1 - A[k] / bTemp[k-1]) # this isn't entirely correct because m = f(A[k])
-        # E[k-1] = A[k] / bTemp[k-1] = C[k-1]/bTemp[k-1]
-        # m = E[k-1]
-        # bTemp[k] = 1. - C[k] - C[k-1](1 - E[k-1])
-        # alpha[k-1] = C[k-1](1-C[k-1]/bTemp[k-1])
-        bTemp[k] = 1. - C[k] - alpha[k-1] # /layerThickEdgeMean[k-1]?
-        m = C[k] / bTemp[k] # Seems like this shoud be bTemp[k] from E20
-        rTemp[k] = normalVelocity[k] - m * rTemp[k-1]
-        # Consider: rTemp[k] = (layerThickEdgeMean[k] * normalVelocity[k] - C[k-1] * rTemp[k-1])/bTemp[k]
-        # rTemp[k] = normalVelocity[k] - rTemp[k-1] * C[k-1] / bTemp[k-1]
-        # Prep for next iter
-        #alpha[k] = C[k] * (1. - alpha[k-1]) / bTemp[k]
-        alpha[k] = C[k](bTemp[k]-C[k-1])/bTemp[k-1]
-        #alpha[k] = A[k]* (layerThickEdgeMean[k]+alpha[k-1]) / (layerThickEdgeMean[k] + A[k] + alpha[k-1])
+        bTemp[k] = 1. + C[k] - alpha[k-1]
+        alpha[k] = -C[k]*(1 + C[k]/bTemp[k])
+        rTemp[k] = normalVelocity[k] + C[k] * rTemp[k-1]/bTemp[k-1]
 
     print('C')
     print(C)
@@ -120,23 +102,19 @@ def _mod_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
     print('btemp')
     print(bTemp)
 
-    A = ( -2. * dt * vertViscTopOfEdge[N] /
-        (layerThickEdgeMean[N-1] + layerThickEdgeMean[N]) /
-        layerThickEdgeMean[N] )
-    m = A / bTemp[N-1]
-
     # We do not apply bottom drag, unlike mpas
-    normalVelocity[N] = ( (normalVelocity[N] - m * rTemp[N-1]) /
-                          (1. - A - m * C[N-1]) )
+    bTemp[N] = (1. - alpha[N-1]) # + C[k], C[k]=0
+    normalVelocity[N] = ( (normalVelocity[N] + (C[N-1] / bTemp[N-1]) * rTemp[N-1]) /
+                          bTemp[N] )
     # second pass: back substitution
     for k in range(N-1, Nsurf-1, -1):
-        normalVelocity[k] = (rTemp[k] - C[k] * normalVelocity[k+1]) / bTemp[k]
+        normalVelocity[k] = (rTemp[k] + C[k] * normalVelocity[k+1]) / bTemp[k]
 
     return normalVelocity
 
 def _schopf_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
 
-    # tridiagonal matrix algorithm from Schopf and Longe
+    # tridiagonal matrix algorithm currently in mpas-ocean
     # vertViscTopOfEdge
     # layerThickEdgeMean
     # dt
@@ -165,12 +143,10 @@ def _schopf_tridiag(vertViscTopOfEdge, layerThickEdgeMean, dt, normalVelocity):
 
     # Using POP notation now:
 
-    # We reverse the direction of the k-index from that in Schopf to match MPAS
-    
-    # We also need to multiply by layerThickEdgeMean to match MPAS
+    # This time, we don't divide through by layerThickEdgeMean
     k = Nsurf
-    # dz = (layerThickEdgeMean[k] + layerThickEdgeMean[k+1]) / 2.
-    # Before reversing k-direction: A[k] = dt * vertViscTopOfEdge[k+1] / dz
+    dz = (layerThickEdgeMean[k] + layerThickEdgeMean[k+1]) / 2.
+    A[k] = dt * vertViscTopOfEdge[k+1] / dz
     alpha[k] = 0.0
     D[k] = h[k] * normalVelocity[k]
     DD[k] = h[k] + A[k] # POP: hfac_u(k) = dz(k)/c2dtu = dz/(2 * dt)
