@@ -53,9 +53,7 @@ module ocn_wetting_drying
    !--------------------------------------------------------------------
 
    public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4, &
-             ocn_wetting_drying_outflux_barotropic_factor, &
              ocn_wetting_drying_barotropic_factor
-   public :: ocn_wetting_velocity_factor_on_cell_edges
 
    !--------------------------------------------------------------------
    !
@@ -298,7 +296,116 @@ contains
 
 !***********************************************************************
 !
-!  routine ocn_wetting_drying_outflux_barotropic_factor
+!  routine ocn_wetting_drying_barotropic_factor
+!
+!> \brief   Computes velocity to prevent cell drying
+!> \author  Phillip J. Wolfram
+!> \date    03/19/2018
+!> \details
+!>  This routine adds wetting velocity opposed to drying motion
+!>  to prevent cells from drying.
+!
+!-----------------------------------------------------------------------
+   subroutine ocn_wetting_drying_barotropic_factor(sshNew, btrVelocity, &
+                     wettingVelocityBarotropic, err)!{{{
+
+      !-----------------------------------------------------------------
+      !
+      ! input variables
+      !
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), intent(in) :: &
+         sshNew, &   !< predicted SSH
+         btrVelocity !< barotropic velocity on edges
+
+      !-----------------------------------------------------------------
+      !
+      ! input/output variables
+      !
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), intent(inout) :: &
+         wettingVelocityBarotropic !< Input/Output: velocity wettingVelocityFactor
+
+      !-----------------------------------------------------------------
+      !
+      ! output variables
+      !
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< Output: error flag
+
+      !-----------------------------------------------------------------
+      !
+      ! local variables
+      !
+      !-----------------------------------------------------------------
+
+      integer :: cell1, cell2, iEdge, iCell, i
+
+      real (kind=RKIND) :: divFlux, divOutFlux
+      real (kind=RKIND) :: wct
+      real (kind=RKIND) :: hCrit, hRampMin, hEdgeTotal
+
+      character (len=100) :: log_string
+
+      err = 0
+
+      call mpas_log_write('Barotropic wetdry start')
+      hCrit = config_drying_min_cell_height
+      wettingVelocityBarotropic(:) = 1.0_RKIND
+
+      if (.not. config_use_wetting_drying .or. &
+          .not. config_zero_drying_velocity) then
+         call mpas_log_write('Barotropic wetdry return')
+         return
+      endif
+
+      ! need predicted transport velocity to limit drying flux
+      !$omp parallel
+      !$omp do schedule(runtime) private(i, iEdge, wct)
+      do iCell = 1, nCellsAll
+        wct = sshNew(iCell) + bottomDepth(iCell)
+        ! if layer thickness is too small, limit divergence flux outwards with
+        ! opposite velocity
+        if (wct <= &
+            hCrit + config_drying_safety_height) then
+          do i = 1, nEdgesOnCell(iCell)
+            iEdge = edgesOnCell(i, iCell)
+            if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+              wettingVelocityBarotropic(iEdge) = 0.0_RKIND
+            end if
+          end do
+        elseif (config_zero_drying_velocity_ramp .and. &
+               (wct > &
+               hCrit + config_drying_safety_height) .and. &
+               (wct <= config_zero_drying_velocity_ramp_hmax)) then
+
+          hRampMin = config_zero_drying_velocity_ramp_hmin
+          ! Following O'Dea et al. (2021), if total upwinded wct is less than
+          ! 2*critical thickness, apply damping at each edge
+          do i = 1, nEdgesOnCell(iCell)
+            iEdge = edgesOnCell(i, iCell)
+            if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+              wettingVelocityBarotropic(iEdge) = &
+                tanh(50.0_RKIND * (wct - hRampMin)/hRampMin)
+            end if
+          end do
+
+        end if
+
+      end do
+      !$omp end do
+      !$omp end parallel
+      call mpas_log_write('Barotropic wetdry finish')
+
+   end subroutine ocn_wetting_drying_barotropic_factor !}}}
+
+
+!***********************************************************************
+!
+!  routine ocn_wetting_drying_wettingVelocity
 !
 !> \brief   Computes velocity to prevent cell drying
 !> \author  Phillip J. Wolfram
