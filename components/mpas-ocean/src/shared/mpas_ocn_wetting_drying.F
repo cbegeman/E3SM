@@ -53,8 +53,8 @@ module ocn_wetting_drying
 
    public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4, &
              ocn_wetting_drying_outflux_barotropic_factor, &
-             ocn_wetting_drying_barotropic_factor
-   public :: ocn_wetting_velocity_factor_on_cell_edges
+             ocn_wetting_drying_barotropic_factor, &
+             ocn_wetting_velocity_factor_on_cell_edges
    public :: ocn_wetting_drying_update_land_ice
 
    !--------------------------------------------------------------------
@@ -298,7 +298,7 @@ contains
 
 !***********************************************************************
 !
-!  routine ocn_wetting_drying_outflux_barotropic_factor
+!  routine ocn_wetting_drying_wettingVelocity
 !
 !> \brief   Computes velocity to prevent cell drying
 !> \author  Phillip J. Wolfram
@@ -864,9 +864,6 @@ contains
       real (kind=RKIND), dimension(:,:), allocatable :: layerThickness
       character (len=100) :: log_string
 
-      integer:: cellDummy(2), cellCur, CellNei
-      real (kind=RKIND) :: sshCur, sshNei
-      real (kind=RKIND), dimension(:), pointer :: sshCell
       real (kind=RKIND), dimension(:, :), pointer :: layerThicknessCell
 
 
@@ -930,13 +927,13 @@ contains
                 end if
               end if
             end do
-
+          endif
           layerThicknessCell(k, iCell) = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell)) + dt * divOutFlux
           if ( .not. config_use_ssh_gradient_wetting_drying ) then
              call ocn_wetting_velocity_factor_on_cell_edges( &
                       wettingVelocityFactor, layerThicknessCell(k, iCell), normalVelocity, iCell, k)
           end if
-        end do
+        end do ! k
       end do
       !$omp end do
       !$omp end parallel
