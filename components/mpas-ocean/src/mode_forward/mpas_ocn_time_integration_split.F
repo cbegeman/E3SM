@@ -922,10 +922,6 @@ module ocn_time_integration_split
                                  'normalBarotropicVelocitySubcycle', &
                                   normalBarotropicVelocitySubcycleCur, &
                                   oldBtrSubcycleTime)
-            call mpas_pool_get_array(statePool, &
-                                 'wettingVelocityBarotropicSubcycle', &
-                                  wettingVelocityBarotropicSubcycleCur, &
-                                  oldBtrSubcycleTime)
 
             if (config_filter_btr_mode) then
                !$omp parallel
@@ -1091,6 +1087,7 @@ module ocn_time_integration_split
                      nEdges = nEdgesHalo(edgeHaloComputeCounter-1)
                   endif
 
+                  !wettingVelocityBarotropicSubcycleCur(:) = 1.0_RKIND
                   !$omp parallel
                   !$omp do schedule(runtime) &
                   !$omp private(i, cell1, cell2, eoe, CoriolisTerm, &
@@ -1115,8 +1112,9 @@ module ocn_time_integration_split
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                            wettingVelocityBarotropicSubcycleCur(iEdge) * &
                            temp_mask * &
-                           (normalBarotropicVelocitySubcycleCur(iEdge) &
-                            + wettingVelocityBarotropicSubcycleCur(iEdge) * dt / nBtrSubcycles * &
+                           ( normalBarotropicVelocitySubcycleCur(iEdge) + &
+                             wettingVelocityBarotropicSubcycleCur(iEdge) * &
+                             dt / nBtrSubcycles * &
                               ( CoriolisTerm - gravity * &
                                 (sshSubcycleCur(cell2) - sshSubcycleCur(cell1)) / dcEdge(iEdge) + &
                                 barotropicForcing(iEdge)))
@@ -1251,6 +1249,8 @@ module ocn_time_integration_split
 
                ! a cell halo layer is now corrupted - decrement counter
                cellHaloComputeCounter = cellHaloComputeCounter - 1
+               ! TODO replace this with call to wetdry routine
+               wettingVelocityBarotropicSubcycleNew(:) = 1.0_RKIND
 
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: VELOCITY CORRECTOR STEP
@@ -1413,11 +1413,12 @@ module ocn_time_integration_split
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                           temp_mask * &
                           wettingVelocityBarotropicSubcycleNew(iEdge) * &
-                          (normalBarotropicVelocitySubcycleCur(iEdge) + &
-                           wettingVelocityBarotropicSubcycleNew(iEdge) * dt / nBtrSubcycles * &
-                           ( CoriolisTerm - gravity * &
-                             (sshCell2 - sshCell1) / dcEdge(iEdge) + &
-                             barotropicForcing(iEdge)))
+                          ( normalBarotropicVelocitySubcycleCur(iEdge) + &
+                            wettingVelocityBarotropicSubcycleNew(iEdge) * &
+                            dt / nBtrSubcycles * &
+                             ( CoriolisTerm - gravity * &
+                               (sshCell2 - sshCell1) / dcEdge(iEdge) + &
+                               barotropicForcing(iEdge)))
 
                   end do
                   !$omp end do
@@ -1574,10 +1575,6 @@ module ocn_time_integration_split
                                   'normalBarotropicVelocitySubcycle', &
                                    normalBarotropicVelocitySubcycleNew, &
                                    newBtrSubcycleTime)
-               call mpas_pool_get_array(statePool, &
-                                  'wettingVelocityBarotropicSubcycle', &
-                                   wettingVelocityBarotropicSubcycleNew, &
-                                   newBtrSubcycleTime)
 
                ! normalBarotropicVelocityNew =
                ! normalBarotropicVelocityNew +
@@ -1591,8 +1588,8 @@ module ocn_time_integration_split
                !$omp private(k)
                do iEdge = 1, nEdgesOwned
                   normalBarotropicVelocityNew(iEdge) = &
-                  normalBarotropicVelocityNew(iEdge) + &
-                  normalBarotropicVelocitySubcycleNew(iEdge)
+                     normalBarotropicVelocityNew(iEdge) + &
+                     normalBarotropicVelocitySubcycleNew(iEdge)
                   do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
                      wettingVelocityBaroclinicNew(k, iEdge) = &
                         wettingVelocityBaroclinicNew(k, iEdge) + &
