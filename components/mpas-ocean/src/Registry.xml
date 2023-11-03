@@ -2400,6 +2400,13 @@
 		/>
 		<var name="barotropicDrag" type="real" dimensions="nEdges Time" units="m s^-1"
 			 description="barotropic velocity, used in subcycling in stage 2 of split-explicit time-stepping"
+		/>
+		<var name="wettingVelocityBarotropicSubcycle" type="real" dimensions="nEdges Time" units="m s^-1"
+			 description="barotropic wetting velocity factor, used in split-explicit time-stepping"
+			 packages="splitTimeIntegrator"
+		/>
+		<var name="wettingVelocityBaroclinic" type="real" dimensions="nVertLevels nEdges Time" units="m s^-1"
+			 description="baroclinic wetting velocity factor, used in split-explicit time-stepping"
 			 packages="splitTimeIntegrator"
 		/>
 
@@ -2960,7 +2967,7 @@
 			 packages="forwardMode;analysisMode"
 		/>
 		<var name="wettingVelocityFactor" type="real" dimensions="nVertLevels nEdges Time"
-			 description="Scaling factor for normalVelocity and its tendency to prevent drying of cell between 0 (no scaling) and 1 (normalVelocity and tendency set to 0)."
+			 description="Scaling factor for normalVelocity and its tendency to prevent drying of cell between 0 (normalVelocity and tendency set to 0) and 1 (no scaling). Used in RK4 time stepping"
 			 packages="forwardMode"
 		/>
 		<var name="vertAleTransportTop" type="real" dimensions="nVertLevelsP1 nCells Time" units="m s^-1"
