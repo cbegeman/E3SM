@@ -214,7 +214,9 @@ module ocn_time_integration_split
          sshCur,                      &! sea sfc height at current time
          sshNew,                      &! sea sfc height at new     time
          normalBarotropicVelocityCur, &! barotropic vel at current time
-         normalBarotropicVelocityNew   ! barotropic vel at new     time
+         normalBarotropicVelocityNew, &! barotropic vel at new     time
+         wettingVelocityBarotropicSubcycleCur,&! wetting factor at current time
+         wettingVelocityBarotropicSubcycleNew  ! wetting factor at current time
 
       real (kind=RKIND), dimension(:,:), pointer :: &
          normalBaroclinicVelocityCur, &! baroclinic vel at current time
@@ -227,6 +229,8 @@ module ocn_time_integration_split
          highFreqThicknessNew,        &! high frq thick at new     time
          lowFreqDivergenceCur,        &! low frq div    at current time
          lowFreqDivergenceNew,        &! low frq div    at new     time
+         wettingVelocityBaroclinicCur,&! wetting factor at current time
+         wettingVelocityBaroclinicNew,&! wetting factor at current time
          tracerGroupIdealAgeMask       ! mask for resetting surface ideal age
 
       type (field1DReal), pointer :: &
@@ -374,6 +378,11 @@ module ocn_time_integration_split
       call mpas_pool_get_array(statePool, 'lowFreqDivergence', &
                                            lowFreqDivergenceNew, 2)
 
+      call mpas_pool_get_array(statePool, 'wettingVelocityBaroclinic', &
+                                           wettingVelocityBaroclinicCur, 1)
+      call mpas_pool_get_array(statePool, 'wettingVelocityBaroclinic', &
+                                           wettingVelocityBaroclinicNew, 2)
+
       call mpas_pool_get_dimension_scalar(tracersPool, 'index_salinity', &
                                                         indexSalinity)
 
@@ -437,7 +446,8 @@ module ocn_time_integration_split
       !$acc parallel present(normalVelocityCur, normalBarotropicVelocityCur, &
       !$acc    sshCur, layerThicknessCur, normalBaroClinicVelocityCur, &
       !$acc    normalVelocityNew, normalBaroclinicVelocityNew, sshNew, &
-      !$acc    layerThicknessNew, minLevelCell, maxLevelCell)
+      !$acc    layerThicknessNew, minLevelCell, maxLevelCell, &
+      !$acc    wettingVelocityBaroclinicCur, wettingVelocityBaroclinicNew)
 #endif
 
 #ifdef MPAS_OPENACC
@@ -457,6 +467,8 @@ module ocn_time_integration_split
 
          normalBaroclinicVelocityNew(k,iEdge) = &
          normalBaroclinicVelocityCur(k,iEdge)
+         wettingVelocityBaroclinicNew(k,iEdge) = &
+         wettingVelocityBaroclinicCur(k,iEdge)
       end do
       end do
 #ifndef MPAS_OPENACC
@@ -765,8 +777,9 @@ module ocn_time_integration_split
                   !  -fEdge(iEdge)*normalBaroclinicVelocityPerp(k,iEdge)
                   uTemp(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge) &
                            + dt * (normalVelocityTend(k,iEdge) &
-                           + normalVelocityNew(k,iEdge) &
-                           + sshGrad )
+                           + wettingVelocityBaroclinicCur(k,iEdge) * &
+                             ( normalVelocityNew(k,iEdge) &
+                             + sshGrad ))
                enddo ! vertical
 
                ! thicknessSum is initialized outside the loop because
@@ -794,8 +807,10 @@ module ocn_time_integration_split
                   !        {\bf u}^{'}_{k,n} +{\bf u}'_{k,n+1}\right)
                   ! so that normalBaroclinicVelocityNew is at time n+1/2
                   normalBaroclinicVelocityNew(k,iEdge) = 0.5_RKIND*( &
-                  normalBaroclinicVelocityCur(k,iEdge) + uTemp(k,iEdge) - &
-                         dt * barotropicForcing(iEdge))
+                     normalBaroclinicVelocityCur(k,iEdge) + &
+                     wettingVelocityBaroclinicCur(k,iEdge) * &
+                     (uTemp(k,iEdge) - &
+                      dt * barotropicForcing(iEdge)))
 
                enddo
 
@@ -907,6 +922,10 @@ module ocn_time_integration_split
                                  'normalBarotropicVelocitySubcycle', &
                                   normalBarotropicVelocitySubcycleCur, &
                                   oldBtrSubcycleTime)
+            call mpas_pool_get_array(statePool, &
+                                 'wettingVelocityBarotropicSubcycle', &
+                                  wettingVelocityBarotropicSubcycleCur, &
+                                  oldBtrSubcycleTime)
 
             if (config_filter_btr_mode) then
                !$omp parallel
@@ -941,6 +960,8 @@ module ocn_time_integration_split
 
                ! barotropicThicknessFlux = 0
                barotropicThicknessFlux(iEdge) = 0.0_RKIND
+               ! wettingVelocityBaroclinic will accumulate the sum of wettingVelocityBarotropic
+               wettingVelocityBaroclinicNew(:, iEdge) = wettingVelocityBaroclinicCur(:, iEdge)
             end do
             !$omp end do
             !$omp end parallel
@@ -998,6 +1019,14 @@ module ocn_time_integration_split
                                   newBtrSubcycleTime)
                   call mpas_pool_get_array(statePool, 'sshSubcycle', &
                                   sshSubcycleCur, oldBtrSubcycleTime)
+                  call mpas_pool_get_array(statePool, &
+                                  'wettingVelocityBarotropicSubcycle', &
+                                  wettingVelocityBarotropicSubcycleCur, &
+                                  oldBtrSubcycleTime)
+                  call mpas_pool_get_array(statePool, &
+                                  'wettingVelocityBarotropicSubcycle', &
+                                  wettingVelocityBarotropicSubcycleNew, &
+                                  newBtrSubcycleTime)
 
                   ! TODO: Modify this to eliminate pointer reassigning
                   ! Subtract tidal potential from ssh, if needed
@@ -1084,12 +1113,13 @@ module ocn_time_integration_split
                      end do
 
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
-                           temp_mask* &
+                           wettingVelocityBarotropicSubcycleCur(iEdge) * &
+                           temp_mask * &
                            (normalBarotropicVelocitySubcycleCur(iEdge) &
-                            + dt/nBtrSubcycles*(CoriolisTerm - gravity &
-                             *(sshSubcycleCur(cell2) - &
-                               sshSubcycleCur(cell1))/dcEdge(iEdge) + &
-                               barotropicForcing(iEdge)))
+                            + wettingVelocityBarotropicSubcycleCur(iEdge) * dt / nBtrSubcycles * &
+                              ( CoriolisTerm - gravity * &
+                                (sshSubcycleCur(cell2) - sshSubcycleCur(cell1)) / dcEdge(iEdge) + &
+                                barotropicForcing(iEdge)))
 
                   end do ! edges
                   !$omp end do
@@ -1243,6 +1273,10 @@ module ocn_time_integration_split
                   call mpas_pool_get_array(statePool, 'sshSubcycle', &
                                                        sshSubcycleNew,&
                                                     newBtrSubcycleTime)
+                  call mpas_pool_get_array(statePool, &
+                                'wettingVelocityBarotropicSubcycle', &
+                                 wettingVelocityBarotropicSubcycleNew, &
+                                 newBtrSubcycleTime)
 
                   ! TODO: change to avoid pointer reassignment
                   ! Subtract tidal potential from ssh, if needed
@@ -1378,11 +1412,12 @@ module ocn_time_integration_split
                      !      - g*grad(SSH) + G)
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                           temp_mask * &
-                          (normalBarotropicVelocitySubcycleCur(iEdge) &
-                           + dt/nBtrSubcycles &
-                           *(CoriolisTerm - gravity* &
-                             (sshCell2 - sshCell1)/dcEdge(iEdge) &
-                           + barotropicForcing(iEdge)))
+                          wettingVelocityBarotropicSubcycleNew(iEdge) * &
+                          (normalBarotropicVelocitySubcycleCur(iEdge) + &
+                           wettingVelocityBarotropicSubcycleNew(iEdge) * dt / nBtrSubcycles * &
+                           ( CoriolisTerm - gravity * &
+                             (sshCell2 - sshCell1) / dcEdge(iEdge) + &
+                             barotropicForcing(iEdge)))
 
                   end do
                   !$omp end do
@@ -1539,6 +1574,10 @@ module ocn_time_integration_split
                                   'normalBarotropicVelocitySubcycle', &
                                    normalBarotropicVelocitySubcycleNew, &
                                    newBtrSubcycleTime)
+               call mpas_pool_get_array(statePool, &
+                                  'wettingVelocityBarotropicSubcycle', &
+                                   wettingVelocityBarotropicSubcycleNew, &
+                                   newBtrSubcycleTime)
 
                ! normalBarotropicVelocityNew =
                ! normalBarotropicVelocityNew +
@@ -1548,11 +1587,17 @@ module ocn_time_integration_split
                ! be merged with the above code.
 
                !$omp parallel
-               !$omp do schedule(runtime)
+               !$omp do schedule(runtime) &
+               !$omp private(k)
                do iEdge = 1, nEdgesOwned
                   normalBarotropicVelocityNew(iEdge) = &
                   normalBarotropicVelocityNew(iEdge) + &
                   normalBarotropicVelocitySubcycleNew(iEdge)
+                  do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
+                     wettingVelocityBaroclinicNew(k, iEdge) = &
+                        wettingVelocityBaroclinicNew(k, iEdge) + &
+                        wettingVelocityBarotropicSubcycleNew(iEdge)
+                  end do  ! k
                end do  ! iEdge
                !$omp end do
                !$omp end parallel
@@ -1577,7 +1622,8 @@ module ocn_time_integration_split
             call mpas_timer_start('btr se norm')
 
             !$omp parallel
-            !$omp do schedule(runtime)
+            !$omp do schedule(runtime) &
+            !$omp private(k)
             do iEdge = 1, nEdgesOwned
                barotropicThicknessFlux(iEdge) = &
                barotropicThicknessFlux(iEdge) &
@@ -1586,6 +1632,12 @@ module ocn_time_integration_split
                normalBarotropicVelocityNew(iEdge) = &
                normalBarotropicVelocityNew(iEdge) &
                      / (nBtrSubcycles*config_btr_subcycle_loop_factor + 1)
+
+               do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
+                  wettingVelocityBaroclinicNew(k, iEdge) = &
+                  wettingVelocityBaroclinicNew(k, iEdge) &
+                        / (nBtrSubcycles*config_btr_subcycle_loop_factor + 1)
+               end do
             end do
             !$omp end do
             !$omp end parallel
@@ -2854,12 +2906,14 @@ module ocn_time_integration_split
 
       real (kind=RKIND), dimension(:), pointer :: &
          refBottomDepth,         &! reference bottom depth
+         wettingVelocityBarotropicSubcycle,&! wetting factor at current time
          normalBarotropicVelocity ! normal barotropic velocity
 
       real (kind=RKIND), dimension(:,:), pointer :: &
-         layerThickness,          &! layer thickness cell center
-         normalBaroclinicVelocity,&! normal baroclinic velocity
-         normalVelocity            ! normal velocity (total)
+         layerThickness,           &! layer thickness cell center
+         normalBaroclinicVelocity, &! normal baroclinic velocity
+         wettingVelocityBaroclinic,&! wetting factor at current time
+         normalVelocity             ! normal velocity (total)
 
       type (mpas_time_type) :: &
          nowTime          ! current model time
@@ -2972,6 +3026,10 @@ module ocn_time_integration_split
                                               normalBarotropicVelocity, 1)
          call mpas_pool_get_array(statePool, 'normalBaroclinicVelocity', &
                                               normalBaroclinicVelocity, 1)
+         call mpas_pool_get_array(statePool, 'wettingVelocityBarotropicSubcycle', &
+                                              wettingVelocityBarotropicSubcycle, 1)
+         call mpas_pool_get_array(statePool, 'wettingVelocityBaroclinic', &
+                                              wettingVelocityBaroclinic, 1)
 
          call mpas_pool_get_array(meshPool, 'refBottomDepth', refBottomDepth)
          call mpas_pool_get_array(meshPool, 'cellsOnEdge', cellsOnEdge)
@@ -3058,6 +3116,8 @@ module ocn_time_integration_split
 
          endif ! split explicit
 
+         wettingVelocityBarotropicSubcycle(:) = 1.0_RKIND
+         wettingVelocityBaroclinic(:,:) = 1.0_RKIND
       end if ! not restart
 
       ! Create reusable halo exchange for subcycling
@@ -3066,6 +3126,8 @@ module ocn_time_integration_split
                                            'sshSubcycle')
       call mpas_dmpar_exch_group_add_field(domain, subcycleGroupName, &
                                   'normalBarotropicVelocitySubcycle')
+      call mpas_dmpar_exch_group_add_field(domain, subcycleGroupName, &
+                                  'wettingVelocityBarotropicSubcycle')
       call mpas_dmpar_exch_group_build_reusable_buffers(domain, &
                                                      subcycleGroupName)
 
