@@ -44,6 +44,7 @@ module ocn_time_integration_split
    use ocn_vertical_advection
    use ocn_vertical_remap
    use ocn_time_average_coupled
+   use ocn_wetting_drying
 
    use ocn_effective_density_in_land_ice
    use ocn_surface_land_ice_fluxes
@@ -1087,7 +1088,6 @@ module ocn_time_integration_split
                      nEdges = nEdgesHalo(edgeHaloComputeCounter-1)
                   endif
 
-                  !wettingVelocityBarotropicSubcycleCur(:) = 1.0_RKIND
                   !$omp parallel
                   !$omp do schedule(runtime) &
                   !$omp private(i, cell1, cell2, eoe, CoriolisTerm, &
@@ -1249,8 +1249,8 @@ module ocn_time_integration_split
 
                ! a cell halo layer is now corrupted - decrement counter
                cellHaloComputeCounter = cellHaloComputeCounter - 1
-               ! TODO replace this with call to wetdry routine
-               wettingVelocityBarotropicSubcycleNew(:) = 1.0_RKIND
+               call ocn_wetting_drying_barotropic_factor(sshSubcycleNew, &
+                         btrvel_temp, wettingVelocityBarotropicSubcycleNew, err)
 
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: VELOCITY CORRECTOR STEP
