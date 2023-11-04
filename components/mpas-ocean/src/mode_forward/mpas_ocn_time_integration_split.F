@@ -761,6 +761,13 @@ module ocn_time_integration_split
          endif
 #endif
 
+         !$omp parallel
+         !$omp do schedule(runtime)
+         do iCell = 1, nCellsAll
+            wettingVelocityFactor(:, iCell) = 1.0_RKIND - wettingVelocityBaroclinicNew(:, iCell)
+         end do
+         !$omp end do
+         !$omp end parallel
          ! This is where the barotropic drag is removed in an explicit fashion
          call ocn_tend_vel(domain, tendPool, statePool, forcingPool, &
                            stage1_tend_time, domain % dminfo, dt)
