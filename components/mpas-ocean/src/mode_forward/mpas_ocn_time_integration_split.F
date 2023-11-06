@@ -838,8 +838,8 @@ module ocn_time_integration_split
                   ! so that normalBaroclinicVelocityNew is at time n+1/2
                   normalBaroclinicVelocityNew(k,iEdge) = 0.5_RKIND*( &
                      normalBaroclinicVelocityCur(k,iEdge) + &
-                     wettingVelocityBaroclinicCur(k,iEdge) * &
                      (uTemp(k,iEdge) - &
+                      wettingVelocityBaroclinicCur(k,iEdge) * &
                       dt * barotropicForcing(iEdge)))
 
                enddo
