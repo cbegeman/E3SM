@@ -662,6 +662,7 @@ module ocn_time_integration_split
          end if
 
          call mpas_timer_start('se loop')
+         call mpas_log_write('se loop start')
 
          stage1_tend_time = min(splitExplicitStep,2)
 
@@ -700,6 +701,7 @@ module ocn_time_integration_split
          !           long timestep
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+         call mpas_log_write('se stage 1')
          if (config_use_freq_filtered_thickness) then
 
             call mpas_timer_start("se freq-filtered-thick computations")
@@ -777,6 +779,7 @@ module ocn_time_integration_split
          end do
          !$omp end do
          !$omp end parallel
+         call mpas_log_write('tend vel')
          call ocn_tend_vel(domain, tendPool, statePool, forcingPool, &
                            stage1_tend_time, domain % dminfo, dt)
 
@@ -789,6 +792,7 @@ module ocn_time_integration_split
          do j=1,numClinicIterations(splitExplicitStep)
 
             call mpas_timer_start('bcl iters on linear Coriolis')
+            call mpas_log_write('bcl iter $i on linear Coriolis', intArgs=(/ j /))
 
             ! Put f*normalBaroclinicVelocity^{perp} in
             ! normalVelocityNew as a work variable
@@ -800,6 +804,7 @@ module ocn_time_integration_split
 
             allocate(uTemp(nVertLevels,nEdgesOwned))
 
+            call mpas_log_write('bcl iter btr forcing: start')
             !$omp parallel
             !$omp do schedule(runtime) &
             !$omp private(k, cell1, cell2, uTemp, sshGrad, &
@@ -850,6 +855,7 @@ module ocn_time_integration_split
                barotropicForcing(iEdge) = splitFact* &
                               normalThicknessFluxSum/thicknessSum/dt
 
+               call mpas_log_write('bcl iter btr forcing: normalBclVelNew')
                do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
                   ! These two steps are together here:
                   !{\bf u}'_{k,n+1} =
@@ -868,6 +874,7 @@ module ocn_time_integration_split
             enddo ! iEdge
             !$omp end do
             !$omp end parallel
+            call mpas_log_write('bcl iter btr forcing: complete')
 
             baroclinicThickness(:) = 0.0_RKIND
             !$omp parallel
@@ -911,6 +918,7 @@ module ocn_time_integration_split
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
          call mpas_timer_start("se btr vel")
+         call mpas_log_write('se Stage 2 btr vel')
 
          oldBtrSubcycleTime = 1
          newBtrSubcycleTime = 2
@@ -1033,6 +1041,8 @@ module ocn_time_integration_split
 
             call mpas_timer_start('btr se subcycle loop')
             do j = 1, nBtrSubcycles * config_btr_subcycle_loop_factor
+               call mpas_log_write('btr iter number: $i', &
+                  intArgs=(/ j /))
 
                ! Update halos if needed
                if (cellHaloComputeCounter < neededHalos) then
@@ -1306,6 +1316,7 @@ module ocn_time_integration_split
                ! Barotropic subcycle: VELOCITY CORRECTOR STEP
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+               call mpas_log_write('Velocity corrector step')
                do BtrCorIter = 1, config_n_btr_cor_iter
                   uPerpTime = newBtrSubcycleTime
 
@@ -1485,6 +1496,7 @@ module ocn_time_integration_split
                ! Barotropic subcycle: SSH CORRECTOR STEP
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+               call mpas_log_write('SSH corrector step')
                if (config_btr_solve_SSH2) then
 
                   allocate(sshTemp(nCellsAll))
@@ -1633,6 +1645,7 @@ module ocn_time_integration_split
                ! iteration is limited to one, this could
                ! be merged with the above code.
 
+               call mpas_log_write('Update normalBarotropicVelocityNew, wettingVelocityBaroclinicNew')
                !$omp parallel
                !$omp do schedule(runtime) &
                !$omp private(k)
@@ -1847,6 +1860,7 @@ module ocn_time_integration_split
          ! monotonic advection.
 
          call mpas_timer_start('se thick tend')
+         call mpas_log_write('se stage 3')
 
          ! compute vertAleTransportTop.  Use normalTransportVelocity
          ! for advection of layerThickness and tracers.
@@ -1893,9 +1907,11 @@ module ocn_time_integration_split
          call mpas_timer_stop("se halo thickness")
 
          call mpas_timer_start('se tracer tend', .false.)
+         call mpas_log_write('se tracer tend start')
          call ocn_tend_tracer(tendPool, statePool, forcingPool, &
                               meshPool, swForcingPool, &
                               dt, activeTracersOnly, 2)
+         call mpas_log_write('se tracer tend complete')
 
          call mpas_pool_get_array(tracersPool, 'activeTracers', &
                                                 tracersGroupCur, 1)
@@ -1982,6 +1998,7 @@ module ocn_time_integration_split
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
          if (splitExplicitStep < numTSIterations) then
+            call mpas_log_write('se prep for next iter')
 
             ! Get indices for dynamic tracers (Includes T&S).
             call mpas_pool_get_dimension_scalar(tracersPool,'activeGRP_start',&
@@ -2103,6 +2120,7 @@ module ocn_time_integration_split
             call ocn_diagnostic_solve(dt, statePool, forcingPool, &
                                       meshPool, verticalMeshPool, scratchPool, &
                                       tracersPool, 2, full=.false.)
+            call mpas_log_write('se prep for next iter complete')
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          ! If large iteration complete, compute all variables at
@@ -2111,6 +2129,7 @@ module ocn_time_integration_split
 
          elseif (splitExplicitStep == numTSIterations) then
 
+            call mpas_log_write('se wrap up iteration')
 #ifdef MPAS_OPENACC
             !$acc parallel present(minLevelCell, maxLevelCell) &
             !$acc   present(layerThicknessTend) &
@@ -2477,6 +2496,7 @@ module ocn_time_integration_split
 #ifdef MPAS_OPENACC
             !$acc end parallel
 #endif
+            call mpas_log_write('se wrap up iteration complete')
 
          endif ! splitExplicitStep
 
@@ -2545,6 +2565,7 @@ module ocn_time_integration_split
          endif
 #endif
 
+         call mpas_log_write('se loop finished')
          call mpas_timer_stop('se loop fini')
          call mpas_timer_stop('se loop')
 
@@ -2554,6 +2575,7 @@ module ocn_time_integration_split
       ! END large iteration loop
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+      call mpas_log_write("se actions outside loop")
       call mpas_timer_start("se implicit vert mix")
 
       ! Call ocean diagnostic solve in preparation for vertical mixing.
@@ -2584,6 +2606,7 @@ module ocn_time_integration_split
          !$acc enter data copyin(landIceDraft)
       endif
 #endif
+      call mpas_log_write("se implicit diags")
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
 
@@ -2634,6 +2657,7 @@ module ocn_time_integration_split
       !$acc exit data delete(layerThicknessNew, normalVelocityNew)
 #endif
 
+      call mpas_log_write("se implicit vert mix")
       call ocn_vmix_implicit(dt, meshPool, statePool, forcingPool, &
                              scratchPool, err, 2)
 
@@ -2687,6 +2711,7 @@ module ocn_time_integration_split
       call mpas_timer_stop("se implicit vert mix")
 
       call mpas_timer_start('se fini')
+      call mpas_log_write("se final actions")
 
 #ifdef MPAS_OPENACC
       !$acc enter data copyin(layerThicknessNew, normalVelocityNew)
@@ -2900,6 +2925,7 @@ module ocn_time_integration_split
       end if
       deallocate(baroclinicThickness)
 
+      call mpas_log_write("se final actions complete")
       call mpas_timer_stop('se fini')
       call mpas_timer_stop("se timestep")
 
