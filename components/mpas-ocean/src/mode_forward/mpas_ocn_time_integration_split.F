@@ -1269,6 +1269,7 @@ module ocn_time_integration_split
                ! Barotropic subcycle: VELOCITY CORRECTOR STEP
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+               call mpas_log_write('Velocity corrector step')
                do BtrCorIter = 1, config_n_btr_cor_iter
                   uPerpTime = newBtrSubcycleTime
 
@@ -1448,6 +1449,7 @@ module ocn_time_integration_split
                ! Barotropic subcycle: SSH CORRECTOR STEP
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+               call mpas_log_write('SSH corrector step')
                if (config_btr_solve_SSH2) then
 
                   allocate(sshTemp(nCellsAll))
@@ -1596,6 +1598,7 @@ module ocn_time_integration_split
                ! iteration is limited to one, this could
                ! be merged with the above code.
 
+               call mpas_log_write('Update normalBarotropicVelocityNew, wettingVelocityBaroclinicNew')
                !$omp parallel
                !$omp do schedule(runtime) &
                !$omp private(k)
@@ -1810,6 +1813,7 @@ module ocn_time_integration_split
          ! monotonic advection.
 
          call mpas_timer_start('se thick tend')
+         call mpas_log_write('se stage 3')
 
          ! compute vertAleTransportTop.  Use normalTransportVelocity
          ! for advection of layerThickness and tracers.
