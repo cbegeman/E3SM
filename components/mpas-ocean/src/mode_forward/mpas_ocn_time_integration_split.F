@@ -812,7 +812,6 @@ module ocn_time_integration_split
                barotropicForcing(iEdge) = splitFact* &
                               normalThicknessFluxSum/thicknessSum/dt
 
-               call mpas_log_write('bcl iter btr forcing: normalBclVelNew')
                do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
                   ! These two steps are together here:
                   !{\bf u}'_{k,n+1} =
