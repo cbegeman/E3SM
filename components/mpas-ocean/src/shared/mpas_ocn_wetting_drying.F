@@ -348,14 +348,13 @@ contains
 
       real (kind=RKIND) :: divFlux, divOutFlux
       real (kind=RKIND) :: wct
-      real (kind=RKIND) :: hCrit, hRampMin, hEdgeTotal
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax
 
       character (len=100) :: log_string
 
       err = 0
 
       call mpas_log_write('Barotropic wetdry start')
-      hCrit = config_drying_min_cell_height
       wettingVelocityBarotropic(:) = 1.0_RKIND
 
       if (.not. config_use_wetting_drying .or. &
@@ -371,8 +370,11 @@ contains
         wct = sshNew(iCell) + bottomDepth(iCell)
         ! if layer thickness is too small, limit divergence flux outwards with
         ! opposite velocity
-        if (wct <= &
-            hCrit + config_drying_safety_height) then
+        hCrit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1) + &
+                config_drying_safety_height
+        hRampMax = config_zero_drying_velocity_ramp_hmax * &
+                   (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+        if (wct <= hCrit) then
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
@@ -380,11 +382,10 @@ contains
             end if
           end do
         elseif (config_zero_drying_velocity_ramp .and. &
-               (wct > &
-               hCrit + config_drying_safety_height) .and. &
-               (wct <= config_zero_drying_velocity_ramp_hmax)) then
+               (wct > hCrit) .and. &
+               (wct <= hRampMax)) then
 
-          hRampMin = config_zero_drying_velocity_ramp_hmin
+          hRampMin = config_zero_drying_velocity_ramp_hmin * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
           ! Following O'Dea et al. (2021), if total upwinded wct is less than
           ! 2*critical thickness, apply damping at each edge
           do i = 1, nEdgesOnCell(iCell)
@@ -471,9 +472,9 @@ contains
 
       integer :: cell1, cell2, iEdge, iCell, k, i
 
-      real (kind=RKIND) :: divOutFlux
-      real (kind=RKIND) :: columnThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal
+      real (kind=RKIND) :: divFlux, divOutFlux
+      real (kind=RKIND) :: layerThickness
+      real (kind=RKIND) :: hCrit, hRampMin
 
       character (len=100) :: log_string
 
