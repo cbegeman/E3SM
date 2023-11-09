@@ -809,6 +809,14 @@ module ocn_time_integration_split
                   thicknessSum = thicknessSum + &
                                  layerThickEdgeFlux(k,iEdge)
                enddo
+               if (normalThicknessFluxSum < 1.0e-8_RKIND) then
+                  call mpas_log_write('normalThicknessFluxSum($i) = $r', &
+                     intArgs=(/iEdge/), realArgs=(/normalThicknessFluxSum/))
+               endif
+               if (thicknessFluxSum < 1.0e-8_RKIND) then
+                  call mpas_log_write('thicknessFluxSum($i) = $r', &
+                     intArgs=(/iEdge/), realArgs=(/thicknessFluxSum/))
+               endif
                barotropicForcing(iEdge) = splitFact* &
                               normalThicknessFluxSum/thicknessSum/dt
 
