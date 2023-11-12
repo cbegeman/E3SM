@@ -773,6 +773,12 @@ module ocn_time_integration_split
             !$omp private(k, cell1, cell2, uTemp, sshGrad, &
             !$omp         normalThicknessFluxSum, thicknessSum)
             do iEdge = 1, nEdgesOwned
+
+               if (maxLevelEdgeTop(iEdge) == 0) then
+                  barotropicForcing(iEdge) = 0.0_RKIND
+                  cycle
+               endif
+
                cell1 = cellsOnEdge(1,iEdge)
                cell2 = cellsOnEdge(2,iEdge)
                ! could put this after with uTemp(maxleveledgetop+1:nvertlevels)=0
@@ -809,13 +815,24 @@ module ocn_time_integration_split
                   thicknessSum = thicknessSum + &
                                  layerThickEdgeFlux(k,iEdge)
                enddo
-               if (normalThicknessFluxSum < 1.0e-8_RKIND) then
+               if (ABS(normalThicknessFluxSum) > 10.0_RKIND) then
                   call mpas_log_write('normalThicknessFluxSum($i) = $r', &
                      intArgs=(/iEdge/), realArgs=(/normalThicknessFluxSum/))
                endif
-               if (thicknessFluxSum < 1.0e-8_RKIND) then
-                  call mpas_log_write('thicknessFluxSum($i) = $r', &
-                     intArgs=(/iEdge/), realArgs=(/thicknessFluxSum/))
+               if (ABS(normalThicknessFluxSum) > 10.0_RKIND .or. thicknessSum < 1.0e-8_RKIND) then
+                  if (maxLevelEdgeTop(iEdge) == 0) &
+                     call mpas_log_write('maxLevelEdgeTop($i) = 0', intArgs=(/iEdge/))
+                  k = minLevelEdgeBot(iEdge)
+                  call mpas_log_write('layerThickEdgeFlux($i,$i) = $r', &
+                     intArgs=(/k,iEdge/), realArgs=(/layerThickEdgeFlux(k,iEdge)/))
+                  do k = minLevelEdgeBot(iEdge)+1, maxLevelEdgeTop(iEdge)
+                     call mpas_log_write('layerThickEdgeFlux($i,$i) = $r', &
+                        intArgs=(/k,iEdge/), realArgs=(/layerThickEdgeFlux(k,iEdge)/))
+                  enddo
+                  call mpas_log_write('normalThicknessFluxSum($i) = $r', &
+                     intArgs=(/iEdge/), realArgs=(/normalThicknessFluxSum/))
+                  call mpas_log_write('thicknessSum($i) = $r', &
+                     intArgs=(/iEdge/), realArgs=(/thicknessSum/), messageType=MPAS_LOG_CRIT)
                endif
                barotropicForcing(iEdge) = splitFact* &
                               normalThicknessFluxSum/thicknessSum/dt
@@ -1985,6 +2002,12 @@ module ocn_time_integration_split
             do iCell = 1, nCellsAll
             do k = minLevelCell(iCell), maxLevelCell(iCell)
 
+               if (abs(layerThicknessCur(k,iCell))>10.0_RKIND ) &
+                  call mpas_log_write('layerThicknessCur($i,$i)=$r', &
+                     intArgs=(/k,iCell/), realArgs=(/layerThicknessCur(k,iCell)/))
+               if (abs(layerThicknessTend(k,iCell))>10.0_RKIND ) &
+                  call mpas_log_write('layerThicknessTend($i,$i)=$r', &
+                     intArgs=(/k,iCell/), realArgs=(/layerThicknessTend(k,iCell)/))
                ! this is h_{n+1}
                temp_h = layerThicknessCur(k,iCell) + dt* &
                layerThicknessTend(k,iCell)
@@ -2122,6 +2145,12 @@ module ocn_time_integration_split
             !$acc loop vector
 #endif
             do k = minLevelCell(iCell), maxLevelCell(iCell)
+               if (abs(layerThicknessCur(k,iCell))>10.0_RKIND ) &
+                  call mpas_log_write('layerThicknessCur($i,$i)=$r', &
+                     intArgs=(/k,iCell/), realArgs=(/layerThicknessCur(k,iCell)/))
+               if (abs(layerThicknessTend(k,iCell))>10.0_RKIND ) &
+                  call mpas_log_write('layerThicknessTend($i,$i)=$r', &
+                     intArgs=(/k,iCell/), realArgs=(/layerThicknessTend(k,iCell)/))
                ! this is h_{n+1}
                layerThicknessNew(k,iCell) = &
                                      layerThicknessCur(k,iCell) + &
@@ -3108,6 +3137,7 @@ module ocn_time_integration_split
                layerThicknessEdge1 = 0.5_RKIND* &
                                      (layerThickness(minLevelCell(cell1),cell1) + &
                                       layerThickness(minLevelCell(cell2),cell2) )
+               layerThickEdgeFlux(minLevelEdgeBot(iEdge),iEdge) = layerThicknessEdge1
                normalThicknessFluxSum = layerThicknessEdge1* &
                                         normalVelocity(minLevelEdgeBot(iEdge),iEdge)
                layerThicknessSum = layerThicknessEdge1
@@ -3116,6 +3146,7 @@ module ocn_time_integration_split
                   layerThicknessEdge1 = 0.5_RKIND* &
                                        (layerThickness(k,cell1) + &
                                         layerThickness(k,cell2))
+                  layerThickEdgeFlux(k,iEdge) = layerThicknessEdge1
 
                   normalThicknessFluxSum = normalThicknessFluxSum + &
                                            layerThicknessEdge1* &
