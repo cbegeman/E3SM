@@ -3166,6 +3166,7 @@ module ocn_time_integration_split
                layerThicknessEdge1 = 0.5_RKIND* &
                                      (layerThickness(minLevelCell(cell1),cell1) + &
                                       layerThickness(minLevelCell(cell2),cell2) )
+               layerThickEdgeFlux(minLevelEdgeBot(iEdge),iEdge) = layerThicknessEdge1
                normalThicknessFluxSum = layerThicknessEdge1* &
                                         normalVelocity(minLevelEdgeBot(iEdge),iEdge)
                layerThicknessSum = layerThicknessEdge1
@@ -3174,6 +3175,7 @@ module ocn_time_integration_split
                   layerThicknessEdge1 = 0.5_RKIND* &
                                        (layerThickness(k,cell1) + &
                                         layerThickness(k,cell2))
+                  layerThickEdgeFlux(k,iEdge) = layerThicknessEdge1
 
                   normalThicknessFluxSum = normalThicknessFluxSum + &
                                            layerThicknessEdge1* &
