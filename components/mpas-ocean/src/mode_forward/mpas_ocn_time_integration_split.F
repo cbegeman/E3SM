@@ -828,6 +828,14 @@ module ocn_time_integration_split
                   do k = minLevelEdgeBot(iEdge)+1, maxLevelEdgeTop(iEdge)
                      call mpas_log_write('layerThickEdgeFlux($i,$i) = $r', &
                         intArgs=(/k,iEdge/), realArgs=(/layerThickEdgeFlux(k,iEdge)/))
+                     call mpas_log_write('normalBaroclinicVelocityCur($i,$i) = $r', &
+                        intArgs=(/k,iEdge/), realArgs=(/normalBaroclinicVelocityCur(k,iEdge)/))
+                     call mpas_log_write('normalVelocityTend($i,$i) = $r', &
+                        intArgs=(/k,iEdge/), realArgs=(/normalVelocityTend(k,iEdge)/))
+                     call mpas_log_write('wettingVelocityBaroclinicCur($i,$i) = $r', &
+                        intArgs=(/k,iEdge/), realArgs=(/wettingVelocityBaroclinicCur(k,iEdge)/))
+                     call mpas_log_write('normalVelocityNew($i,$i) = $r', &
+                        intArgs=(/k,iEdge/), realArgs=(/normalVelocityNew(k,iEdge)/))
                   enddo
                   call mpas_log_write('normalThicknessFluxSum($i) = $r', &
                      intArgs=(/iEdge/), realArgs=(/normalThicknessFluxSum/))
