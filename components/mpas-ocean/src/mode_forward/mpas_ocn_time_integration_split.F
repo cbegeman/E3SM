@@ -768,6 +768,12 @@ module ocn_time_integration_split
             !$omp private(k, cell1, cell2, uTemp, sshGrad, &
             !$omp         normalThicknessFluxSum, thicknessSum)
             do iEdge = 1, nEdgesOwned
+
+               if (maxLevelEdgeTop(iEdge) == 0) then
+                  barotropicForcing(iEdge) = 0.0_RKIND
+                  cycle
+               endif
+
                cell1 = cellsOnEdge(1,iEdge)
                cell2 = cellsOnEdge(2,iEdge)
                ! could put this after with uTemp(maxleveledgetop+1:nvertlevels)=0
