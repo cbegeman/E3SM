@@ -698,6 +698,7 @@ module ocn_tracer_advection_mono
                                        tracerCur(k+1,iCell))
            end do
            ! finish with bottom cell
+           if (kmax == 1) cycle
            tracerMax(kmax,iCell) = max(tracerCur(kmax  ,iCell), &
                                        tracerCur(kmax-1,iCell))
            tracerMin(kmax,iCell) = min(tracerCur(kmax  ,iCell), &
