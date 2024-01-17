@@ -269,8 +269,8 @@ contains
      ! ensure cells stay wet by selectively damping cells with a damping tendency to make
      ! sure tendency doesn't dry cells
 
-     call ocn_wetting_drying_wettingVelocity(domain, layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
-                                             normalTransportVelocity, rkSubstepWeight, wettingVelocityFactor, err)
+     call ocn_wetting_drying_full_depth_factor(layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
+                                               normalTransportVelocity, rkSubstepWeight, wettingVelocityFactor, err)
 
      ! prevent drying from happening with selective wettingVelocityFactor
      if (config_zero_drying_velocity) then
