@@ -561,7 +561,7 @@ contains
 
       real (kind=RKIND) :: divOutFlux
       real (kind=RKIND) :: columnThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal, hOut
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal, hOut, hRampFactor
 
       character (len=100) :: log_string
 
@@ -689,6 +689,7 @@ contains
 
         hRampMin = config_zero_drying_velocity_ramp_hmin
         hRampMax = config_zero_drying_velocity_ramp_hmax
+        hRampFactor = config_zero_drying_velocity_ramp_factor
         hCrit = config_drying_min_cell_height + config_drying_safety_height
 
         !$omp parallel
@@ -745,7 +746,7 @@ contains
 
                 if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                      tanh(50.0_RKIND * (layerThicknessCell(k, iCell) - hRampMin)/hRampMin)
+                      tanh(hRampFactor * (layerThicknessCell(k, iCell) - hRampMin)/hRampMin)
                 endif
 
                 ! If edge velocity has been zeroed, check neighbor and current cell ssh.
