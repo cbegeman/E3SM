@@ -585,7 +585,7 @@ module ocn_time_integration_rk4
         if (config_verify_not_dry) then
           block => domain % blocklist
             do while (associated(block))
-              call ocn_wetting_drying_verify(block, config_drying_min_cell_height, err)
+              call ocn_wetting_drying_verify(block, config_drying_min_cell_height + 1e-8_RKIND, err)
               block => block % next
             end do
         end if
