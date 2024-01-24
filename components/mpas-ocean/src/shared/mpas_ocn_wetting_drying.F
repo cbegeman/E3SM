@@ -348,7 +348,7 @@ contains
 
       real (kind=RKIND) :: divFlux, divOutFlux
       real (kind=RKIND) :: wct
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor
 
       character (len=100) :: log_string
 
@@ -364,6 +364,7 @@ contains
       endif
 
       ! need predicted transport velocity to limit drying flux
+      hRampFactor = config_zero_drying_velocity_ramp_factor
       !$omp parallel
       !$omp do schedule(runtime) private(i, iEdge, wct)
       do iCell = 1, nCellsAll
@@ -393,7 +394,7 @@ contains
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
               wettingVelocityBarotropic(iEdge) = &
-                tanh(50.0_RKIND * (wct - hRampMin)/hRampMin)
+                tanh(hRampFactor * (wct - hRampMin)/hRampMin)
             end if
           end do
 
@@ -470,7 +471,7 @@ contains
 
       real (kind=RKIND) :: divFlux, divOutFlux
       real (kind=RKIND) :: layerThickness, columnThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor
 
       character (len=100) :: log_string
 
@@ -486,6 +487,7 @@ contains
         hCrit = 0.0_RKIND
         hRampMax = 0.0_RKIND
         hRampMin = 0.0_RKIND
+        hRampFactor = config_zero_drying_velocity_ramp_factor
 
         do k = minLevelCell(iCell), maxLevelCell(iCell)
           divOutFlux = 0.0_RKIND
@@ -534,7 +536,7 @@ contains
                 if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
                   if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
                     wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                      tanh(50.0_RKIND * (columnThickness - hRampMin)/hRampMin)
+                      tanh(hRampFactor * (columnThickness - hRampMin)/hRampMin)
                   end if
                 end if
               end do
@@ -616,7 +618,7 @@ contains
 
       real (kind=RKIND) :: divOutFlux
       real (kind=RKIND) :: columnThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor, hEdgeTotal
 
       character (len=100) :: log_string
 
@@ -638,6 +640,7 @@ contains
 
       hRampMin = config_zero_drying_velocity_ramp_hmin
       hRampMax = config_zero_drying_velocity_ramp_hmax
+      hRampFactor = config_zero_drying_velocity_ramp_factor
       hCrit = config_drying_min_cell_height + config_drying_safety_height
 
       layerThicknessCell => layerThicknessCellWetDry
@@ -770,7 +773,7 @@ contains
 
                 if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                      tanh(50.0_RKIND * (layerThicknessCell(k, iCell) - hRampMin)/hRampMin)
+                      tanh(hRampFactor * (layerThicknessCell(k, iCell) - hRampMin)/hRampMin)
                 endif
 
                 ! If edge velocity has been zeroed, check neighbor and current cell ssh.
@@ -873,6 +876,7 @@ contains
               (layerThicknessTmp <= config_zero_drying_velocity_ramp_hmax)) then
 
          hRampMin = config_zero_drying_velocity_ramp_hmin
+         hRampFactor = config_zero_drying_velocity_ramp_factor
          ! Following O'Dea et al. (2021), if total upwinded wct is less than
          ! 2*critical thickness, apply damping at each edge
          do i = 1, nEdgesOnCell(iCell)
@@ -880,7 +884,7 @@ contains
             if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                  tanh(50.0_RKIND * (layerThicknessTmp - hRampMin)/hRampMin)
+                    tanh(hRampFactor * (layerThickness - hRampMin)/hRampMin)
                end if
             end if
          end do
