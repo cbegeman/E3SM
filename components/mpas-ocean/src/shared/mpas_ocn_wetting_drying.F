@@ -33,6 +33,7 @@ module ocn_wetting_drying
    use ocn_diagnostics_variables
    use ocn_gm
    use ocn_mesh
+   use ocn_surface_land_ice_fluxes
 
    implicit none
    private
@@ -51,6 +52,7 @@ module ocn_wetting_drying
    !--------------------------------------------------------------------
 
    public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4, &
+             ocn_compute_land_ice_ssh_adjustment, &
              ocn_wetting_drying_barotropic_factor
 
    !--------------------------------------------------------------------
@@ -64,6 +66,71 @@ module ocn_wetting_drying
 !***********************************************************************
 
 contains
+
+   subroutine ocn_compute_land_ice_ssh_adjustment(forcingPool, ssh_land_ice_adjustment, &
+                                                  err)
+      !-----------------------------------------------------------------
+      !
+      ! input variables
+      !
+      !-----------------------------------------------------------------
+      type (mpas_pool_type), intent(in) :: forcingPool
+
+      !-----------------------------------------------------------------
+      !
+      ! input/output variables
+      !
+      !-----------------------------------------------------------------
+      real (kind=RKIND), dimension(:), intent(inout) :: ssh_land_ice_adjustment
+
+      !-----------------------------------------------------------------
+      !
+      ! output variables
+      !
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< Output: error flag
+
+      !-----------------------------------------------------------------
+      !
+      ! local variables
+      !
+      !-----------------------------------------------------------------
+      integer :: iCell
+      real (kind=RKIND), dimension(:), pointer :: landIceMask, landIcePressure
+      real (kind=RKIND) :: ssh_crit, ssh_floatation, hCrit
+
+      err = 0
+
+      if ( .not. config_zero_drying_velocity ) return
+      if ( .not. landIcePressureOn ) return
+
+      call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
+      call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
+
+      !$omp parallel
+      !$omp do schedule(runtime) private(ssh_floatation, ssh_crit)
+      do iCell = 1, nCellsAll
+
+         ! the depth at which floatation occurs with full land ice pressure
+         ! (may be below the bathymetry) (gravity is positive)
+         ssh_floatation = - landIcePressure(iCell) / (gravity * rho_sw)
+
+         ! the ssh below which the wetting-and-drying factor is active
+         hCrit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+         ssh_crit = hCrit - bottomDepth(iCell)
+
+         ! the ssh equivalent by which we adjusted landIcePressure to ensure
+         ! floatation at roughly the point at which the wetting-and-drying
+         ! is active (ssh_crit)
+         ! we need to multiply by landIceMask here for the cases where ssh_crit > 0
+         ssh_land_ice_adjustment(iCell) = landIceMask(iCell) * &
+                                          min(ssh_floatation - ssh_crit, 0.0_RKIND)
+      end do
+      !$omp end do
+      !$omp end parallel
+
+   end subroutine ocn_compute_land_ice_ssh_adjustment
 
 !***********************************************************************
 !
@@ -236,6 +303,8 @@ contains
       type (mpas_pool_type), pointer :: tendPool
       type (mpas_pool_type), pointer :: statePool
       type (mpas_pool_type), pointer :: provisStatePool
+      type (mpas_pool_type), pointer :: forcingPool
+      real (kind=RKIND), dimension(:), allocatable :: sshLandIceAdjustment
       real (kind=RKIND), dimension(:, :), pointer :: layerThicknessCur
       real (kind=RKIND), dimension(:, :), pointer :: layerThicknessProvis
       real (kind=RKIND), dimension(:, :), pointer :: normalVelocity
@@ -247,6 +316,7 @@ contains
      call mpas_pool_get_subpool(block % structs, 'tend', tendPool)
      call mpas_pool_get_subpool(block % structs, 'state', statePool)
      call mpas_pool_get_subpool(block % structs, 'provis_state', provisStatePool)
+     call mpas_pool_get_subpool(block % structs, 'forcing', forcingPool)
 
      call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, 1)
      ! use thickness at n because constraint is h_n + dt*T_h > h_min
@@ -262,14 +332,19 @@ contains
      !$omp end do
      !$omp end parallel
 
-     ! ensure cells stay wet by selectively damping cells with a damping tendency to make 
-     ! sure tendency doesn't dry cells
-
-     call ocn_wetting_drying_full_depth_factor(layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
-                                               normalTransportVelocity, rkSubstepWeight, wettingVelocityFactor, err)
-
      ! prevent drying from happening with selective wettingVelocityFactor
      if (config_zero_drying_velocity) then
+       ! ensure cells stay wet by selectively damping cells with a damping tendency to make 
+       ! sure tendency doesn't dry cells
+
+       allocate(sshLandIceAdjustment(nCellsAll))
+       sshLandIceAdjustment(:) = 0.0_RKIND
+
+       call ocn_compute_land_ice_ssh_adjustment(forcingPool, sshLandIceAdjustment, err)
+       call ocn_wetting_drying_full_depth_factor(layerThickEdgeFlux, layerThicknessCur, &
+               layerThicknessProvis, normalTransportVelocity, rkSubstepWeight, &
+               sshLandIceAdjustment, wettingVelocityFactor, err)
+
        !$omp parallel
        !$omp do schedule(runtime) private(k)
        do iEdge = 1, nEdgesAll
@@ -304,7 +379,7 @@ contains
 !
 !-----------------------------------------------------------------------
    subroutine ocn_wetting_drying_barotropic_factor(sshNew, btrVelocity, &
-                     wettingVelocityBarotropic, err)!{{{
+                     sshLandIceAdjustment, wettingVelocityBarotropic, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -313,8 +388,11 @@ contains
       !-----------------------------------------------------------------
 
       real (kind=RKIND), dimension(:), intent(in) :: &
-         sshNew, &   !< predicted SSH
-         btrVelocity !< barotropic velocity on edges
+         sshNew, &            !< predicted SSH
+         btrVelocity, &       !< barotropic velocity on edges
+         sshLandIceAdjustment !< amount by which to adjust ssh related to
+                              !< the initial adjustment of land ice pressure
+                              !< effects on ssh
 
       !-----------------------------------------------------------------
       !
@@ -362,7 +440,7 @@ contains
       !$omp parallel
       !$omp do schedule(runtime) private(i, iEdge, wct)
       do iCell = 1, nCellsAll
-        wct = sshNew(iCell) + bottomDepth(iCell)
+        wct = sshNew(iCell) + bottomDepth(iCell) + sshLandIceAdjustment(iCell)
         ! if layer thickness is too small, limit divergence flux outwards with
         ! opposite velocity
         hCrit = (config_drying_min_cell_height + config_drying_safety_height) * &
@@ -415,7 +493,7 @@ contains
 !-----------------------------------------------------------------------
    subroutine ocn_wetting_drying_full_depth_factor(layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
 
-       normalVelocity, dt, wettingVelocityFactor, err)!{{{
+       normalVelocity, dt, sshLandIceAdjustment, wettingVelocityFactor, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -438,6 +516,10 @@ contains
       real (kind=RKIND), intent(in) :: &
          dt     !< Input: time step
 
+      real (kind=RKIND), dimension(:), intent(in) :: &
+         sshLandIceAdjustment !< Input: amount by which to adjust ssh related to
+                              !< the initial adjustment of land ice pressure effects
+                              !< on ssh
       !-----------------------------------------------------------------
       !
       ! input/output variables
@@ -506,6 +588,7 @@ contains
         enddo
         ! The projected column thickness only accounts for outgoing fluxes
         ! if column thickness is too small, limit flux throughout the full column
+        columnThickness = columnThickness + sshLandIceAdjustment(iCell)
         if (columnThickness <= hCrit) then
           do k = minLevelCell(iCell), maxLevelCell(iCell)
             do i = 1, nEdgesOnCell(iCell)

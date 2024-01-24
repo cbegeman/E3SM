@@ -271,6 +271,7 @@ module ocn_time_integration_split
          activeTracersTend       ! active tracer tendencies
 
       ! Forcing pool
+      real (kind=RKIND), dimension(:), allocatable :: sshLandIceAdjustment
       real (kind=RKIND), dimension(:), pointer :: tidalPotentialEta
 
       real (kind=RKIND) :: totalDepth
@@ -595,6 +596,11 @@ module ocn_time_integration_split
          call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
          call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
       endif
+      ! Once per time step, we need to compute the ssh adjustment for wetting and drying
+      ! where land ice draft is at our near grounded (nothing happends if landIcePressureOff)
+      allocate(sshLandIceAdjustment(nCellsAll))
+      sshLandIceAdjustment(:) = 0.0_RKIND
+      call ocn_compute_land_ice_ssh_adjustment(forcingPool, sshLandIceAdjustment, err)
 
 #ifdef MPAS_OPENACC
       !$acc exit data delete(normalVelocityCur, normalBarotropicVelocityCur, &
@@ -1273,7 +1279,8 @@ module ocn_time_integration_split
                ! a cell halo layer is now corrupted - decrement counter
                cellHaloComputeCounter = cellHaloComputeCounter - 1
                call ocn_wetting_drying_barotropic_factor(sshSubcycleNew, &
-                         btrvel_temp, wettingVelocityBarotropicSubcycleNew, err)
+                         btrvel_temp, sshLandIceAdjustment, &
+                         wettingVelocityBarotropicSubcycleNew, err)
 
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: VELOCITY CORRECTOR STEP
