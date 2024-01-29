@@ -2473,7 +2473,7 @@ contains
       !-----------------------------------------------------------------
 
       integer :: iCell ! cell loop index
-
+      real (kind=RKIND) :: h_crit, ssh_crit, floatation_pressure
       real (kind=RKIND), dimension(:), pointer :: &
          frazilSurfacePressure, &! frazil ice pressure from forcing
          landIcePressure         ! land ice pressure
@@ -2548,6 +2548,24 @@ contains
 #ifndef MPAS_OPENACC
          !$omp end do
 #endif
+         if (config_use_wetting_drying .and. config_zero_drying_velocity) then
+#ifndef MPAS_OPENACC
+            !$omp do schedule(runtime) private(floatation_pressure, h_crit, ssh_crit)
+#endif
+            do iCell = 1, nCellsAll
+               ! the ssh below which the wetting-and-drying factor is active
+               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+               ssh_crit = h_crit - bottomDepth(iCell)
+               ! the maximum pressure is the one that results in ssh at the critical
+               ! thickness (gravity is positive)
+               floatation_pressure = - gravity * rho_sw * ssh_crit
+               surfacePressure(iCell) = min(surfacePressure(iCell), &
+                                            floatation_pressure)
+            end do
+#ifndef MPAS_OPENACC
+            !$omp end do
+#endif
+         endif
       endif ! land ice pressure
 #ifndef MPAS_OPENACC
       !$omp end parallel
