@@ -1600,6 +1600,10 @@ module ocn_time_integration_split
                                   'normalBarotropicVelocitySubcycle', &
                                    normalBarotropicVelocitySubcycleNew, &
                                    newBtrSubcycleTime)
+               call mpas_pool_get_array(statePool, &
+                                  'wettingVelocityBarotropicSubcycle', &
+                                   wettingVelocityBarotropicSubcycleNew, &
+                                   newBtrSubcycleTime)
 
                ! normalBarotropicVelocityNew =
                ! normalBarotropicVelocityNew +
