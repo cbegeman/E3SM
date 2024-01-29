@@ -370,14 +370,15 @@ contains
         wct = sshNew(iCell) + bottomDepth(iCell)
         ! if layer thickness is too small, limit divergence flux outwards with
         ! opposite velocity
-        hCrit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1) + &
-                config_drying_safety_height
+        hCrit = (config_drying_min_cell_height + config_drying_safety_height) * &
+                (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+                
         hRampMax = config_zero_drying_velocity_ramp_hmax * &
                    (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
         if (wct <= hCrit) then
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
-            if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+            if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
               wettingVelocityBarotropic(iEdge) = 0.0_RKIND
             end if
           end do
@@ -390,7 +391,7 @@ contains
           ! 2*critical thickness, apply damping at each edge
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
-            if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+            if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
               wettingVelocityBarotropic(iEdge) = &
                 tanh(50.0_RKIND * (wct - hRampMin)/hRampMin)
             end if
@@ -515,7 +516,9 @@ contains
             do i = 1, nEdgesOnCell(iCell)
               iEdge = edgesOnCell(i, iCell)
               if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-                wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+                end if
               end if
             end do
           end do
@@ -529,8 +532,10 @@ contains
               do i = 1, nEdgesOnCell(iCell)
                 iEdge = edgesOnCell(i, iCell)
                 if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                    tanh(50.0_RKIND * (columnThickness - hRampMin)/hRampMin)
+                  if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+                    wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
+                      tanh(50.0_RKIND * (columnThickness - hRampMin)/hRampMin)
+                  end if
                 end if
               end do
             end do
