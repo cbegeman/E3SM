@@ -138,6 +138,7 @@ contains
         nCells = nCellsArray( 2 )
 
         do iCell = 1, nCells
+           if (maxLevelCell(iCell) == 0) cycle
            zTop = 0.0_RKIND
            transmissionCoeffTop = ocn_forcing_transmission(zTop, sfcFlxAttCoeff(iCell))
            do k = minLevelCell(iCell), maxLevelCell(iCell)
@@ -154,6 +155,7 @@ contains
 !  now do river runoff separately
 
         do iCell = 1, nCells
+           if (maxLevelCell(iCell) == 0) cycle
            zTop = 0.0_RKIND
            transmissionCoeffTop = ocn_forcing_transmission(zTop, surfaceFluxAttenuationCoefficientRunoff(iCell))
            do k = minLevelCell(iCell), maxLevelCell(iCell)
