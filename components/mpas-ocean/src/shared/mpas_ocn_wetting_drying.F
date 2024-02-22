@@ -386,6 +386,8 @@ contains
               wctNei = sshNew(cellNei) + bottomDepth(cellNei)
               if ( wctNei > hCrit .and. sshNew(iCell) < sshNei ) then
                 wettingVelocityBarotropic(iEdge) = 1.0_RKIND
+              else
+                wettingVelocityBarotropic(iEdge) = 0.0_RKIND
               end if     
             end if
           end do
@@ -537,7 +539,7 @@ contains
               iEdge = edgesOnCell(i, iCell)
               if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
                 if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
-                  wettingVelocityFactor(k, iEdge) = 0.0_RKIND
+                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND
                 ! Allow flux across edges that are anticipated to be motionless but have an ssh gradient from a wet cell into a dry cell
                 elseif ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) == 0.0_RKIND ) then
                   cellNei = merge( cellsOnEdge(2, iEdge), cellsOnEdge(1, iEdge), iCell == cellsOnEdge(1, iEdge) )
@@ -545,9 +547,9 @@ contains
                   sshCur = columnThickness(iCell) - bottomDepth(iCell)
                   sshNei = columnThickness(cellNei) - bottomDepth(cellNei)
                   if ( columnThickness(cellNei) > hCrit .and. sshCur < sshNei ) then
-                    wettingVelocityFactor(k, iEdge) = 1.0_RKIND
-                  else
                     wettingVelocityFactor(k, iEdge) = 0.0_RKIND
+                  else
+                    wettingVelocityFactor(k, iEdge) = 1.0_RKIND
                   end if     
                 end if
               end if
@@ -577,7 +579,7 @@ contains
                   sshCur = columnThickness(iCell) - bottomDepth(iCell)
                   sshNei = columnThickness(cellNei) - bottomDepth(cellNei)
                   if ( columnThickness(cellNei) <= hCrit .and. sshCur < sshNei ) then
-                    wettingVelocityFactor(k, iEdge) = 0.0_RKIND
+                    wettingVelocityFactor(k, iEdge) = 1.0_RKIND
                   end if     
                 end if
               end do
@@ -693,8 +695,17 @@ contains
             do i = 1, nEdgesOnCell(iCell)
               iEdge = edgesOnCell(i, iCell)
               if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+                elseif ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) == 0.0_RKIND ) then
+                  cellNei = merge( cellsOnEdge(2, iEdge), cellsOnEdge(1, iEdge), iCell == cellsOnEdge(1, iEdge) )
+                  if ( cellNei > nCellsAll ) cellNei = iCell ! check with Steven on how to handle this index
+                  sshCur = columnThickness(iCell) - bottomDepth(iCell)
+                  sshNei = columnThickness(cellNei) - bottomDepth(cellNei)
+                  if ( columnThickness(cellNei) > hCrit .and. sshCur < sshNei ) then
+                    wettingVelocityFactor(k, iEdge) = 0.0_RKIND
+                  else
+                    wettingVelocityFactor(k, iEdge) = 1.0_RKIND
                 end if
               end if
             end do
@@ -716,6 +727,17 @@ contains
                 end if
               end if
             end do
+            ! Then go back through all the edges with 0 flux and disallow flux when the neighboring cell is dry
+            ! but the ssh gradient would favor flow from the neighboring dry cell
+            if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) == 0.0_RKIND ) then
+              cellNei = merge( cellsOnEdge(2, iEdge), cellsOnEdge(1, iEdge), iCell == cellsOnEdge(1, iEdge) )
+              if ( cellNei > nCellsAll ) cellNei = iCell ! check with Steven on how to handle this index
+              sshCur = columnThickness(iCell) - bottomDepth(iCell)
+              sshNei = columnThickness(cellNei) - bottomDepth(cellNei)
+              if ( columnThickness(cellNei) <= hCrit .and. sshCur < sshNei ) then
+                wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+              end if
+            end if
 
           end if
 
