@@ -383,7 +383,7 @@ contains
               cellNei = merge( cellsOnEdge(2, iEdge), cellsOnEdge(1, iEdge), iCell == cellsOnEdge(1, iEdge) )
               if ( cellNei > nCellsAll ) cellNei = iCell ! check with Steven on how to handle this index
               sshNei = sshNew(cellNei)
-              wctNei = sshNew(cellNei) + bottomDepth(cellNei) + sshLandIceAdjustment(cellNei)
+              wctNei = sshNew(cellNei) + bottomDepth(cellNei)
               if ( wctNei > hCrit .and. sshNew(iCell) < sshNei ) then
                 wettingVelocityBarotropic(iEdge) = 1.0_RKIND
               end if     
