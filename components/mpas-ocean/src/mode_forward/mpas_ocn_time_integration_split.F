@@ -1214,6 +1214,9 @@ module ocn_time_integration_split
                !$omp end parallel
                call ocn_diagnostic_solve_wctEdge(btrvel_temp, deltaSSH, &
                          baroclinicThickness, wctEdge)
+               call ocn_wetting_drying_outflux_barotropic_factor(sshSubcycleCur, &
+                         btrvel_temp, wctEdge, dt/nBtrSubcycles, &
+                         wettingVelocityBarotropicSubcycleNew, err)
 
                !$omp parallel
                !$omp do schedule(runtime) &
@@ -1224,7 +1227,8 @@ module ocn_time_integration_split
                      iEdge = edgesOnCell(i, iCell)
                      if (maxLevelEdgeTop(iEdge).eq.0) cycle
 
-                     flux = btrvel_temp(iEdge) * wctEdge(iEdge)
+                     flux = wettingVelocityBarotropicSubcycleNew(iEdge) * &
+                            btrvel_temp(iEdge) * wctEdge(iEdge)
 
                      sshTend(iCell) = sshTend(iCell) + &
                                       edgeSignOncell(i, iCell)*flux* &
@@ -1272,8 +1276,8 @@ module ocn_time_integration_split
 
                ! a cell halo layer is now corrupted - decrement counter
                cellHaloComputeCounter = cellHaloComputeCounter - 1
-               call ocn_wetting_drying_barotropic_factor(sshSubcycleNew, &
-                         btrvel_temp, wettingVelocityBarotropicSubcycleNew, err)
+               ! call ocn_wetting_drying_barotropic_factor(sshSubcycleNew, &
+               !           btrvel_temp, wettingVelocityBarotropicSubcycleNew, err)
 
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: VELOCITY CORRECTOR STEP
