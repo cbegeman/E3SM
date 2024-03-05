@@ -1227,6 +1227,10 @@
 					description="If true, just zero out velocity that is contributing to drying for cell that is drying.  This option can be used to estimate acceptable minimum thicknesses for a run."
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_zero_drying_velocity_gradSSH" type="logical" default_value=".false."
+					description="If true, use the SSH gradient to determine whether to allow fluxes into cells with no projected flow."
+					possible_values=".true. or .false."
+		/>
 		<nml_option name="config_zero_drying_velocity_ramp" type="logical" default_value=".false."
 					description="If true, ramp velocities and tendencies to zero rather than applying a simple on/off switch."
 					possible_values=".true. or .false."
