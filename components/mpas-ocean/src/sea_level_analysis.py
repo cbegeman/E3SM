@@ -2,14 +2,16 @@ import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 
+# case_name = 'v3.LR.CRYO1850-DISMF.paolo'
 case_name = 'v3.LR.CRYO1850-DISMF'
 file_prefix = f'{case_name}.chrysalis'
 #file_prefix = '20240201.v3.SORRM.piControl.chrysalis'
-run_path = f'/lcrc/group/acme/ac.dcomeau/E3SMv3/{file_prefix}/run/'
+run_path = f'/lcrc/group/acme/ac.dcomeau/E3SMv3/{file_prefix}/archive/ocn/hist/'
+#run_path = f'/lcrc/group/acme/ac.dcomeau/E3SMv3/{file_prefix}/run/'
 #run_path = '/lcrc/group/acme/ac.dcomeau/E3SMv3_dev/20240201.v3.SORRM.piControl.chrysalis/run/'
 conserv_prefix = 'mpaso.hist.am.conservationCheck'
 ts_prefix = 'mpaso.hist.am.timeSeriesStatsMonthly'
-output_dir = '/lcrc/group/acme/ac.cbegeman/ssh_analysis/v3.LR.CRYO1850-DISMF'
+output_dir = f'/lcrc/group/acme/ac.cbegeman/ssh_analysis/{case_name}'
 
 decimal_year = []
 total_ssh = []
@@ -34,7 +36,7 @@ rho_sw = 1026.
 mass_flux_to_SLR = 1.e3 / rho_sw # we still need to divide by area of the ocean below to get units of mm/s
 # fluxes have units of kg m^-2 s^-1
 # accumulated values have units of kg s^-1
-for year in range(200):
+for year in range(5):
    for month in range(12):
        decimal_year.append(year + 1. + month / 12.)
        date_suffix = f'{year+1:04g}-{month+1:02g}-01.nc'
@@ -68,7 +70,8 @@ A = np.array(A)
 V = np.array(V)
 total_ssh = V / A
 
-print(f'dismf: {np.mean(accumulated_land_ice_flux) * s_year * 1e-12} Gt/yr')
+print(accumulated_land_ice_flux)
+print(f'dismf: {np.mean(accumulated_land_ice_flux[1:]) * s_year * 1e-12} Gt/yr')
 #print(np.mean(accumulated_iceberg_flux + \
 #              accumulated_land_ice_flux + \
 #              accumulated_removed_river_runoff_flux + \
@@ -103,6 +106,11 @@ ssh_rate_removed_ice_runoff = np.array(accumulated_removed_ice_runoff_flux) * fa
 #print(np.mean(ssh_rate_removed_ice_runoff + ssh_rate_removed_river_runoff))
 
 print(f'ssh_rate_land_ice: {np.mean(ssh_rate_land_ice)}')
+mass_flux_land_ice_imbalance = (np.array(accumulated_iceberg_flux) + \
+                               np.array(accumulated_land_ice_flux) + \
+                               np.array(accumulated_removed_river_runoff_flux) + \
+                               np.array(accumulated_removed_ice_runoff_flux)) * s_year * 1e-12
+mass_anomaly_land_ice_imbalance = np.cumsum(mass_flux_land_ice_imbalance) * (s_year/12)
 ssh_rate_land_ice_imbalance = ssh_rate_iceberg + \
                               ssh_rate_land_ice + \
                               ssh_rate_removed_river_runoff + \
@@ -146,9 +154,9 @@ ssh_anomaly_land_ice_imbalance = ssh_anomaly_land_ice_imbalance - ssh_anomaly_la
 ssh_anomaly_land_ice_imbalance_corrected = ssh_anomaly_land_ice_imbalance_corrected - ssh_anomaly_land_ice_imbalance_corrected[0]
 mask = ssh_anomaly != 0.
 #error_factor = np.mean(np.abs((ssh_rate_total[1:] - ssh_rate_derived)/ssh_rate_derived))
-error_factors = np.abs((ssh_anomaly[mask] - ssh_anomaly_cum[mask])/ssh_anomaly[mask])
-error_factor = np.mean(error_factors[100:])
-print(error_factor)
+#error_factors = np.abs((ssh_anomaly[mask] - ssh_anomaly_cum[mask])/ssh_anomaly[mask])
+#error_factor = np.mean(error_factors[100:])
+#print(error_factor)
 #print(np.min(error_factors),np.max(error_factors))
 
 fig = plt.figure()
@@ -162,6 +170,22 @@ plt.xlim([min(decimal_year), max(decimal_year)])
 plt.xlabel('Year')
 plt.ylabel('d(mass)/dt (kg/s)')
 fig.savefig(f'{output_dir}/ssh_flux_components.png', bbox_inches="tight")
+
+fig = plt.figure()
+plt.plot(decimal_year, mass_flux_land_ice_imbalance, label='land ice imbalance')
+plt.plot([min(decimal_year), max(decimal_year)], [0,0], ':k')
+plt.xlim([min(decimal_year), max(decimal_year)])
+plt.xlabel('Year')
+plt.ylabel('dM/dt (Gt/yr)')
+fig.savefig(f'{output_dir}/mass_flux_imbalance.png', bbox_inches="tight")
+
+fig = plt.figure()
+plt.plot(decimal_year, mass_anomaly_land_ice_imbalance, label='land ice imbalance')
+plt.plot([min(decimal_year), max(decimal_year)], [0,0], ':k')
+plt.xlim([min(decimal_year), max(decimal_year)])
+plt.xlabel('Year')
+plt.ylabel('M (Gt)')
+fig.savefig(f'{output_dir}/mass_anomaly_imbalance.png', bbox_inches="tight")
 
 fig = plt.figure()
 plt.plot(decimal_year, ssh_rate_land_ice_imbalance, label='land ice imbalance')
@@ -275,9 +299,9 @@ plt.plot(decimal_year, ssh_anomaly_cum, color='lightsalmon',
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 fig.savefig(f'{output_dir}/ssh_time_series_imbalance_corrected_cum.png', bbox_inches="tight")
 
-plt.fill_between(decimal_year,
-                 (1 - error_factor) * ssh_anomaly_land_ice_imbalance,
-                 ssh_anomaly_land_ice_imbalance,
-                 color='dodgerblue', edgecolor=None, alpha=0.5)
-plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-fig.savefig(f'{output_dir}/ssh_time_series_imbalance_corrected_uncertainty.png', bbox_inches="tight")
+#plt.fill_between(decimal_year,
+#                 (1 - error_factor) * ssh_anomaly_land_ice_imbalance,
+#                 ssh_anomaly_land_ice_imbalance,
+#                 color='dodgerblue', edgecolor=None, alpha=0.5)
+#plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+#fig.savefig(f'{output_dir}/ssh_time_series_imbalance_corrected_uncertainty.png', bbox_inches="tight")
