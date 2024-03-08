@@ -1181,6 +1181,8 @@ v=accumulatedLandIceFrazilFlux     ; write(m,"('  landIceFrazilFlux    ',es16.8,
            areaCell, &
            accumulatedFrazilIceSalinityNew, &
            accumulatedFrazilIceSalinityOld, &
+           accumulatedLandIceFrazilSalinityNew, &
+           accumulatedLandIceFrazilSalinityOld, &
            accumulatedLandIceFrazilMassNew, &
            accumulatedLandIceFrazilMassOld, &
            seaIceSalinityFlux
@@ -1261,11 +1263,12 @@ v=accumulatedLandIceFrazilFlux     ; write(m,"('  landIceFrazilFlux    ',es16.8,
             if (landIceFreshwaterFluxesOn &
                .and.config_use_frazil_ice_formation &
                .and.config_frazil_under_land_ice) then
-               call mpas_pool_get_array(statePool, 'accumulatedLandIceFrazilMass', accumulatedLandIceFrazilMassOld, 1)
-               call mpas_pool_get_array(statePool, 'accumulatedLandIceFrazilMass', accumulatedLandIceFrazilMassNew, 2)
+               call mpas_pool_get_array(statePool, 'accumulatedLandIceFrazilSalinity', accumulatedLandIceFrazilSalinityOld, 1)
+               call mpas_pool_get_array(statePool, 'accumulatedLandIceFrazilSalinity', accumulatedLandIceFrazilSalinityNew, 2)
                do iCell = 1, nCellsSolve
                   sumArray(3) = sumArray(3) + areaCell(iCell) &
-                                 * (accumulatedLandIceFrazilMassNew(iCell) - accumulatedLandIceFrazilMassOld(iCell))/dt
+                                 * (  accumulatedLandIceFrazilSalinityNew(iCell) &
+                                    - accumulatedLandIceFrazilSalinityOld(iCell))/dt
                enddo
             end if
 
@@ -1311,9 +1314,9 @@ v=accumulatedLandIceFrazilFlux     ; write(m,"('  landIceFrazilFlux    ',es16.8,
          ! calculate the final net salt flux to the ice
          call MPAS_pool_get_array(conservationCheckSaltAMPool, "netSaltFlux", netSaltFlux)
 
+         ! Note: accumulatedLandIceFrazilSalinityFlux is already accounted for in accumulatedFrazilSalinityFlux
          netSaltFlux = accumulatedSeaIceSalinityFlux &
-                     + accumulatedFrazilSalinityFlux &
-                     + accumulatedLandIceFrazilSalinityFlux
+                     + accumulatedFrazilSalinityFlux
 
          ! compute the final salt error
          call MPAS_pool_get_array(conservationCheckSaltAMPool, "absoluteSaltError", absoluteSaltError)

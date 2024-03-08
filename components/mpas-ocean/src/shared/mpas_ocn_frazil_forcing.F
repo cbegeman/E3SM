@@ -380,6 +380,8 @@ contains
       real (kind=RKIND), pointer, dimension(:)     :: accumulatedFrazilIceSalinityOld
       real (kind=RKIND), pointer, dimension(:)     :: accumulatedLandIceFrazilMassNew
       real (kind=RKIND), pointer, dimension(:)     :: accumulatedLandIceFrazilMassOld
+      real (kind=RKIND), pointer, dimension(:)     :: accumulatedLandIceFrazilSalinityNew
+      real (kind=RKIND), pointer, dimension(:)     :: accumulatedLandIceFrazilSalinityOld
       real (kind=RKIND), pointer, dimension(:)     :: ssh
       real (kind=RKIND), pointer, dimension(:,:)   :: layerThickness
       real (kind=RKIND), pointer, dimension(:,:,:) :: activeTracers
@@ -428,6 +430,8 @@ contains
       call mpas_pool_get_array(statePool, 'accumulatedFrazilIceSalinity', accumulatedFrazilIceSalinityOld, 1)
       call mpas_pool_get_array(statePool, 'accumulatedLandIceFrazilMass', accumulatedLandIceFrazilMassNew, 2)
       call mpas_pool_get_array(statePool, 'accumulatedLandIceFrazilMass', accumulatedLandIceFrazilMassOld, 1)
+      call mpas_pool_get_array(statePool, 'accumulatedLandIceFrazilSalinity', accumulatedLandIceFrazilSalinityNew, 2)
+      call mpas_pool_get_array(statePool, 'accumulatedLandIceFrazilSalinity', accumulatedLandIceFrazilSalinityOld, 1)
       call mpas_pool_get_array(statePool, 'ssh', ssh, 1)
       call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracers, 1)
       call mpas_pool_get_array(forcingPool, 'frazilTemperatureTendency', frazilTemperatureTendency)
@@ -618,6 +622,8 @@ contains
            ! for freshwater budgets
            accumulatedLandIceFrazilMassNew(iCell) = accumulatedLandIceFrazilMassOld(iCell) &
                                                   + sumNewFrazilIceThickness * config_frazil_ice_density
+           accumulatedLandIceFrazilSalinityNew(iCell) = accumulatedLandIceFrazilSalinityOld(iCell) &
+                                                      + sumNewThicknessWeightedSaltContent
         end if
 
       enddo   ! do iCell = 1, nCells
