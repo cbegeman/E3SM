@@ -231,6 +231,7 @@ contains
             else  ! cell2 == iCell
                iCellSelf = 2
             endif
+            if (maxLevelCell(cell1) == 0 .or. maxLevelCell(cell2) == 0) cycle
 
             r_tmp = dvEdge(iEdge)/dcEdge(iEdge)
             coef = dvEdge(iEdge)
