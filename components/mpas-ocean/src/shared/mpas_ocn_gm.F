@@ -235,6 +235,7 @@ contains
             !$omp do schedule(runtime) private(maxLocation, k, BruntVaisalaFreqTopEdge, maxN)
             do iCell = 1, nCells
                k = min(maxLevelCell(iCell) - 1, max(minLevelCell(iCell), indMLD(iCell)))
+               if (k <= 0) cycle
                maxN = max(BruntVaisalaFreqTop(k, iCell), 0.0_RKIND)
                do while (BruntVaisalaFreqTop(k + 1, iCell) > maxN .and. k < maxLevelCell(iCell) - 1)
                  k = k + 1
