@@ -1411,6 +1411,10 @@
 					description="Enables a run-time check for consistency for a zlevel grid. Ensures relevant variables correctly define the bottom of the ocean."
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_collapse_ice_shelf_cavities" type="logical" default_value=".false."
+					description="Enables a run-time check to determine if the SSH is within 2m of the surface.  See equation for $\zeta_i$."
+					possible_values=".true. or .false."
+		/>
 		<nml_option name="config_check_ssh_consistency" type="logical" default_value=".true."
 					description="Enables a run-time check to determine if the SSH is within 2m of the surface.  See equation for $\zeta_i$."
 					possible_values=".true. or .false."
