@@ -777,7 +777,7 @@ contains
 
        type (block_type), pointer :: block_ptr
 
-       type (mpas_pool_type), pointer :: meshPool, verticalMeshPool, criticalPassagesPool
+       type (mpas_pool_type), pointer :: meshPool, forcingPool, verticalMeshPool, criticalPassagesPool
 
        real (kind=RKIND), dimension(:), pointer :: latCell, lonCell, bottomDepth, bottomDepthObserved, &
             refBottomDepth, refLayerThickness, refZMid, oceanFracObserved, bed_elevation
@@ -786,7 +786,7 @@ contains
 
        type (field1DInteger), pointer :: maxLevelCellField
        type (field1DReal), pointer :: bottomDepthField
-       integer, dimension(:), pointer :: minLevelCell, maxLevelCell, nEdgesOnCell
+       integer, dimension(:), pointer :: minLevelCell, maxLevelCell, nEdgesOnCell, landIceMask
        integer, dimension(:, :), pointer :: cellsOnCell
 
        integer :: iCell, coc, j, k, maxLevelNeighbors
@@ -799,6 +799,7 @@ contains
        block_ptr => domain % blocklist
        do while(associated(block_ptr))
           call mpas_pool_get_subpool(block_ptr % structs, 'mesh', meshPool)
+          call mpas_pool_get_subpool(block_ptr % structs, 'forcing', forcingPool)
 
           call mpas_pool_get_dimension(meshPool, 'nCells', nCells)
           call mpas_pool_get_dimension(meshPool, 'nVertLevels', nVertLevels)
@@ -809,6 +810,7 @@ contains
           call mpas_pool_get_array(meshPool, 'bottomDepthObserved', bottomDepthObserved)
           call mpas_pool_get_array(meshPool, 'oceanFracObserved', oceanFracObserved)
           call mpas_pool_get_array(meshPool, 'refBottomDepth', refBottomDepth)
+          call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
 
           ! Alter bathymetry for minimum depth
           do k = 1, nVertLevels
@@ -908,6 +910,11 @@ contains
                    bottomDepth(iCell) = refBottomDepth( nVertLevels )
                 end if
 
+                if (config_collapse_ice_shelf_cavities .and. landIceMask(iCell) == 1) then
+                   call mpas_log_write( 'Set maxLevelCell($i)=-1.', intArgs=(/iCell/))
+                   bottomDepth(iCell) = 0.0_RKIND
+                   maxLevelCell(iCell) = -1
+                end if
              else
                 bottomDepth(iCell) = 0.0_RKIND
                 maxLevelCell(iCell) = -1
