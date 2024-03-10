@@ -1611,6 +1611,11 @@ contains
       ! Check consistency and validity of options
       !-----------------------------------------------------------------
 
+      if (config_collapse_ice_shelf_cavities) then
+         do iCell = 1,nCellsAll
+            if (landIceMask(iCell) /= 0) maxLevelCell(iCell) = 0
+         enddo
+      endif
       ! SSH consistency
       if (config_check_ssh_consistency) then
 
