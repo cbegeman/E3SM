@@ -2724,7 +2724,7 @@ contains
 
    character (len=StrKIND), pointer :: config_land_ice_flux_mode
 
-   logical :: keepFrazil
+   logical :: computeMeltPotential
 
 
    ! get configure options
@@ -2849,39 +2849,38 @@ contains
 
        if ( frazilIceActive ) then
           ! negative when frazil ice can be melted
-          keepFrazil = .true.
-          if ( associated(landIceMask) ) then
-             if ( landIceMask(i) == 1 ) then
-                keepFrazil = .false.
-             end if
+          if ( associated(landIceMask) .and. landIceMask(i) == 1 ) then
+             computeMeltPotential = .false.
+          else
+             computeMeltPotential = .true.
           end if
 
-          if ( keepFrazil ) then
+          ! Calculate energy associated with frazil mass transfer if frazil has accumulated
+          ! Here we include the land ice frazil, if active. Land ice masking will happen in
+          ! the coupler or sea ice component TODO: figure out which
+          if ( accumulatedFrazilIceMass(i) > 0.0_RKIND ) then
 
-             ! Calculate energy associated with frazil mass transfer to sea ice if frazil has accumulated
-             if ( accumulatedFrazilIceMass(i) > 0.0_RKIND ) then
+            seaIceEnergy(i) = accumulatedFrazilIceMass(i) * config_frazil_heat_of_fusion
+            o2x_o % rAttr(index_o2x_Fioo_q, n)  = seaIceEnergy(i) / ocn_cpl_dt
+            o2x_o % rAttr(index_o2x_Fioo_frazil, n) = accumulatedFrazilIceMass(i) / ocn_cpl_dt
 
-              seaIceEnergy(i) = accumulatedFrazilIceMass(i) * config_frazil_heat_of_fusion
+          ! Otherwise calculate the melt potential where avgTracersSurfaceValue represents only the
+          ! top layer of the ocean
+          elseif ( computeMeltPotential ) then
 
-             ! Otherwise calculate the melt potential where avgTracersSurfaceValue represents only the
-             ! top layer of the ocean
-             else
+            surfaceFreezingTemp = ocn_freezing_temperature(salinity=avgTracersSurfaceValue(index_salinitySurfaceValue, i), &
+               pressure=0.0_RKIND,  inLandIceCavity=.false.)
 
-              surfaceFreezingTemp = ocn_freezing_temperature(salinity=avgTracersSurfaceValue(index_salinitySurfaceValue, i), &
-                 pressure=0.0_RKIND,  inLandIceCavity=.false.)
+            seaIceEnergy(i) = min(rho_sw*cp_sw*layerThickness(1, i)*( surfaceFreezingTemp + T0_Kelvin &
+                            - avgTracersSurfaceValue(index_temperatureSurfaceValue, i) ), 0.0_RKIND )
 
-              seaIceEnergy(i) = min(rho_sw*cp_sw*layerThickness(1, i)*( surfaceFreezingTemp + T0_Kelvin &
-                              - avgTracersSurfaceValue(index_temperatureSurfaceValue, i) ), 0.0_RKIND )
-
-             end if
-
-             o2x_o % rAttr(index_o2x_Fioo_q, n)  = seaIceEnergy(i) / ocn_cpl_dt
-             o2x_o % rAttr(index_o2x_Fioo_frazil, n) = accumulatedFrazilIceMass(i) / ocn_cpl_dt
+            o2x_o % rAttr(index_o2x_Fioo_q, n)  = seaIceEnergy(i) / ocn_cpl_dt
+            o2x_o % rAttr(index_o2x_Fioo_frazil, n) = 0.0_RKIND
 
           else
 
-             o2x_o % rAttr(index_o2x_Fioo_q, n)  = 0.0_RKIND
-             o2x_o % rAttr(index_o2x_Fioo_frazil, n) = 0.0_RKIND
+            o2x_o % rAttr(index_o2x_Fioo_q, n)  = 0.0_RKIND
+            o2x_o % rAttr(index_o2x_Fioo_frazil, n) = 0.0_RKIND
 
           end if
 
@@ -4034,7 +4033,7 @@ contains
    
       character (len=StrKIND), pointer :: config_land_ice_flux_mode
    
-      logical :: keepFrazil
+      logical :: computeMeltPotential
 
    
       ! get configure options
@@ -4157,40 +4156,39 @@ contains
 
             if ( frazilIceActive ) then
                ! negative when frazil ice can be melted
-               keepFrazil = .true.
-               if ( associated(landIceMask) ) then
-                  if ( landIceMask(i) == 1 ) then
-                     keepFrazil = .false.
-                  end if
+               if ( associated(landIceMask) .and. landIceMask(i) == 1 ) then
+                  computeMeltPotential = .false.
+               else
+                  computeMeltPotential = .true.
                end if
    
-               if ( keepFrazil ) then
-   
-                  ! Calculate energy associated with frazil mass transfer to sea ice if frazil has accumulated
-                  if ( accumulatedFrazilIceMass(i) > 0.0_RKIND ) then
-   
-                  seaIceEnergy(i) = accumulatedFrazilIceMass(i) * config_frazil_heat_of_fusion 
-   
-                  ! Otherwise calculate the melt potential where avgTracersSurfaceValue represents only the
-                  ! top layer of the ocean
-                  else
-   
-                  surfaceFreezingTemp = ocn_freezing_temperature(salinity=avgTracersSurfaceValue(index_salinitySurfaceValue, i), &
-                     pressure=0.0_RKIND,  inLandIceCavity=.false.) 
-   
-                  seaIceEnergy(i) = min(rho_sw*cp_sw*layerThickness(1, i)*( surfaceFreezingTemp + T0_Kelvin &
+               ! Calculate energy associated with frazil mass transfer if frazil has accumulated
+               ! Here we include the land ice frazil, if active. Land ice masking will happen in
+               ! the coupler or sea ice component TODO: figure out which
+               if ( accumulatedFrazilIceMass(i) > 0.0_RKIND ) then
+
+                 seaIceEnergy(i) = accumulatedFrazilIceMass(i) * config_frazil_heat_of_fusion
+                 o2x_om(n, index_o2x_Fioo_q)  = seaIceEnergy(i) / ocn_cpl_dt
+                 o2x_om(n, index_o2x_Fioo_frazil) = accumulatedFrazilIceMass(i) / ocn_cpl_dt
+
+               ! Otherwise calculate the melt potential where avgTracersSurfaceValue represents only the
+               ! top layer of the ocean
+               elseif ( computeMeltPotential ) then
+
+                 surfaceFreezingTemp = ocn_freezing_temperature(salinity=avgTracersSurfaceValue(index_salinitySurfaceValue, i), &
+                    pressure=0.0_RKIND,  inLandIceCavity=.false.)
+
+                 seaIceEnergy(i) = min(rho_sw*cp_sw*layerThickness(1, i)*( surfaceFreezingTemp + T0_Kelvin &
                                  - avgTracersSurfaceValue(index_temperatureSurfaceValue, i) ), 0.0_RKIND )
-   
-                  end if
-   
-                  o2x_om(n, index_o2x_Fioo_q) = seaIceEnergy(i) / ocn_cpl_dt
-                  o2x_om(n, index_o2x_Fioo_frazil) = accumulatedFrazilIceMass(i) / ocn_cpl_dt
-   
+
+                 o2x_om(n, index_o2x_Fioo_q)  = seaIceEnergy(i) / ocn_cpl_dt
+                 o2x_om(n, index_o2x_Fioo_frazil) = 0.0_RKIND
+
                else
-   
-                  o2x_om(n, index_o2x_Fioo_q)      = 0.0_RKIND
-                  o2x_om(n, index_o2x_Fioo_frazil) = 0.0_RKIND
-   
+
+                 o2x_om(n, index_o2x_Fioo_q)  = 0.0_RKIND
+                 o2x_om(n, index_o2x_Fioo_frazil) = 0.0_RKIND
+
                end if
    
                ! Reset SeaIce Energy and Accumulated Frazil Ice
