@@ -1011,7 +1011,7 @@ contains
 
          ! accumulatedLandIceFrazilMass
          variableIndex = variableIndex + 1
-         if (landIceFluxesPkgActive .and. frazilIcePkgActive) then
+         if (frazilIcePkgActive .and. sum(landIceFloatingArea) > 0.0_RKIND) then
             call ocn_compute_field_area_weighted_local_stats_surface(dminfo, nCellsSolve, &
                          landIceFloatingArea, &
                          accumulatedLandIceFrazilMass(1:nCellsSolve), sums_tmp(variableIndex), &
@@ -1324,7 +1324,7 @@ contains
 
       ! accumulatedLandIceFrazilMass
       variableIndex = variableIndex + 1
-      if (landIceFluxesPkgActive .and. frazilIcePkgActive .and. landIceFloatingAreaSum > 0.0_RKIND) then
+      if (frazilIcePkgActive .and. landIceFloatingAreaSum > 0.0_RKIND) then
          averages(variableIndex) = sums(variableIndex)/(landIceFloatingAreaSum)
          rms(variableIndex) = sqrt(sumSquares(variableIndex)/(landIceFloatingAreaSum))
       else
