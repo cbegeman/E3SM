@@ -607,7 +607,7 @@ contains
                   ! Frazil ice mass is negative. Negative coefficient makes heat
                   ! flux positive, because freezing ice releases heat.
                   sumArray(18) = sumArray(18) - areaCell(iCell) * config_frazil_heat_of_fusion &
-                                 * (accumulatedLandIceFrazilMassNew(iCell) - accumulatedLandIceFrazilMassOld(iCell))
+                                 * (accumulatedLandIceFrazilMassNew(iCell) - accumulatedLandIceFrazilMassOld(iCell))/dt
                enddo
             end if
 
