@@ -474,12 +474,11 @@ contains
       integer :: cell1, cell2, iEdge, iCell, k, i
 
       real (kind=RKIND) :: divOutFlux
-      real (kind=RKIND) :: columnThickness
       real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor, hEdgeTotal
-
+      real (kind=RKIND), dimension(:), allocatable :: columnThickness
       character (len=100) :: log_string
 
-      integer:: cellDummy(2), cellCur, CellNei, sshCur, sshNei
+      integer:: cellDummy(2), cellCur, cellNei
       real (kind=RKIND), dimension(:), pointer :: sshCell
       real (kind=RKIND), dimension(:, :), pointer :: layerThicknessCell
 
@@ -505,6 +504,8 @@ contains
       !$omp parallel
       !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux)
       do iCell = 1, nCellsAll
+        columnThickness(iCell) = 0.0_RKIND
+        layerThicknessCell(:, iCell) = 0.0_RKIND
         do k = minLevelCell(iCell), maxLevelCell(iCell)
           divOutFlux = 0.0_RKIND
           do i = 1, nEdgesOnCell(iCell)
@@ -719,7 +720,7 @@ contains
 
       integer :: i, iEdge
 
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor
 
       if (config_use_column_thickness_wetting_drying) then
         hCrit = (config_drying_min_cell_height + config_drying_safety_height) * &
@@ -757,7 +758,7 @@ contains
             if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                    tanh(hRampFactor * (layerThickness - hRampMin)/hRampMin)
+                    tanh(hRampFactor * (layerThicknessTmp - hRampMin)/hRampMin)
                end if
             end if
          end do
