@@ -409,149 +409,6 @@ contains
 
 !***********************************************************************
 !
-!  routine ocn_wetting_drying_full_depth_factor
-!
-!> \brief   Computes velocity to prevent cell drying
-!> \author  Phillip J. Wolfram
-!> \date    03/19/2018
-!> \details
-!>  This routine adds wetting velocity opposed to drying motion
-!>  to prevent cells from drying.
-!
-!-----------------------------------------------------------------------
-   subroutine ocn_wetting_drying_full_depth_factor(layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
-
-       normalVelocity, dt, wettingVelocityFactor, err)!{{{
-
-      !-----------------------------------------------------------------
-      !
-      ! input variables
-      !
-      !-----------------------------------------------------------------
-
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
-         layerThicknessCur    !< Input: layer thickness at old time
-
-       real (kind=RKIND), dimension(:,:), intent(in) :: &
-         layerThicknessProvis    !< Input: provisional layer thickness
-
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
-         layerThickEdgeFlux  !< Input: flux-related layerThickness at an edge
-
-      real (kind=RKIND), dimension(:,:), intent(in) :: &
-         normalVelocity     !< Input: transport
-
-      real (kind=RKIND), intent(in) :: &
-         dt     !< Input: time step
-
-      !-----------------------------------------------------------------
-      !
-      ! input/output variables
-      !
-      !-----------------------------------------------------------------
-
-      real (kind=RKIND), dimension(:,:), intent(inout) :: &
-         wettingVelocityFactor          !< Input/Output: velocity wettingVelocityFactor
-
-      !-----------------------------------------------------------------
-      !
-      ! output variables
-      !
-      !-----------------------------------------------------------------
-
-      integer, intent(out) :: err !< Output: error flag
-
-      !-----------------------------------------------------------------
-      !
-      ! local variables
-      !
-      !-----------------------------------------------------------------
-
-      integer :: cell1, cell2, iEdge, iCell, k, i
-
-      real (kind=RKIND) :: divFlux, divOutFlux
-      real (kind=RKIND) :: layerThickness, columnThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor
-
-      character (len=100) :: log_string
-
-      err = 0
-
-      if (.not. config_zero_drying_velocity) return
-
-      ! need predicted transport velocity to limit drying flux
-      !$omp parallel
-      !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux, layerThickness)
-      do iCell = 1, nCellsAll
-        columnThickness = 0.0_RKIND
-        hCrit = 0.0_RKIND
-        hRampMax = 0.0_RKIND
-        hRampMin = 0.0_RKIND
-        hRampFactor = config_zero_drying_velocity_ramp_factor
-
-        do k = minLevelCell(iCell), maxLevelCell(iCell)
-          divOutFlux = 0.0_RKIND
-
-          layerThickness = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
-          do i = 1, nEdgesOnCell(iCell)
-            iEdge = edgesOnCell(i, iCell)
-            if (k <= maxLevelEdgeTop(iEdge) .and. k >= minLevelEdgeBot(iEdge)) then
-              ! only consider divergence flux leaving the cell
-              if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
-                divOutFlux = divOutFlux + &
-                             normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) * &
-                             layerThickEdgeFlux(k, iEdge) * dvEdge(iEdge) * &
-                             invAreaCell(iCell)
-              end if
-            end if
-          end do
-          layerThickness = layerThickness + dt * divOutFlux
-          columnThickness = columnThickness + layerThickness
-          hCrit = hCrit + config_drying_min_cell_height + config_drying_safety_height
-          hRampMax = hRampMax + config_zero_drying_velocity_ramp_hmax
-          hRampMin = hRampMin + config_zero_drying_velocity_ramp_hmin
-        enddo
-        ! The projected column thickness only accounts for outgoing fluxes
-        ! if column thickness is too small, limit flux throughout the full column
-        if (columnThickness <= hCrit) then
-          do k = minLevelCell(iCell), maxLevelCell(iCell)
-            do i = 1, nEdgesOnCell(iCell)
-              iEdge = edgesOnCell(i, iCell)
-              if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
-                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND
-                end if
-              end if
-            end do
-          end do
-        elseif (config_zero_drying_velocity_ramp) then
-          if ((columnThickness > hCrit ) .and. &
-              (columnThickness <= hRampMax)) then
-
-            ! Following O'Dea et al. (2021), if total upwinded wct is less than
-            ! 2*critical thickness, apply damping at each edge
-            do k = minLevelCell(iCell), maxLevelCell(iCell)
-              do i = 1, nEdgesOnCell(iCell)
-                iEdge = edgesOnCell(i, iCell)
-                if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-                  if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
-                    wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                      tanh(hRampFactor * (columnThickness - hRampMin)/hRampMin)
-                  end if
-                end if
-              end do
-            end do
-          end if
-        end if
-
-      end do
-      !$omp end do
-      !$omp end parallel
-
-   end subroutine ocn_wetting_drying_full_depth_factor !}}}
-
-!***********************************************************************
-!
 !  routine ocn_wetting_drying_wettingVelocity
 !
 !> \brief   Computes velocity to prevent cell drying
@@ -664,11 +521,19 @@ contains
           end do
 
           layerThicknessCell(k, iCell) = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell)) + dt * divOutFlux
-          if ( .not. config_use_ssh_gradient_wetting_drying ) then
+          columnThickness(iCell) = columnThickness(iCell) + layerThicknessCell(k, iCell)
+          if ( .not. config_use_ssh_gradient_wetting_drying .and. &
+               .not. config_use_column_thickness_wetting_drying ) then
              call ocn_wetting_velocity_factor_on_cell_edges( &
                       wettingVelocityFactor, layerThicknessCell(k, iCell), normalVelocity, iCell, k)
           end if
         end do
+        if (config_use_column_thickness_wetting_drying) then
+          do k = minLevelCell(iCell), maxLevelCell(iCell)
+            call ocn_wetting_velocity_factor_on_cell_edges(wettingVelocityFactor, columnThickness(iCell), &
+                                                           normalVelocity, iCell, k)
+          end do
+        end if
       end do
       !$omp end do
       !$omp end parallel
@@ -854,14 +719,24 @@ contains
 
       integer :: i, iEdge
 
-      real (kind=RKIND) :: hCrit, hRampMin
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax
 
-      hCrit = config_drying_min_cell_height
+      if (config_use_column_thickness_wetting_drying) then
+        hCrit = (config_drying_min_cell_height + config_drying_safety_height) * &
+                (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+        hRampMin = config_zero_drying_velocity_ramp_hmin * &
+                (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+        hRampMax = config_zero_drying_velocity_ramp_hmax * &
+                (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+      else
+        hCrit = config_drying_min_cell_height + config_drying_safety_height
+        hRampMin = config_zero_drying_velocity_ramp_hmin
+        hRampMax = config_zero_drying_velocity_ramp_hmax
+      endif
 
       ! if layer thickness is too small, limit divergence flux outwards with
       ! opposite velocity
-      if (layerThicknessTmp <= &
-         hCrit + config_drying_safety_height) then
+      if (layerThicknessTmp <= hCrit) then
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
@@ -871,11 +746,9 @@ contains
             end if
          end do
       elseif (config_zero_drying_velocity_ramp .and. &
-              (layerThicknessTmp > &
-              hCrit + config_drying_safety_height) .and. &
-              (layerThicknessTmp <= config_zero_drying_velocity_ramp_hmax)) then
+              (layerThicknessTmp > hCrit) .and. &
+              (layerThicknessTmp <= hRampMax)) then
 
-         hRampMin = config_zero_drying_velocity_ramp_hmin
          hRampFactor = config_zero_drying_velocity_ramp_factor
          ! Following O'Dea et al. (2021), if total upwinded wct is less than
          ! 2*critical thickness, apply damping at each edge
