@@ -575,11 +575,7 @@ contains
           !$omp parallel
           !$omp do schedule(runtime) private(k, columnThickness)
           do iCell = 1, nCellsAll
-            columnThickness = 0.0_RKIND
-            do k = minLevelCell(iCell), maxLevelCell(iCell)
-              columnThickness = columnThickness + layerThicknessCell(k, iCell)
-            enddo
-            sshCell(iCell) = columnThickness - bottomDepth(iCell)
+            sshCell(iCell) = columnThickness(iCell) - bottomDepth(iCell)
           enddo
           !$omp end do
           !$omp end parallel
