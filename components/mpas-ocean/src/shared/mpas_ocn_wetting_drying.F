@@ -53,7 +53,7 @@ module ocn_wetting_drying
    !--------------------------------------------------------------------
 
    public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4
-   public :: ocn_wetting_velocity_factor_on_cell_edges
+   public :: ocn_compute_wetting_velocity_factor
 
    !--------------------------------------------------------------------
    !
@@ -359,15 +359,13 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: cell1, cell2, iEdge, iCell, k, i
+      integer :: iEdge, iCell, k, i
 
       real (kind=RKIND) :: divOutFlux
       real (kind=RKIND) :: columnThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor, hEdgeTotal
 
       character (len=100) :: log_string
 
-      integer:: cellDummy(2), cellCur, CellNei, sshCur, sshNei
       real (kind=RKIND), dimension(:), pointer :: sshCell
       real (kind=RKIND), dimension(:, :), pointer :: layerThicknessCell
 
@@ -382,11 +380,6 @@ contains
          call mpas_log_write("config_use_ssh_gradient_wetting_drying requires " // &
                              "config_pressure_gradient_type = 'ssh_gradient'", MPAS_LOG_CRIT)
       endif
-
-      hRampMin = config_zero_drying_velocity_ramp_hmin
-      hRampMax = config_zero_drying_velocity_ramp_hmax
-      hRampFactor = config_zero_drying_velocity_ramp_factor
-      hCrit = config_drying_min_cell_height + config_drying_safety_height
 
       layerThicknessCell => layerThicknessCellWetDry
       ! need predicted transport velocity to limit drying flux
@@ -410,8 +403,8 @@ contains
 
           layerThicknessCell(k, iCell) = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell)) + dt * divOutFlux
           if ( .not. config_use_ssh_gradient_wetting_drying ) then
-             call ocn_wetting_velocity_factor_on_cell_edges( &
-                      wettingVelocityFactor, layerThicknessCell(k, iCell), normalVelocity, iCell, k)
+             call ocn_compute_wetting_velocity_factor( &
+                      wettingVelocityFactor, layerThicknessCell, normalVelocity, iCell, k)
           end if
         end do
       end do
@@ -465,84 +458,13 @@ contains
         end if
 
         !$omp parallel
-        !$omp do schedule(runtime) private(k, i, iEdge, cellDummy, cellNei, cellCur, sshCur, sshNei)
+        !$omp do schedule(runtime) private(k)
         do iCell = 1, nCellsAll
-          do i = 1, nEdgesOnCell(iCell)
-            iEdge = edgesOnCell(i, iCell)
-            do k = minLevelCell(iCell), maxLevelCell(iCell)
-              if (k <= maxLevelEdgeTop(iEdge) .and. k >= minLevelEdgeBot(iEdge) .and. &
-                 layerThicknessCell(k, iCell) <= hCrit ) then
-                ! If edge velocity has been zeroed, check neighbor and currnt cell ssh.
-                ! Allow flow into current cell if neighbor cell is wet and the ssh gradient
-                ! would cause flow from neighbor cell into current cell.
-                if ( normalVelocity(k,iEdge)*edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
-
-                  wettingVelocityFactor(k,iEdge) = 1.0_RKIND
-
-                elseif ( normalVelocity(k,iEdge)*edgeSignOnCell(i, iCell) == 0.0_RKIND ) then
-
-                  cellDummy(1:2) = cellsOnEdge(1:2,iEdge)
-                  cellNei = merge( cellDummy(2), cellDummy(1), iCell == cellDummy(1) )
-                  cellCur = iCell
-                  if ( cellNei > nCellsAll ) cellNei = cellCur
-                  sshCur = sshCell(cellCur)
-                  sshNei = sshCell(cellNei)
-
-                  wettingVelocityFactor(k,iEdge) = 1.0_RKIND
-
-                  ! if the neigbor cell is anticipated wet
-                  if ( layerThicknessCell(k, cellNei) >  hCrit ) then
-                    if ( sshCur < sshNei ) then
-                       wettingVelocityFactor(k,iEdge) = 0.0_RKIND
-                    end if
-                  end if
-
-                end if ! velocity check
-              endif ! k check and thickness check
-            enddo ! k
-          enddo ! i
-        end do ! iCell
-        !$omp end do
-        !$omp end parallel
-
-        !$omp parallel
-        !$omp do schedule(runtime) private(k, i, iEdge, cellDummy, cellNei, cellCur, sshCur, sshNei)
-        do iCell = 1, nCellsAll
-          do i = 1, nEdgesOnCell(iCell)
-            iEdge = edgesOnCell(i, iCell)
-            do k = minLevelCell(iCell), maxLevelCell(iCell)
-              if (k <= maxLevelEdgeTop(iEdge) .and. k >= minLevelEdgeBot(iEdge) .and. &
-                  config_zero_drying_velocity_ramp .and. &
-                  (layerThicknessCell(k, iCell) > hCrit) .and. &
-                  (layerThicknessCell(k, iCell) <= hRampMax) ) then
-
-                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                      tanh(hRampFactor * (layerThicknessCell(k, iCell) - hRampMin)/hRampMin)
-                endif
-
-                ! If edge velocity has been zeroed, check neighbor and current cell ssh.
-                ! Prevent flow out of cell if neighbor cell is dry and the ssh gradient
-                ! would cause flow from neighbor cell into current cell.
-                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i,iCell) == 0.0_RKIND ) then
-
-                  cellDummy(1:2) = cellsOnEdge(1:2,iEdge)
-                  cellNei = merge( cellDummy(2), cellDummy(1), iCell == cellDummy(1) )
-                  cellCur = iCell
-                  if ( cellNei > nCellsAll ) cellNei = cellCur
-                  sshCur = sshCell(cellCur)
-                  sshNei = sshCell(cellNei)
-
-                  ! if the neigbor cell is anticipated dry
-                  if ( layerThicknessCell(k, cellNei) <=  hCrit ) then
-                     if ( sshCur < sshNei ) then
-                         wettingVelocityFactor(k,iEdge) = 1.0_RKIND
-                     end if
-                  end if
-                end if ! velocity check
-              end if ! thickness check
-            enddo ! k
-          enddo ! iEdge
+          do k = minLevelCell(iCell), maxLevelCell(iCell)
+            call ocn_compute_wetting_velocity_factor( &
+                    wettingVelocityFactor, layerThicknessCell, normalVelocity, &
+                    iCell, k, sshCell)
+          enddo ! k
         end do ! iCell
         !$omp end do
         !$omp end parallel
@@ -562,7 +484,7 @@ contains
 !>  This routine computes wettingVelocityFactor at the edges of iCell
 !
 !-----------------------------------------------------------------------
-   subroutine ocn_wetting_velocity_factor_on_cell_edges(wettingVelocityFactor, layerThicknessTmp, normalVelocity, iCell, k)!{{{
+   subroutine ocn_compute_wetting_velocity_factor(wettingVelocityFactor, layerThicknessCell, normalVelocity, iCell, k, sshCell)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -570,18 +492,19 @@ contains
       !
       !-----------------------------------------------------------------
 
-      real (kind=RKIND), intent(in) :: &
-         layerThicknessTmp    !< Input: layer thickness to use for limiting
+      real (kind=RKIND), dimension(:,:), intent(in) :: &
+         layerThicknessCell !< Input: layer thickness to use for limiting
 
       real (kind=RKIND), dimension(:,:), intent(in) :: &
-         normalVelocity       !< Input: transport
+         normalVelocity     !< Input: transport
 
       integer, intent(in) :: &
-         iCell                !< Input: wettingVelocityFactor is computed at the edges of iCell
+         iCell              !< Input: wettingVelocityFactor is computed at the edges of iCell
 
       integer, intent(in) :: &
-         k                    !< Input: wettingVelocityFactor is computed at layer k
+         k                  !< Input: wettingVelocityFactor is computed at layer k
 
+      real (kind=RKIND), dimension(:), intent(in), optional :: sshCell !< Predicted SSH
       !-----------------------------------------------------------------
       !
       ! input/output variables
@@ -598,45 +521,86 @@ contains
       !-----------------------------------------------------------------
 
       integer :: i, iEdge
+      integer:: cellDummy(2), cellCur, CellNei
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor, sshCur, sshNei
 
-      real (kind=RKIND) :: hCrit, hRampMin
-
-      hCrit = config_drying_min_cell_height
+      hCrit = config_drying_min_cell_height + config_drying_safety_height
+      hRampMin = config_zero_drying_velocity_ramp_hmin
+      hRampMax = config_zero_drying_velocity_ramp_hmax
+      hRampFactor = config_zero_drying_velocity_ramp_factor
 
       ! if layer thickness is too small, limit divergence flux outwards with
       ! opposite velocity
-      if (layerThicknessTmp <= &
-         hCrit + config_drying_safety_height) then
+      if (layerThicknessCell(k, iCell) <= hCrit) then
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-               if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+               if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+                 wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+               elseif ( normalVelocity(k,iEdge)*edgeSignOnCell(i, iCell) == 0.0_RKIND ) then
+                 if (config_use_ssh_gradient_wetting_drying) then
+
+                   cellDummy(1:2) = cellsOnEdge(1:2,iEdge)
+                   cellNei = merge( cellDummy(2), cellDummy(1), iCell == cellDummy(1) )
+                   cellCur = iCell
+                   if ( cellNei > nCellsAll ) cellNei = cellCur
+                   sshCur = sshCell(cellCur)
+                   sshNei = sshCell(cellNei)
+
+                   wettingVelocityFactor(k,iEdge) = 1.0_RKIND
+
+                   ! if the neigbor cell is anticipated wet
+                   if ( layerThicknessCell(k, cellNei) > hCrit ) then
+                     if ( sshCur < sshNei ) then
+                        wettingVelocityFactor(k,iEdge) = 0.0_RKIND
+                     end if
+                   end if
+
+                 else
+                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+                 end if
                end if
             end if
          end do
       elseif (config_zero_drying_velocity_ramp .and. &
-              (layerThicknessTmp > &
-              hCrit + config_drying_safety_height) .and. &
-              (layerThicknessTmp <= config_zero_drying_velocity_ramp_hmax)) then
+              (layerThicknessCell(k, iCell) > hCrit) .and. &
+              (layerThicknessCell(k, iCell) <= hRampMax)) then
 
-         hRampMin = config_zero_drying_velocity_ramp_hmin
-         hRampFactor = config_zero_drying_velocity_ramp_factor
          ! Following O'Dea et al. (2021), if total upwinded wct is less than
          ! 2*critical thickness, apply damping at each edge
          do i = 1, nEdgesOnCell(iCell)
-            iEdge = edgesOnCell(i, iCell)
-            if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-               if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                  wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                    tanh(hRampFactor * (layerThicknessTmp - hRampMin)/hRampMin)
+           iEdge = edgesOnCell(i, iCell)
+           if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
+             if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+                wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
+                  tanh(hRampFactor * (layerThicknessCell(k, iCell) - hRampMin)/hRampMin)
+             end if
+             ! If edge velocity has been zeroed, check neighbor and current cell ssh.
+             ! Prevent flow out of cell if neighbor cell is dry and the ssh gradient
+             ! would cause flow from neighbor cell into current cell.
+             if ( normalVelocity(k, iEdge) * edgeSignOnCell(i,iCell) == 0.0_RKIND .and. &
+                  config_use_ssh_gradient_wetting_drying ) then
+
+               cellDummy(1:2) = cellsOnEdge(1:2,iEdge)
+               cellNei = merge( cellDummy(2), cellDummy(1), iCell == cellDummy(1) )
+               cellCur = iCell
+               if ( cellNei > nCellsAll ) cellNei = cellCur
+               sshCur = sshCell(cellCur)
+               sshNei = sshCell(cellNei)
+
+               ! if the neigbor cell is anticipated dry
+               if ( layerThicknessCell(k, cellNei) <=  hCrit ) then
+                  if ( sshCur < sshNei ) then
+                      wettingVelocityFactor(k,iEdge) = 1.0_RKIND
+                  end if
                end if
-            end if
+             end if ! velocity check
+           end if
          end do
 
       end if
 
-   end subroutine ocn_wetting_velocity_factor_on_cell_edges!}}}
+   end subroutine ocn_compute_wetting_velocity_factor!}}}
 
 end module ocn_wetting_drying
 

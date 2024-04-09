@@ -1489,17 +1489,19 @@ module ocn_time_integration_lts
 
    real (kind=RKIND), dimension(:, :), pointer :: layerThickness
    real (kind=RKIND), dimension(:, :), pointer :: normalVelocity
-   real (kind=RKIND) :: divOutFlux, layerThicknessTmp
+   real (kind=RKIND), dimension(:, :), allocatable :: layerThicknessTmp
+   real (kind=RKIND) :: divOutFlux
 
    integer :: iEdge, k, iCell, i
 
    call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevelIn)
    call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevelIn)
 
+   allocate(layerThicknessTmp(nVertLevels, nCellsAll))
    do iCell = 1, nCellsAll
       do k = minLevelCell(iCell), maxLevelCell(iCell)
          divOutFlux = 0.0_RKIND
-         layerThicknessTmp = layerThickness(k, iCell)
+         layerThicknessTmp(k, iCell) = layerThickness(k, iCell)
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if (k <= maxLevelEdgeTop(iEdge) .and. k >= minLevelEdgeBot(iEdge)) then
@@ -1512,9 +1514,9 @@ module ocn_time_integration_lts
                 end if
              end if
           end do
-          layerThicknessTmp = layerThicknessTmp + dt * divOutFlux
+          layerThicknessTmp(k, iCell) = layerThicknessTmp(k, iCell) + dt * divOutFlux
 
-          call ocn_wetting_velocity_factor_on_cell_edges(wettingVelocityFactor, layerThicknessTmp, normalVelocity, iCell, k)
+          call ocn_compute_wetting_velocity_factor(wettingVelocityFactor, layerThicknessTmp, normalVelocity, iCell, k)
 
       end do
    end do
