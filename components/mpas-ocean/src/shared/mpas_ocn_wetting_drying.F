@@ -629,7 +629,7 @@ contains
             if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                    tanh(hRampFactor * (layerThickness - hRampMin)/hRampMin)
+                    tanh(hRampFactor * (layerThicknessTmp - hRampMin)/hRampMin)
                end if
             end if
          end do
