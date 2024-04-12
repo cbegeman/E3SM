@@ -54,6 +54,7 @@ module ocn_wetting_drying
 
    public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4
    public :: ocn_wetting_velocity_factor_on_cell_edges
+   public :: ocn_wetting_drying_barotropic_factor
 
    !--------------------------------------------------------------------
    !
@@ -641,6 +642,97 @@ contains
 
 !***********************************************************************
 !
+!  routine ocn_wetting_drying_barotropic_factor
+!
+!> \brief   Computes velocity to prevent cell drying
+!> \author  Phillip J. Wolfram
+!> \date    03/19/2018
+!> \details
+!>  This routine adds wetting velocity opposed to drying motion
+!>  to prevent cells from drying.
+!
+!-----------------------------------------------------------------------
+   subroutine ocn_wetting_drying_barotropic_factor(sshCur, sshProvis, &
+                     btrVelocity, wct, dt, wettingVelocityBarotropic, err)!{{{
+
+      !-----------------------------------------------------------------
+      !
+      ! input variables
+      !
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), intent(in) :: &
+         sshCur, &      !< current SSH
+         sshProvis, &   !< predicted SSH
+         btrVelocity, & !< barotropic velocity on edges
+         wct            !< water column thickness on edges, which may be
+                        !  centered or upwinded based on btrVelocity
+      real (kind=RKIND), intent(in) :: dt
+
+      !-----------------------------------------------------------------
+      !
+      ! input/output variables
+      !
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), intent(inout) :: &
+         wettingVelocityBarotropic !< Input/Output: velocity wettingVelocityFactor
+
+      !-----------------------------------------------------------------
+      !
+      ! output variables
+      !
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< Output: error flag
+
+      !-----------------------------------------------------------------
+      !
+      ! local variables
+      !
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), allocatable :: sshCell !< Predicted SSH using outgoing fluxes
+      real (kind=RKIND) :: divOutFlux
+      integer :: iEdge, iCell, k, i
+
+      err = 0
+
+      allocate(sshCell(nCellsAll))
+      ! Use velocity and old ssh to predict ssh using only outward flow
+      !$omp parallel
+      !$omp do schedule(runtime) private(i, iEdge, divOutFlux)
+      do iCell = 1, nCellsAll
+        divOutFlux = 0.0_RKIND
+        do i = 1, nEdgesOnCell(iCell)
+          iEdge = edgesOnCell(i, iCell)
+          ! only consider divergence flux leaving the cell
+          if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+            divOutFlux = divOutFlux + &
+                         btrVelocity(iEdge) * edgeSignOnCell(i, iCell) * &
+                         wct(iEdge) * dvEdge(iEdge) * &
+                         invAreaCell(iCell)
+          end if
+        end do
+
+        sshCell(iCell) = min(sshProvis(iCell), sshCur(iCell)) + dt * divOutFlux
+      enddo
+      !$omp end do
+      !$omp end parallel
+
+      !$omp parallel
+      !$omp do schedule(runtime)
+      do iCell = 1, nCellsAll
+        call ocn_compute_barotropic_wetting_velocity_factor( &
+           wettingVelocityBarotropic, btrVelocity, iCell, sshCell)!{{{
+      enddo
+      !$omp end do
+      !$omp end parallel
+
+   end subroutine ocn_wetting_drying_barotropic_factor
+
+!***********************************************************************
+!
 !  routine ocn_wetting_velocity_factor_on_cell_edges
 !
 !> \brief   Computes wettingVelocityFactor at edges of iCell
@@ -651,7 +743,7 @@ contains
 !
 !-----------------------------------------------------------------------
    subroutine ocn_compute_barotropic_wetting_velocity_factor( &
-      wettingVelocityFactor, layerThicknessCell, normalVelocity, iCell, k, sshCell)!{{{
+      wettingVelocityFactor, btrVelocity, iCell, sshCell)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -660,15 +752,12 @@ contains
       !-----------------------------------------------------------------
 
       real (kind=RKIND), dimension(:), intent(in) :: &
-         wct             !< Input: water column thickness to use for limiting
-
-      real (kind=RKIND), dimension(:), intent(in) :: &
          btrVelocity     !< Input: transport
 
       integer, intent(in) :: &
          iCell           !< Input: wettingVelocityFactor is computed at the edges of iCell
 
-      real (kind=RKIND), dimension(:), intent(in), optional :: sshCell !< Predicted SSH
+      real (kind=RKIND), dimension(:), intent(in) :: sshCell !< Predicted SSH using outgoing fluxes
       !-----------------------------------------------------------------
       !
       ! input/output variables
@@ -684,6 +773,9 @@ contains
       !
       !-----------------------------------------------------------------
 
+      real (kind=RKIND) :: &
+         wctCur, wctNei             !< water column thickness to use for limiting
+
       integer :: i, iEdge
       integer:: cellDummy(2), cellCur, CellNei, nVertLevelsCell
       real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hRampFactor, sshCur, sshNei
@@ -694,9 +786,10 @@ contains
       hRampMax = config_zero_drying_velocity_ramp_hmax * nVertLevelsCell
       hRampFactor = config_zero_drying_velocity_ramp_factor
 
+      wctCur = bottomDepth(iCell) + sshCell(iCell)
       ! if layer thickness is too small, limit divergence flux outwards with
       ! opposite velocity
-      if (wct(iCell) <= hCrit) then
+      if (wctCur <= hCrit) then
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
@@ -710,11 +803,12 @@ contains
                 if ( cellNei > nCellsAll ) cellNei = cellCur
                 sshCur = sshCell(cellCur)
                 sshNei = sshCell(cellNei)
+                wctNei = bottomDepth(cellNei) + sshNei
 
                 wettingVelocityFactor(iEdge) = 1.0_RKIND
 
                 ! if the neigbor cell is anticipated wet
-                if ( wct(cellNei) > hCrit ) then
+                if ( wctNei > hCrit ) then
                   if ( sshCur < sshNei ) then
                      wettingVelocityFactor(iEdge) = 0.0_RKIND
                   end if
@@ -726,8 +820,8 @@ contains
             end if
          end do
       elseif (config_zero_drying_velocity_ramp .and. &
-              (wct(iCell) > hCrit) .and. &
-              (wct(iCell) <= hRampMax)) then
+              (wctCur > hCrit) .and. &
+              (wctCur <= hRampMax)) then
 
          ! Following O'Dea et al. (2021), if total upwinded wct is less than
          ! 2*critical thickness, apply damping at each edge
@@ -735,7 +829,7 @@ contains
            iEdge = edgesOnCell(i, iCell)
            if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
               wettingVelocityFactor(iEdge) = 1.0_RKIND - &
-                tanh(hRampFactor * (wct(iCell) - hRampMin)/hRampMin)
+                tanh(hRampFactor * (wctCur - hRampMin)/hRampMin)
            end if
            ! If edge velocity has been zeroed, check neighbor and current cell ssh.
            ! Prevent flow out of cell if neighbor cell is dry and the ssh gradient
@@ -749,12 +843,13 @@ contains
              if ( cellNei > nCellsAll ) cellNei = cellCur
              sshCur = sshCell(cellCur)
              sshNei = sshCell(cellNei)
+             wctNei = bottomDepth(cellNei) + sshNei
 
              ! if the neigbor cell is anticipated dry
-             if ( wct(cellNei) <=  hCrit ) then
-                if ( sshCur < sshNei ) then
-                    wettingVelocityFactor(iEdge) = 1.0_RKIND
-                end if
+             if ( wctNei <= hCrit ) then
+               if ( sshCur < sshNei ) then
+                 wettingVelocityFactor(iEdge) = 1.0_RKIND
+               end if
              end if
            end if ! velocity check
          end do
