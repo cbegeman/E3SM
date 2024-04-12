@@ -44,6 +44,7 @@ module ocn_time_integration_split
    use ocn_vertical_advection
    use ocn_vertical_remap
    use ocn_time_average_coupled
+   use ocn_wetting_drying
 
    use ocn_effective_density_in_land_ice
    use ocn_surface_land_ice_fluxes
@@ -1251,6 +1252,9 @@ module ocn_time_integration_split
 
                ! a cell halo layer is now corrupted - decrement counter
                cellHaloComputeCounter = cellHaloComputeCounter - 1
+               call ocn_wetting_drying_barotropic_factor( &
+                         sshSubcycleCur, sshSubcycleNew, btrvel_temp, wctEdge, &
+                         dt, wettingVelocityBarotropicSubcycleNew, err)
 
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: VELOCITY CORRECTOR STEP
