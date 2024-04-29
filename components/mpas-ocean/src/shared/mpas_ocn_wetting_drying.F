@@ -733,10 +733,10 @@ contains
 
 !***********************************************************************
 !
-!  routine ocn_wetting_velocity_factor_on_cell_edges
+!  routine ocn_compute_barotropic_wetting_velocity_factor
 !
-!> \brief   Computes wettingVelocityFactor at edges of iCell
-!> \author  Giacomo Capodaglio
+!> \brief   Computes barotropic wettingVelocityFactor at edges of iCell
+!> \author  Carolyn Begeman
 !> \date    09/06/2023
 !> \details
 !>  This routine computes wettingVelocityFactor at the edges of iCell
