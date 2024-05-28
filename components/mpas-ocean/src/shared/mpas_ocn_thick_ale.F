@@ -203,7 +203,7 @@ contains
             ! but with eqn 6
             do k = kMin, kMax
                ALE_thickness(k, iCell) = restingThickness(k, iCell) &
-                  + ( (SSH(iCell) + restingThicknessDiff) * vertCoordMovementWeights(k) * &
+                  + ( (SSH(iCell) - restingThicknessDiff) * vertCoordMovementWeights(k) * &
                       restingThickness(k, iCell) ) / weightedThicknessSum
             end do
          enddo
