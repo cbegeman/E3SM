@@ -172,7 +172,7 @@ contains
 #ifdef MPAS_OPENACC
          !xacc parallel loop &
          !xacc    present(ALE_thickness, SSH, restingThickness, &
-         !xacc            minLevelCell, maxLevelCell, &
+         !xacc            minLevelCell, maxLevelCell, bottomDepth, &
          !xacc            vertCoordMovementWeights) &
          !xacc    private(k, kMin, kMax, restingThicknessDiff, &
          !xacc            restingThicknessSum, weightedThicknessSum)
