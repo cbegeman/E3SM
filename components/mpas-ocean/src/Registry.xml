@@ -1988,6 +1988,7 @@
 			<var name="boundaryLayerDepth"/>
 			<var name="effectiveDensityInLandIce"/>
 			<var_struct name="ecosysAuxiliary"/>
+			<var name="accumulatedSnowIceMass"/>
 			<var name="accumulatedFrazilIceMass"/>
 			<var name="accumulatedFrazilIceSalinity"/>
 			<var name="accumulatedLandIceMass"/>
@@ -2339,6 +2340,10 @@
 			 description="low frequency-filtered divergence"
 			 missing_value="FILLVAL" missing_value_mask="cellMask"
 			 packages="thicknessFilter"
+		/>
+
+		<var name="accumulatedSnowIceMass" type="real" dimensions="nCells Time" units="kg m^-2"
+			 description="Mass per unit area of snow and ice runoff unmelted due to lack of available ocean heat."
 		/>
 
 		<!-- FIELDS FOR FRAZIL ICE -->
