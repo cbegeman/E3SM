@@ -1082,11 +1082,15 @@ module ocn_time_integration_split
                              normalBarotropicVelocitySubcycleCur(eoe)* &
                                        fEdge(eoe)
                      end do
+                     dragTerm = 2.0_RKIND * dragCoeff * &
+                           abs(normalBarotropicVelocitySubcycleCur(iEdge))* &
+                           normalBarotropicVelocitySubcycleCur(iEdge)/ &
+                           (sshSubcycleCur(cell1) + sshSubcycleCur(cell2))
 
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                            temp_mask* &
                            (normalBarotropicVelocitySubcycleCur(iEdge) &
-                            + dt/nBtrSubcycles*(CoriolisTerm - gravity &
+                            + dt/nBtrSubcycles*(CoriolisTerm + dragTerm - gravity &
                              *(sshSubcycleCur(cell2) - &
                                sshSubcycleCur(cell1))/dcEdge(iEdge) + &
                                barotropicForcing(iEdge)))
@@ -1371,6 +1375,10 @@ module ocn_time_integration_split
                                          sshSubcycleCur(cell2) &
                               +      config_btr_gam2_SSHWt1  * &
                                          sshSubcycleNew(cell2)
+                     dragTerm = 2.0_RKIND * dragCoeff * &
+                           abs(normalBarotropicVelocitySubcycleCur(iEdge))* &
+                           normalBarotropicVelocitySubcycleCur(iEdge)/ &
+                           (sshCell1 + sshCell2)
 
                      ! normalBarotropicVelocityNew =
                      ! normalBarotropicVelocityOld + dt/J*
@@ -1380,7 +1388,7 @@ module ocn_time_integration_split
                           temp_mask * &
                           (normalBarotropicVelocitySubcycleCur(iEdge) &
                            + dt/nBtrSubcycles &
-                           *(CoriolisTerm - gravity* &
+                           *(CoriolisTerm + dragTerm - gravity* &
                              (sshCell2 - sshCell1)/dcEdge(iEdge) &
                            + barotropicForcing(iEdge)))
 
