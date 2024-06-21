@@ -517,17 +517,46 @@ contains
       !$omp parallel
       !$omp do schedule(runtime) private(allowedSalt, requiredSalt)
       do iCell = 1, nCells
+        meltedMassFlux = snowFlux(iCell) + iceRunoffFlux(iCell)
+        ! Negative heatFlux is an extraction of heat from the ocean
+        ! So, we negate heat fluxes when determining how much heat this flux needs.
+        requiredHeat = - meltedMassFlux * dt * latent_heat_fusion_mks ! [J/m^2]
+        minimumTemperature = ocn_freezing_temperature(salinity=tracerGroup(index_salinity_flux, minLevelCell(iCell), iCell), &
+                                                              pressure=pressure(minLevelCell(iCell),iCell), &
+                                                              inLandIceCavity=underLandIce)
+
+        ! This is the same as melt/freeze potential
+        allowedHeat = (tracerGroup(index_temperature_flux, minLevelCell(iCell), iCell) - minimumTemperature) * &
+                      layerThickness(minLevelCell(iCell), iCell) * cp_sw
+
+        if ( allowedHeat < requiredHeat ) then
+           meltedMassFluxRemoved = ( 1 - allowedHeat / requiredHeat ) * meltedMassFlux
+           meltedMassFlux = ( allowedHeat / requiredHeat ) * meltedMassFlux
+           accumulatedSnowIceMassNew(iCell) = accumulatedSnowIceMassOld(iCell) + meltedMassFluxRemoved * dt
+           tracersSurfaceFluxRemoved(index_temperature_flux, iCell) = tracersSurfaceFluxRemoved(index_temperature_flux, iCell)  &
+                                                                    + meltedMassFluxRemoved * latent_heat_fusion_mks * hflux_factor
+        else
+           ! Heat available after melting fluxes from current time step can be used to melt accumulatedSnowIceMass from previous
+           ! time steps
+           excessHeat = allowedHeat - requiredHeat
+           requiredAccumulatedHeat = latent_heat_fusion_mks * accumulatedSnowIceMassOld(iCell)
+           meltedAccumulatedMassFlux = min(excessHeat, requiredAccumulatedHeat) * latent_heat_fusion_mks ! [kg/m2]
+           meltedMassFlux = meltedMassFlux + meltedAccumulatedMassFlux
+           accumulatedSnowIceMassNew(iCell) = accumulatedSnowIceMassOld(iCell) - dt * meltedAccumulatedMassFlux
+        endif
+
         tracersSurfaceFlux(index_temperature_flux, iCell) = tracersSurfaceFlux(index_temperature_flux, iCell) &
                                                            + (latentHeatFlux(iCell) + sensibleHeatFlux(iCell) &
                                                            + longWaveHeatFluxUp(iCell) + longWaveHeatFluxDown(iCell) &
                                                            + seaIceHeatFlux(iCell) + icebergHeatFlux(iCell) &
-                                                           - (snowFlux(iCell) + iceRunoffFlux(iCell)) &
-                                                           * latent_heat_fusion_mks) * hflux_factor
+                                                           - (meltedMassFlux * latent_heat_fusion_mks) * hflux_factor
 
         ! Negative seaIceSalinityFlux is an extraction of salt from the ocean
         ! So, we negate seaIceSalinityFlux when determining how much salt this flux needs.
-        requiredSalt = - seaIceSalinityFlux(iCell) * sflux_factor * dt / layerThickness(minLevelCell(iCell), iCell)
-        allowedSalt = min( 4.0_RKIND, tracerGroup(index_salinity_flux, minLevelCell(iCell), iCell) )
+        requiredSalt = - seaIceSalinityFlux(iCell) * dt  ! [kg/m^2]
+        minimumSalinity = 4.0_RKIND ! [psu]
+        allowedSalt = (tracerGroup(index_salinity_flux, minLevelCell(iCell), iCell) - minimumSalinity) * &
+                      layerThickness(minLevelCell(iCell), iCell) / sflux_factor  ! [kg/m^2]
 
         if ( allowedSalt < requiredSalt ) then
            tracersSurfaceFluxRemoved(index_salinity_flux, iCell) = tracersSurfaceFluxRemoved(index_salinity_flux, iCell)  &
