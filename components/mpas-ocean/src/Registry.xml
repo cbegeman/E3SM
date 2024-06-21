@@ -1388,6 +1388,10 @@
 					description="If true, execute the SSH corrector step in stage 2"
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_btr_bottom_drag" type="logical" default_value=".false."
+					description="If true, split bottom drag into barotropic and baroclinic stages"
+					possible_values=".true. or .false."
+		/>
 	</nml_record>
 	<nml_record name="split_implicit_ts" mode="forward">
 		<nml_option name="config_btr_si_preconditioner" type="character" default_value="ras"
