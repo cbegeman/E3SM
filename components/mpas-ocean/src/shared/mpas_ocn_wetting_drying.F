@@ -99,7 +99,8 @@ contains
       !
       !-----------------------------------------------------------------
       integer :: iCell
-      real (kind=RKIND), dimension(:), pointer :: landIceMask, landIcePressure
+      integer, dimension(:), pointer :: landIceMask
+      real (kind=RKIND), dimension(:), pointer :: landIcePressure
       real (kind=RKIND) :: ssh_crit, ssh_floatation, hCrit
 
       err = 0
@@ -110,6 +111,7 @@ contains
       call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
       call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
 
+      call mpas_log_write('start loop')
       !$omp parallel
       !$omp do schedule(runtime) private(ssh_floatation, ssh_crit)
       do iCell = 1, nCellsAll
@@ -126,8 +128,12 @@ contains
          ! floatation at roughly the point at which the wetting-and-drying
          ! is active (ssh_crit)
          ! we need to multiply by landIceMask here for the cases where ssh_crit > 0
+         !call mpas_log_write('ssh_float = $r, ssh_crit = $r, z_bed = $r', &
+         !   REALARGS=(/ssh_floatation, ssh_crit, bottomDepth(iCell)/))
          ssh_land_ice_adjustment(iCell) = landIceMask(iCell) * &
                                           min(ssh_floatation - ssh_crit, 0.0_RKIND)
+         !call mpas_log_write('ssh_adjust = $r', &
+         !   REALARGS=(/ssh_land_ice_adjustment(iCell)/))
       end do
       !$omp end do
       !$omp end parallel
@@ -342,7 +348,9 @@ contains
      allocate(sshLandIceAdjustment(nCellsAll))
      sshLandIceAdjustment(:) = 0.0_RKIND
 
+     call mpas_log_write('Compute land ice ssh adjust')
      call ocn_compute_land_ice_ssh_adjustment(forcingPool, sshLandIceAdjustment, err)
+     call mpas_log_write('Compute wetting velocity factor')
      call ocn_wetting_drying_wettingVelocity( &
              domain, layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
              normalTransportVelocity, rkSubstepWeight, &
