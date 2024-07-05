@@ -2606,29 +2606,24 @@ contains
          !$omp end do
 #endif
       endif ! frazil pressure
+#ifndef MPAS_OPENACC
+      !$omp end parallel
+#endif
 
       ! Add land ice pressure if needed
 
       if (landIcePressureOn) then
-#ifdef MPAS_OPENACC
-         !$acc parallel loop &
-         !$acc    present(surfacePressure)
-         !! need this eventually, but there is currently
-         !! an issue, probably with the re-retrieval of pointer
-         !!acc    present(surfacePressure, landIcePressure)
-#else
-         !$omp do schedule(runtime)
-#endif
-         do iCell = 1, nCellsAll
-            surfacePressure(iCell) = surfacePressure(iCell) &
-                                   + landIcePressure(iCell)
-         end do
-#ifndef MPAS_OPENACC
-         !$omp end do
-#endif
          if (config_use_wetting_drying .and. config_zero_drying_velocity) then
-#ifndef MPAS_OPENACC
-            !$omp do schedule(runtime) private(floatation_pressure, h_crit, ssh_crit)
+#ifdef MPAS_OPENACC
+            !$acc parallel loop &
+            !$acc    present(surfacePressure)
+            !! need this eventually, but there is currently
+            !! an issue, probably with the re-retrieval of pointer
+            !!acc    present(surfacePressure, landIcePressure)
+#else
+            !$omp parallel
+            !$omp do schedule(runtime) &
+            !$omp private(floatation_pressure, h_crit, ssh_crit)
 #endif
             do iCell = 1, nCellsAll
                ! the ssh below which the wetting-and-drying factor is active
@@ -2637,17 +2632,35 @@ contains
                ! the maximum pressure is the one that results in ssh at the critical
                ! thickness (gravity is positive)
                floatation_pressure = - gravity * rho_sw * ssh_crit
-               surfacePressure(iCell) = min(surfacePressure(iCell), &
-                                            floatation_pressure)
+               surfacePressure(iCell) = surfacePressure(iCell) + &
+                                        min(floatation_pressure, landIcePressure(iCell))
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
+            !$omp end parallel
+#endif
+         else
+#ifdef MPAS_OPENACC
+            !$acc parallel loop &
+            !$acc    present(surfacePressure)
+            !! need this eventually, but there is currently
+            !! an issue, probably with the re-retrieval of pointer
+            !!acc    present(surfacePressure, landIcePressure)
+#else
+            !$omp parallel
+            !$omp do schedule(runtime) &
+            !$omp private(floatation_pressure, h_crit, ssh_crit)
+#endif
+            do iCell = 1, nCellsAll
+               surfacePressure(iCell) = surfacePressure(iCell) + &
+                                        landIcePressure(iCell)
+            end do
+#ifndef MPAS_OPENACC
+            !$omp end do
+            !$omp end parallel
 #endif
          endif
       endif ! land ice pressure
-#ifndef MPAS_OPENACC
-      !$omp end parallel
-#endif
 
    !--------------------------------------------------------------------
 
