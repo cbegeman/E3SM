@@ -2549,7 +2549,7 @@ contains
 #endif
             do iCell = 1, nCellsAll
                ! the ssh below which the wetting-and-drying factor is active
-               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+               h_crit = 0.0_RKIND
                ssh_crit = h_crit - bottomDepth(iCell)
                ! the maximum pressure is the one that results in ssh at the critical
                ! thickness (gravity is positive)

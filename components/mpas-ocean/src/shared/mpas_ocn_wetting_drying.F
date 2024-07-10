@@ -121,7 +121,7 @@ contains
          ssh_floatation = - landIcePressure(iCell) / (gravity * rho_sw)
 
          ! the ssh below which the wetting-and-drying factor is active
-         hCrit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+         hCrit = 0.0_RKIND
          ssh_crit = hCrit - bottomDepth(iCell)
 
          ! the ssh equivalent by which we adjusted landIcePressure to ensure
