@@ -2554,6 +2554,7 @@ contains
                ! the maximum pressure is the one that results in ssh at the critical
                ! thickness (gravity is positive)
                floatation_pressure = - gravity * rho_sw * ssh_crit
+               ! TODO consider masking
                surfacePressure(iCell) = surfacePressure(iCell) + &
                                         min(floatation_pressure, landIcePressure(iCell))
             end do

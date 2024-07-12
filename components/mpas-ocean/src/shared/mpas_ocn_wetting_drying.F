@@ -489,6 +489,7 @@ contains
           end do
 
           layerThicknessCell(k, iCell) = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell)) + dt * divOutFlux
+          if (sshLandIceAdjustment(iCell) > 0.0_RKIND) call mpas_log_write('sshLandIceAdjustment > 0 in wetdry')
           layerThicknessCell(k, iCell) = layerThicknessCell(k, iCell) + sshLandIceAdjustment(iCell) / nVertLevelsCell
           if ( .not. config_use_ssh_gradient_wetting_drying ) then
              call ocn_wetting_velocity_factor_on_cell_edges( &
