@@ -101,6 +101,7 @@ module ocn_time_integration_split
    real (kind=RKIND) :: &
       useVelocityCorrection,&! mask for velocity correction
       splitFact, &! mask for terms in split or unsplit cases
+      dragCoeff, &! drag coefficient to use when bottom drag is split
       self_attraction_and_loading_beta
 
 !***********************************************************************
@@ -188,6 +189,7 @@ module ocn_time_integration_split
          temp,             &! temp for holding vars at new time
          temp_h,           &! temporary for phi
          temp_mask,        &! temporary mask (edgeMask)
+         dragTerm,         &! temporary drag term
          lat,              &! cell latitude
          sshCell1,         &! sea sfc height in neighboring cells
          sshCell2,         &
@@ -201,6 +203,9 @@ module ocn_time_integration_split
          sshTemp,          &
          deltaSSH,         &
          wctEdge,          &! flux water column thickness at edge
+         dragTermCorMean, &! u^2/H mean over coriolis iter
+         dragTermSubcycleMean, &! u^2/H mean over coriolis iter
+         dragTermMean, &! u^2/H mean over btr subcycles
          baroclinicThickness
 
       ! State Array Pointers
@@ -397,6 +402,9 @@ module ocn_time_integration_split
       call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracersNew, 2)
 
       allocate(baroclinicThickness(nEdgesAll+1))
+      allocate(dragTermCorMean(nEdgesAll+1))
+      allocate(dragTermSubcycleMean(nEdgesAll+1))
+      allocate(dragTermMean(nEdgesAll+1))
 
       if (config_transport_tests_flow_id > 0) then
         ! This is a transport test. Write advection velocity from prescribed
@@ -602,6 +610,7 @@ module ocn_time_integration_split
       ! BEGIN large outer timestep iteration loop
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+      dragTermMean(:) = 0.0_RKIND
       do splitExplicitStep = 1, numTSIterations
 
          if (config_disable_thick_all_tend .and. &
@@ -720,6 +729,7 @@ module ocn_time_integration_split
          endif
 #endif
 
+         ! This is where the barotropic drag is removed in an explicit fashion
          call ocn_tend_vel(domain, tendPool, statePool, forcingPool, &
                            stage1_tend_time, domain % dminfo, dt)
 
@@ -729,6 +739,7 @@ module ocn_time_integration_split
          ! BEGIN baroclinic iterations on linear Coriolis term
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+         dragTermCorMean(:) = 0.0_RKIND
          do j=1,numClinicIterations(splitExplicitStep)
 
             call mpas_timer_start('bcl iters on linear Coriolis')
@@ -959,6 +970,7 @@ module ocn_time_integration_split
             wctEdge(:) = 0.0_RKIND
             allocate(deltaSSH(nCellsAll))
             deltaSSH(:) = 0.0_RKIND
+            dragTermSubcycleMean(:) = 0.0_RKIND
 
             cellHaloComputeCounter = 0
             edgeHaloComputeCounter = 0
@@ -1085,7 +1097,8 @@ module ocn_time_integration_split
                      dragTerm = 2.0_RKIND * dragCoeff * &
                            abs(normalBarotropicVelocitySubcycleCur(iEdge))* &
                            normalBarotropicVelocitySubcycleCur(iEdge)/ &
-                           (sshSubcycleCur(cell1) + sshSubcycleCur(cell2))
+                           (bottomDepth(cell1) + bottomDepth(cell2) + &
+                            sshSubcycleCur(cell1) + sshSubcycleCur(cell2))
 
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                            temp_mask* &
@@ -1348,7 +1361,7 @@ module ocn_time_integration_split
                   !$omp parallel
                   !$omp do schedule(runtime) &
                   !$omp private(i, cell1, cell2, eoe, coriolisTerm, &
-                  !$omp         sshCell1, sshCell2, temp_mask)
+                  !$omp         sshCell1, sshCell2, temp_mask, dragTerm)
                   do iEdge = 1, nEdges
 
                      temp_mask = edgeMask(1,iEdge)
@@ -1377,8 +1390,9 @@ module ocn_time_integration_split
                                          sshSubcycleNew(cell2)
                      dragTerm = 2.0_RKIND * dragCoeff * &
                            abs(normalBarotropicVelocitySubcycleCur(iEdge))* &
-                           normalBarotropicVelocitySubcycleCur(iEdge)/ &
-                           (sshCell1 + sshCell2)
+                               normalBarotropicVelocitySubcycleCur(iEdge)/ &
+                           (bottomDepth(cell1) + bottomDepth(cell2) + &
+                            sshCell1 + sshCell2)
 
                      ! normalBarotropicVelocityNew =
                      ! normalBarotropicVelocityOld + dt/J*
@@ -1392,6 +1406,13 @@ module ocn_time_integration_split
                              (sshCell2 - sshCell1)/dcEdge(iEdge) &
                            + barotropicForcing(iEdge)))
 
+                     dragTermCorMean(iEdge) = dragTermCorMean(iEdge) + dragTerm
+                     if (iEdge == 100) &
+                        call mpas_log_write('dragTermCorMean updated with dragTerm = $r, u = $r, h = $r', &
+                                         realArgs=(/dragTerm, normalBarotropicVelocitySubcycleCur(iEdge), &
+                           (bottomDepth(cell1) + bottomDepth(cell2) + &
+                            sshCell1 + sshCell2)/2.0_RKIND/))
+
                   end do
                   !$omp end do
                   !$omp end parallel
@@ -1402,7 +1423,9 @@ module ocn_time_integration_split
                      cellHaloComputeCounter = cellHaloComputeCounter-1
 
                end do !do BtrCorIter=1,config_n_btr_cor_iter
-
+               do iEdge = 1, nEdges
+                 dragTermCorMean(iEdge) = dragTermCorMean(iEdge) / config_n_btr_cor_iter
+               enddo
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: SSH CORRECTOR STEP
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1565,6 +1588,17 @@ module ocn_time_integration_split
                !$omp end do
                !$omp end parallel
 
+               !$omp parallel
+               !$omp do schedule(runtime)
+               do iEdge = 1, nEdges
+                  dragTermSubcycleMean(iEdge) = dragTermSubcycleMean(iEdge) + dragTermCorMean(iEdge)
+                  !if (iEdge == 100) &
+                  !   call mpas_log_write('dragTermSubcycleMean updated with dragTermCorMean = \t$r', &
+                  !                    realArgs=(/dragTermCorMean(iEdge)/))
+               end do
+               !$omp end do
+               !$omp end parallel
+
                ! advance time pointers
                oldBtrSubcycleTime = mod(oldBtrSubcycleTime,2)+1
                newBtrSubcycleTime = mod(newBtrSubcycleTime,2)+1
@@ -1593,6 +1627,10 @@ module ocn_time_integration_split
 
                normalBarotropicVelocityNew(iEdge) = &
                normalBarotropicVelocityNew(iEdge) &
+                     / (nBtrSubcycles*config_btr_subcycle_loop_factor + 1)
+
+               dragTermSubcycleMean(iEdge) = &
+               dragTermSubcycleMean(iEdge) &
                      / (nBtrSubcycles*config_btr_subcycle_loop_factor + 1)
             end do
             !$omp end do
@@ -2005,6 +2043,17 @@ module ocn_time_integration_split
             !$omp end do
             !$omp end parallel
 #endif
+            !$omp parallel
+            !$omp do schedule(runtime)
+            do iEdge = 1, nEdges
+               dragTermMean(iEdge) = dragTermMean(iEdge) + &
+                                     dragTermSubcycleMean(iEdge)
+               !if (iEdge == 100) &
+               !   call mpas_log_write('dragTermMean updated with dragTermSubcycleMean = \t$r', &
+               !                    realArgs=(/dragTermSubcycleMean(iEdge)/))
+            end do
+            !$omp end do
+            !$omp end parallel
 
             ! Efficiency note: We really only need this to compute
             ! layerThickEdgeFlux, density, pressure, and SSH
@@ -2035,7 +2084,16 @@ module ocn_time_integration_split
             !$acc   present(temperatureShortWaveTendency) &
             !$acc   present(activeTracerNonLocalTendency)
 #endif
-
+            !$omp parallel
+            !$omp do schedule(runtime)
+            do iEdge = 1, nEdges
+               dragTermMean(iEdge) = dragTermMean(iEdge) / numTSIterations
+               if (iEdge == 100) &
+                  call mpas_log_write('dragTermMean = \t$r', &
+                                   realArgs=(/dragTermMean(iEdge)/))
+            end do
+            !$omp end do
+            !$omp end parallel
 
 #ifdef MPAS_OPENACC
             !$acc loop gang
@@ -2316,6 +2374,18 @@ module ocn_time_integration_split
 #ifdef MPAS_OPENACC
                !$acc end parallel
 #endif
+               !$omp parallel
+               !$omp do schedule(runtime)
+               do iEdge = 1, nEdges
+                  dragTermMean(iEdge) = dragTermMean(iEdge) + &
+                     dragTermSubcycleMean(iEdge) / &
+                     (numTSIterations * normalBarotropicVelocityNew(iEdge))
+                  if (iEdge == 100) &
+                     call mpas_log_write('final dragTermMean = $r, u = $r', &
+                                      realArgs=(/dragTermMean(iEdge), normalBarotropicVelocityNew(iEdge)/))
+               end do
+               !$omp end do
+               !$omp end parallel
 
             end if
 
@@ -2917,6 +2987,10 @@ module ocn_time_integration_split
       !*** of halo updates during subcycling
       neededHalos = 1 + config_n_btr_cor_iter
       haloDecrement = mod(config_num_halos, neededHalos)
+
+      dragCoeff = config_implicit_constant_bottom_drag_coeff
+      if (config_use_implicit_top_drag) &
+         dragCoeff = dragCoeff + config_implicit_top_drag_coeff
 
       !*** Determine the time integration type and set associated masks
 
