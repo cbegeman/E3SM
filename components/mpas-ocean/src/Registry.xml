@@ -2776,6 +2776,9 @@
 		<var name="daysSinceStartOfSim" type="real" dimensions="Time" units="days"
 			 description="Time since simulationStartTime, for plotting"
 	 	/>
+		<var name="temperatureSurfaceRestoringTendency" type="real" dimensions="nCells Time" units="m 1.e-3 s^-1" packages="activeTracersSurfaceRestoringPKG"
+			 description="temperature tendency due to surface restoring"
+		/>
 		<var name="salinitySurfaceRestoringTendency" type="real" dimensions="nCells Time" units="m 1.e-3 s^-1" packages="activeTracersSurfaceRestoringPKG"
 			 description="salinity tendency due to surface restoring"
 		/>

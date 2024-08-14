@@ -27,6 +27,10 @@
 			description="if true, transit time distribution forcing source is applied to tracers in 'activeTracers' category"
 			possible_values=".true. or .false."
 		/>
+		<nml_option name="config_use_surface_temperature_monthly_restoring" type="logical" default_value=".false."
+			description="If true, apply monthly temperature restoring using a uniform piston velocity, defined at run-time by config_salinity_restoring_constant_piston_velocity.  When false, temperature piston velocity is specified in the input file by salinityPistonVelocity, which may be spatially variable."
+			possible_values=".true. or .false."
+		/>
 		<nml_option name="config_use_surface_salinity_monthly_restoring" type="logical" default_value=".false."
 			description="If true, apply monthly salinity restoring using a uniform piston velocity, defined at run-time by config_salinity_restoring_constant_piston_velocity.  When false, salinity piston velocity is specified in the input file by salinityPistonVelocity, which may be spatially variable."
 			possible_values=".true. or .false."
@@ -37,6 +41,10 @@
 		/>
 		<nml_option name="config_salinity_restoring_constant_piston_velocity" type="real" default_value="1.585e-5" units="m/year"
 			description="When config_use_surface_salinity_monthly_restoring is true, this flag provides a run-time override of the salinityPistonVelocity variable in the input files.  It is uniform over the domain, and controls the rate at which salinity is restored to salinitySurfaceRestoringValue"
+			possible_values="any non-negative number"
+		/>
+		<nml_option name="config_temperature_restoring_max_difference" type="real" default_value="10.0" units="degC"
+			description="Maximum allowable difference between surface temperature and climatology, in degrees C."
 			possible_values="any non-negative number"
 		/>
 		<nml_option name="config_salinity_restoring_max_difference" type="real" default_value="100.0" units="1.e-3"

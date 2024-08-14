@@ -658,7 +658,8 @@ module ocn_forward_mode
       ! always execute this call as initial data needed regardless of alarm
       if (config_use_activeTracers_surface_restoring .and. config_use_surface_salinity_monthly_restoring) then
         call mpas_timer_start('io_monthly_surface_salinity',.false.)
-        call ocn_get_surfaceSalinityData(domain % streamManager, domain, domain % clock, .true.)
+        call ocn_get_surfaceSalinityData(domain % streamManager, domain, domain % clock, .true., &
+                                         config_use_surface_temperature_monthly_restoring)
         call mpas_timer_stop('io_monthly_surface_salinity')
       endif
 
@@ -828,7 +829,8 @@ module ocn_forward_mode
            if ( mpas_is_alarm_ringing(domain % clock, 'salinityDataReadAlarm', ierr=err_tmp) ) then
               call mpas_reset_clock_alarm(domain % clock, 'salinityDataReadAlarm', ierr=err_tmp)
               call mpas_timer_start('io_monthly_surface_salinity',.false.)
-              call ocn_get_surfaceSalinityData(domain % streamManager, domain, domain % clock, .false.)
+              call ocn_get_surfaceSalinityData(domain % streamManager, domain, domain % clock, .false., &
+                                               config_use_surface_temperature_monthly_restoring)
               call mpas_timer_stop('io_monthly_surface_salinity')
            endif
          endif

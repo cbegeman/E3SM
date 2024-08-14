@@ -959,7 +959,8 @@ contains
                    nTracersGroup, nCellsAll, tracerGroup,  &
                    tracerGroupPistonVelocity, &
                    tracerGroupSurfaceRestoringValue, &
-                   tracerGroupSurfaceFlux, indxSalt, &
+                   tracerGroupSurfaceFlux, indxTemp, indxSalt, &
+                   config_use_surface_temperature_monthly_restoring, &
                    config_use_surface_salinity_monthly_restoring, &
                    config_salinity_restoring_constant_piston_velocity, &
                    err)

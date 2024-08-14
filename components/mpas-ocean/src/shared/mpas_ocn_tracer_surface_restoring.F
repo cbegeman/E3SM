@@ -78,7 +78,8 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_tracer_surface_restoring_compute(groupName, nTracers, nCells, tracers, pistonVelocity, &
-                 tracersSurfaceRestoringValue, tracersSurfaceFlux, indexSalinity,  &
+                 tracersSurfaceRestoringValue, tracersSurfaceFlux, indexTemperature, indexSalinity,  &
+                 use_surface_temperature_monthly_restoring, &
                  use_surface_salinity_monthly_restoring, salinity_restoring_constant_piston_velocity, err)!{{{
 
       !-----------------------------------------------------------------
@@ -92,6 +93,7 @@ contains
       ! scalars
       integer, intent(in) ::  &
           nTracers,           &
+          indexTemperature,   &
           indexSalinity,      &
           nCells
 
@@ -99,6 +101,7 @@ contains
 
       ! logicals
       logical, intent(in) ::  &
+          use_surface_temperature_monthly_restoring, &
           use_surface_salinity_monthly_restoring
 
       ! three dimensional arrays
@@ -148,6 +151,12 @@ contains
           if (trim(groupName) == 'activeTracers' &
                 .and. iTracer == indexSalinity   &
                 .and. use_surface_salinity_monthly_restoring) then
+          tracersSurfaceFlux(iTracer, iCell) =   tracersSurfaceFlux(iTracer, iCell) + &
+                                                 salinity_restoring_constant_piston_velocity * &
+                                                 tracersSurfaceRestoringValue(iTracer,iCell)
+          elseif (trim(groupName) == 'activeTracers' &
+                .and. iTracer == indexTemperature &
+                .and. use_surface_temperature_monthly_restoring) then
           tracersSurfaceFlux(iTracer, iCell) =   tracersSurfaceFlux(iTracer, iCell) + &
                                                  salinity_restoring_constant_piston_velocity * &
                                                  tracersSurfaceRestoringValue(iTracer,iCell)
@@ -205,7 +214,8 @@ contains
     subroutine ocn_get_surfaceSalinityData( streamManager, &
         domain, &
         simulationClock, &
-        firstTimeStep) !{{{
+        firstTimeStep, &
+        use_surface_temperature_monthly_restoring) !{{{
 
         type (MPAS_streamManager_type), intent(inout) :: streamManager
 
@@ -216,7 +226,7 @@ contains
         type (MPAS_Time_Type) :: currTime
         character(len=strKind) :: timeStamp
 
-        logical, intent(in) :: firstTimeStep
+        logical, intent(in) :: firstTimeStep, use_surface_temperature_monthly_restoring
         real(kind=RKIND) :: dt, sumAreaDeltaS, sumArea, avgDeltaS, deltaS, sumAreaDeltaSGlobal, sumAreaGlobal
         real(kind=RKIND) :: avgDeltaS1
         type (block_type), pointer :: block
@@ -227,11 +237,11 @@ contains
         type (mpas_pool_type), pointer :: meshPool
         type (mpas_pool_type), pointer :: statePool
         type (mpas_pool_type), pointer :: tracersPool
-        type (mpas_pool_type), pointer :: surfaceSalinityMonthlyForcing
+        type (mpas_pool_type), pointer :: surfaceTemperatureMonthlyForcing, surfaceSalinityMonthlyForcing
         type (mpas_pool_type), pointer :: tracersSurfaceRestoringFieldsPool
 
         real (kind=RKIND), dimension(:), pointer :: &
-           surfaceSalinityMonthlyClimatologyValue, iceFraction, areaCell
+           surfaceTemperatureMonthlyClimatologyValue, surfaceSalinityMonthlyClimatologyValue, iceFraction, areaCell
 
         real (kind=RKIND), dimension(:,:), pointer :: &
            activeTracersSurfaceRestoringValue
@@ -240,7 +250,9 @@ contains
 
         integer, pointer :: nCells, nCellsSolve
         integer, pointer :: indexSalinityPtr, indexSalinitySurfaceRestoringValuePtr
+        integer, pointer :: indexTemperaturePtr, indexTemperatureSurfaceRestoringValuePtr
         integer :: indexSalinity, indexSalinitySurfaceRestoringValue
+        integer :: indexTemperature, indexTemperatureSurfaceRestoringValue
         integer :: iCell, timeLevel
         integer, dimension(:), pointer :: landIceMask
 
@@ -292,7 +304,32 @@ contains
                 domain % streamManager, &
                 config_do_restart, &
                 .false.)
+           if (use_surface_temperature_monthly_restoring) then
+              call MPAS_forcing_init_group( forcingGroupHead,  &
+                   "surfaceTemperatureMonthlyClimatology", &
+                   domain, &
+                   timeStamp, &
+                   '0000-01-01_00:00:00', &
+                   '0001-00-00_00:00:00', &
+                   config_do_restart)
 
+              call MPAS_forcing_init_field( domain % streamManager, &
+                   forcingGroupHead, &
+                   'surfaceTemperatureMonthlyClimatology', &  !  forcing group name
+                   'surfaceTemperatureMonthlyClimatologyValue', &  !  array name
+                   'surface_temperature_monthly_data', &  !  stream name
+                   'surfaceTemperatureMonthlyForcing',  & !  pool name
+                   'surfaceTemperatureMonthlyClimatologyValue',  &   !  array name
+                   'linear',  &
+                   forcingReferenceTimeMonthly,  &
+                   forcingIntervalMonthly)
+
+              call MPAS_forcing_init_field_data( forcingGroupHead, &
+                   'surfaceTemperatureMonthlyClimatology', &
+                   domain % streamManager, &
+                   config_do_restart, &
+                   .false.)
+           endif
            return
         endif  !  first timestep
 
@@ -303,6 +340,11 @@ contains
                                                                   surfaceSalinityMonthlyForcing)
         call MPAS_pool_get_array(surfaceSalinityMonthlyForcing, 'surfaceSalinityMonthlyClimatologyValue',   &
                                                                  surfaceSalinityMonthlyClimatologyValue)
+
+        call MPAS_pool_get_subpool(domain % blocklist % structs, 'surfaceTemperatureMonthlyForcing',  &
+                                                                  surfaceTemperatureMonthlyForcing)
+        call MPAS_pool_get_array(surfaceTemperatureMonthlyForcing, 'surfaceTemperatureMonthlyClimatologyValue',   &
+                                                                    surfaceTemperatureMonthlyClimatologyValue)
 
         call MPAS_forcing_get_forcing(forcingGroupHead, &
              'surfaceSalinityMonthlyClimatology', streamManager, dt)
@@ -336,7 +378,20 @@ contains
                                                                   surfaceSalinityMonthlyForcing)
         call mpas_pool_get_array(surfaceSalinityMonthlyForcing, 'surfaceSalinityMonthlyClimatologyValue',   &
                                                                  surfaceSalinityMonthlyClimatologyValue)
-
+        if (use_surface_temperature_monthly_restoring) then
+           call mpas_pool_get_dimension(tracersPool, 'index_temperature', &
+                                                      indexTemperaturePtr)
+           call mpas_pool_get_dimension(tracersSurfaceRestoringFieldsPool, &
+                                   'index_temperatureSurfaceRestoringValue',  &
+                                    indexTemperatureSurfaceRestoringValuePtr)
+           indexTemperature = indexTemperaturePtr
+           indexTemperatureSurfaceRestoringValue = &
+                                    indexTemperatureSurfaceRestoringValuePtr
+           call mpas_pool_get_subpool(block % structs, 'surfaceTemperatureMonthlyForcing',  &
+                                                        surfaceTemperatureMonthlyForcing)
+           call mpas_pool_get_array(surfaceSalinityMonthlyForcing, 'surfaceTemperatureMonthlyClimatologyValue',   &
+                                                                    surfaceTemperatureMonthlyClimatologyValue)
+        endif
         call mpas_pool_get_array(tracersSurfaceRestoringFieldsPool, 'activeTracersSurfaceRestoringValue', &
            activeTracersSurfaceRestoringValue)
 
@@ -368,6 +423,24 @@ contains
                 activeTracersSurfaceRestoringValue(indexSalinitySurfaceRestoringValue,iCell) = deltaS
               endif
             end do
+            if (use_surface_temperature_monthly_restoring) then
+              do iCell = 1, nCells
+                if (landIceMask(iCell)==1) then
+                  ! Turn off salinity restoring in this cell
+                  activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) = 0.0_RKIND
+                else
+                  ! Turn on salinity restoring in this cell
+                  deltaS = surfaceTemperatureMonthlyClimatologyValue(iCell) - activeTracers(indexTemperature,1,iCell)
+                  if (deltaS >  config_temperature_restoring_max_difference) &
+                    deltaS =  config_temperature_restoring_max_difference
+                  if (deltaS < -config_temperature_restoring_max_difference) &
+                    deltaS = -config_temperature_restoring_max_difference
+
+                  ! Salinity restoring below sea ice is always on, regardless of iceFraction value
+                  activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) = deltaS
+                endif
+              end do
+            endif
 
           else ! config_salinity_restoring_under_sea_ice = .false.
 
@@ -388,6 +461,26 @@ contains
                    deltaS*(1.0_RKIND - iceFraction(iCell))
               endif
             end do
+            if (use_surface_temperature_monthly_restoring) then
+              do iCell = 1, nCells
+                if (landIceMask(iCell)==1) then
+                  ! Turn off salinity restoring in this cell
+                  activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) = 0.0_RKIND
+                else
+                  ! Turn on salinity restoring in this cell
+                  deltaS = surfaceTemperatureMonthlyClimatologyValue(iCell) - activeTracers(indexTemperature,1,iCell)
+                  if (deltaS >  config_temperature_restoring_max_difference) &
+                    deltaS =  config_temperature_restoring_max_difference
+                  if (deltaS < -config_temperature_restoring_max_difference) &
+                    deltaS = -config_temperature_restoring_max_difference
+
+                  ! Salinity restoring below sea ice tapers below partial sea ice
+                  ! coverage, from full in the open ocean to zero when iceFraction=1.0
+                  activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) = &
+                     deltaS*(1.0_RKIND - iceFraction(iCell))
+                endif
+              end do
+            endif
 
           endif
 
@@ -405,6 +498,19 @@ contains
               ! Salinity restoring below sea ice is always on, regardless of iceFraction value
               activeTracersSurfaceRestoringValue(indexSalinitySurfaceRestoringValue,iCell) = deltaS
             end do
+            if (use_surface_temperature_monthly_restoring) then
+              do iCell = 1, nCells
+                ! Turn on salinity restoring in this cell
+                deltaS = surfaceTemperatureMonthlyClimatologyValue(iCell) - activeTracers(indexTemperature,1,iCell)
+                if (deltaS >  config_temperature_restoring_max_difference) &
+                  deltaS =  config_temperature_restoring_max_difference
+                if (deltaS < -config_temperature_restoring_max_difference) &
+                  deltaS = -config_temperature_restoring_max_difference
+
+                ! Salinity restoring below sea ice is always on, regardless of iceFraction value
+                activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) = deltaS
+              end do
+            endif
 
           else ! config_salinity_restoring_under_sea_ice = .false.
 
@@ -419,6 +525,21 @@ contains
               activeTracersSurfaceRestoringValue(indexSalinitySurfaceRestoringValue,iCell) = &
                  deltaS*(1.0_RKIND - iceFraction(iCell))
             end do
+            if (use_surface_temperature_monthly_restoring) then
+              do iCell = 1, nCells
+                ! Turn on salinity restoring in this cell
+                deltaS = surfaceTemperatureMonthlyClimatologyValue(iCell) - activeTracers(indexTemperature,1,iCell)
+                if (deltaS >  config_temperature_restoring_max_difference) &
+                  deltaS =  config_temperature_restoring_max_difference
+                if (deltaS < -config_temperature_restoring_max_difference) &
+                  deltaS = -config_temperature_restoring_max_difference
+
+                ! Salinity restoring below sea ice tapers below partial sea ice
+                ! coverage, from full in the open ocean to zero when iceFraction=1.0
+                activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) = &
+                   deltaS*(1.0_RKIND - iceFraction(iCell))
+              end do
+            endif
 
           endif
 
@@ -483,6 +604,26 @@ contains
              salinitySurfaceRestoringTendency(iCell) = 0.0_RKIND
           endif
         enddo
+
+        if (use_surface_temperature_monthly_restoring) then
+          call mpas_pool_get_dimension(tracersSurfaceRestoringFieldsPool, &
+                                  'index_temperatureSurfaceRestoringValue',  &
+                                   indexTemperatureSurfaceRestoringValuePtr)
+          indexTemperatureSurfaceRestoringValue = &
+                                   indexTemperatureSurfaceRestoringValuePtr
+          do iCell = 1, nCells
+            deltaS = activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell)
+            if (deltaS .ne. 0.0_RKIND) then
+               activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) =  &
+                  deltaS - avgDeltaS
+               temperatureSurfaceRestoringTendency(iCell) = &
+                  activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) &
+                  * config_salinity_restoring_constant_piston_velocity
+            else
+               temperatureSurfaceRestoringTendency(iCell) = 0.0_RKIND
+            endif
+          enddo
+        endif
 
         block => block % next
       end do
