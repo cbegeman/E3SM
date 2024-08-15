@@ -75,8 +75,9 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_vel_forcing_tend(normalVelocity, sfcFlxAttCoeff, &
-                                   surfaceStress, kineticEnergyCell, &
+   subroutine ocn_vel_forcing_tend(normalVelocity, btrDrag, &
+                                   sfcFlxAttCoeff, surfaceStress, &
+                                   kineticEnergyCell, &
                                    layerThickEdgeDrag, layerThickEdgeMean, &
                                    tend, err)!{{{
 
@@ -91,6 +92,7 @@ contains
          layerThickEdgeMean  !< [in] mean thickness at edge
 
       real (kind=RKIND), dimension(:), intent(in) :: &
+         btrDrag,    &!< [in] barotropic velocity at edges
          sfcFlxAttCoeff, &!< [in] attenuation coefficient for sfc fluxes
          surfaceStress    !< [in] surface stress at edges
 
@@ -123,6 +125,10 @@ contains
 
       call ocn_vel_forcing_surface_stress_tend(sfcFlxAttCoeff, &
                    surfaceStress, layerThickEdgeMean, tend, err1)
+      err = ior(err, err1)
+
+      call ocn_vel_forcing_explicit_negative_drag_tend(btrDrag, &
+                   tend, err1)
       err = ior(err, err1)
 
       call ocn_vel_forcing_explicit_bottom_drag_tend(normalVelocity, &

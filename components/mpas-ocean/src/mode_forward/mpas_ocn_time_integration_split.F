@@ -205,7 +205,6 @@ module ocn_time_integration_split
          wctEdge,          &! flux water column thickness at edge
          dragTermCorMean, &! u^2/H mean over coriolis iter
          dragTermSubcycleMean, &! u^2/H mean over coriolis iter
-         dragTermMean, &! u^2/H mean over btr subcycles
          baroclinicThickness
 
       ! State Array Pointers
@@ -218,6 +217,7 @@ module ocn_time_integration_split
          normalBarotropicVelocitySubcycleNew,&! at current, new times
          sshCur,                      &! sea sfc height at current time
          sshNew,                      &! sea sfc height at new     time
+         barotropicDrag,              &! barotropic drag
          normalBarotropicVelocityCur, &! barotropic vel at current time
          normalBarotropicVelocityNew   ! barotropic vel at new     time
 
@@ -379,6 +379,8 @@ module ocn_time_integration_split
       call mpas_pool_get_array(statePool, 'lowFreqDivergence', &
                                            lowFreqDivergenceNew, 2)
 
+      call mpas_pool_get_array(statePool, 'barotropicDrag', &
+                                           barotropicDrag, 2)
       call mpas_pool_get_dimension_scalar(tracersPool, 'index_salinity', &
                                                         indexSalinity)
 
@@ -404,7 +406,6 @@ module ocn_time_integration_split
       allocate(baroclinicThickness(nEdgesAll+1))
       allocate(dragTermCorMean(nEdgesAll+1))
       allocate(dragTermSubcycleMean(nEdgesAll+1))
-      allocate(dragTermMean(nEdgesAll+1))
 
       if (config_transport_tests_flow_id > 0) then
         ! This is a transport test. Write advection velocity from prescribed
@@ -610,7 +611,7 @@ module ocn_time_integration_split
       ! BEGIN large outer timestep iteration loop
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-      dragTermMean(:) = 0.0_RKIND
+      barotropicDrag(:) = 0.0_RKIND
       do splitExplicitStep = 1, numTSIterations
 
          if (config_disable_thick_all_tend .and. &
@@ -2046,7 +2047,7 @@ module ocn_time_integration_split
             !$omp parallel
             !$omp do schedule(runtime)
             do iEdge = 1, nEdges
-               dragTermMean(iEdge) = dragTermMean(iEdge) + &
+               barotropicDrag(iEdge) = barotropicDrag(iEdge) + &
                                      dragTermSubcycleMean(iEdge)
                !if (iEdge == 100) &
                !   call mpas_log_write('dragTermMean updated with dragTermSubcycleMean = \t$r', &
@@ -2087,10 +2088,10 @@ module ocn_time_integration_split
             !$omp parallel
             !$omp do schedule(runtime)
             do iEdge = 1, nEdges
-               dragTermMean(iEdge) = dragTermMean(iEdge) / numTSIterations
+               barotropicDrag(iEdge) = barotropicDrag(iEdge) / numTSIterations
                if (iEdge == 100) &
                   call mpas_log_write('dragTermMean = \t$r', &
-                                   realArgs=(/dragTermMean(iEdge)/))
+                                   realArgs=(/barotropicDrag(iEdge)/))
             end do
             !$omp end do
             !$omp end parallel

@@ -44,6 +44,7 @@ module ocn_vel_forcing_explicit_bottom_drag
    !--------------------------------------------------------------------
 
    public :: ocn_vel_forcing_explicit_bottom_drag_tend, &
+             ocn_vel_forcing_explicit_negative_drag_tend, &
              ocn_vel_forcing_explicit_bottom_drag_init
 
    !--------------------------------------------------------------------
@@ -53,6 +54,7 @@ module ocn_vel_forcing_explicit_bottom_drag
    !--------------------------------------------------------------------
 
    logical :: &
+      splitDragOff,         &! on/off switch for split batotropic drag
       explicitBottomDragOff  ! on/off switch for explicit bottom drag
 
    real (kind=RKIND) :: &
@@ -74,6 +76,80 @@ contains
 !>  based on current state.
 !
 !-----------------------------------------------------------------------
+
+   subroutine ocn_vel_forcing_explicit_negative_drag_tend( &
+                  btrDrag, tend, err) !{{{
+
+      !-----------------------------------------------------------------
+      ! input variables
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), intent(in) :: &
+         btrDrag !< [in] barotropic velocity
+
+      !-----------------------------------------------------------------
+      ! input/output variables
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:,:), intent(inout) :: &
+         tend            !< [inout] accumulated velocity tendency
+
+      !-----------------------------------------------------------------
+      ! output variables
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< [out] error flag
+
+      !-----------------------------------------------------------------
+      ! local variables
+      !-----------------------------------------------------------------
+
+      integer :: &
+         iEdge,      &! loop index for edge loop
+         k            ! vertical index of lowest active layer at edge
+
+      ! End preamble
+      !-----------------------------------------------------------------
+      ! Begin code
+
+      !*** Initialize error code and return if not turned on
+      !*** Otherwise start timer
+
+      err = 0
+      if (splitDragOff) return
+      call mpas_timer_start('vel explicit negative drag')
+
+      ! Explicit bottom drag term:
+      ! du/dt = ... + c |u| u / H
+      ! appied to all layers.
+
+#ifdef MPAS_OPENACC
+      !$acc parallel loop &
+      !$acc    present(minLevelEdgeTop, maxLevelEdgeTop, &
+      !$acc            tend, btrVelocity, btrH) &
+      !$acc    private(k)
+#else
+      !$omp parallel
+      !$omp do schedule(runtime) private(k)
+#endif
+      do iEdge = 1, nEdgesOwned
+        do k = minLevelEdgeTop(iEdge), maxLevelEdgeBot(iEdge)
+           tend(k,iEdge) = tend(k,iEdge) + btrDrag(iEdge)
+        enddo
+        if (iEdge == 100) &
+          call mpas_log_write('negative drag = $r', &
+                              realArgs=(/btrDrag(iEdge)/))
+      enddo
+#ifndef MPAS_OPENACC
+      !$omp end do
+      !$omp end parallel
+#endif
+
+      call mpas_timer_stop('vel explicit negative drag')
+
+   !--------------------------------------------------------------------
+
+   end subroutine ocn_vel_forcing_explicit_negative_drag_tend!}}}
 
    subroutine ocn_vel_forcing_explicit_bottom_drag_tend(normVelocity, &
                                  KECell, layerThickEdgeDrag, tend, err) !{{{
@@ -188,6 +264,7 @@ contains
       err = 0
 
       explicitBottomDragOff  = .true.
+      splitDragOff  = .true.
       dragCoeff = 0.0_RKIND
 
       !*** Reset values based on input model configuration
