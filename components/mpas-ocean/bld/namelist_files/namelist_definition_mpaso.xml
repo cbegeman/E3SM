@@ -2757,6 +2757,14 @@ Valid values: .true. or .false.
 Default: Defined in namelist_defaults.xml
 </entry>
 
+<entry id="config_use_surface_temperature_monthly_restoring" type="logical"
+	category="tracer_forcing_activeTracers" group="tracer_forcing_activeTracers">
+If true, apply monthly salinity restoring using a uniform piston velocity, defined at run-time by config_salinity_restoring_constant_piston_velocity.  When false, salinity piston velocity is specified in the input file by salinityPistonVelocity, which may be spatially variable.
+
+Valid values: .true. or .false.
+Default: Defined in namelist_defaults.xml
+</entry>
+
 <entry id="config_use_surface_salinity_monthly_restoring" type="logical"
 	category="tracer_forcing_activeTracers" group="tracer_forcing_activeTracers">
 If true, apply monthly salinity restoring using a uniform piston velocity, defined at run-time by config_salinity_restoring_constant_piston_velocity.  When false, salinity piston velocity is specified in the input file by salinityPistonVelocity, which may be spatially variable.
@@ -2776,6 +2784,14 @@ Default: Defined in namelist_defaults.xml
 <entry id="config_salinity_restoring_constant_piston_velocity" type="real"
 	category="tracer_forcing_activeTracers" group="tracer_forcing_activeTracers">
 When config_use_surface_salinity_monthly_restoring is true, this flag provides a run-time override of the salinityPistonVelocity variable in the input files.  It is uniform over the domain, and controls the rate at which salinity is restored to salinitySurfaceRestoringValue
+
+Valid values: any non-negative number
+Default: Defined in namelist_defaults.xml
+</entry>
+
+<entry id="config_temperature_restoring_max_difference" type="real"
+	category="tracer_forcing_activeTracers" group="tracer_forcing_activeTracers">
+Maximum allowable difference between surface salinity and climatology, in grams salt per kilogram seawater.
 
 Valid values: any non-negative number
 Default: Defined in namelist_defaults.xml
