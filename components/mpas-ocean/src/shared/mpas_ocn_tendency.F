@@ -342,7 +342,8 @@ contains
       type (dm_info), intent(in) :: dminfo
 
       real (kind=RKIND), dimension(:), pointer, contiguous :: &
-         ssh               ! sea surface height
+         ssh, &
+         barotropicDrag       ! barotropic velocity on edges
 
       real (kind=RKIND), dimension(:,:), pointer, contiguous :: &
          normalVelocity,     &! normal velocity
@@ -388,6 +389,9 @@ contains
                                              sfcStress)
       call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', &
                                              sfcStressMag)
+
+      call mpas_pool_get_array(statePool, 'barotropicDrag', &
+                                           barotropicDrag, timeLevelIn)
 
       !*** Transfer data to device
       !$acc update device(zMid, divergence, relativeVorticity, normPlanetVortEdge, &
@@ -488,8 +492,8 @@ contains
       call ocn_vel_hmix_tend(divergence, relativeVorticity, tendVel,err)
 
       ! Add forcing and bottom drag
-      call ocn_vel_forcing_tend(normalVelocity, sfcFlxAttCoeff, &
-                                sfcStress, kineticEnergyCell, &
+      call ocn_vel_forcing_tend(normalVelocity, barotropicDrag, &
+                                sfcFlxAttCoeff, sfcStress, kineticEnergyCell, &
                                 layerThickEdgeDrag, &
                                 layerThickEdgeMean, tendVel, err)
  
