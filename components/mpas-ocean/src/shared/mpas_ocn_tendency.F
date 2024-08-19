@@ -303,7 +303,8 @@ contains
       type (dm_info), intent(in) :: dminfo
 
       real (kind=RKIND), dimension(:), pointer, contiguous :: &
-         barotropicDrag,           &! barotropic velocity on edges
+         ssh, &
+         barotropicDrag       ! barotropic velocity on edges
 
       real (kind=RKIND), dimension(:,:), pointer, contiguous :: &
          normalVelocity,     &! normal velocity
