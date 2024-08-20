@@ -2988,9 +2988,13 @@ module ocn_time_integration_split
       neededHalos = 1 + config_n_btr_cor_iter
       haloDecrement = mod(config_num_halos, neededHalos)
 
-      dragCoeff = config_implicit_constant_bottom_drag_coeff
-      if (config_use_implicit_top_drag) &
-         dragCoeff = dragCoeff + config_implicit_top_drag_coeff
+      if (config_btr_bottom_drag) then
+         dragCoeff = config_implicit_constant_bottom_drag_coeff
+         if (config_use_implicit_top_drag) &
+            dragCoeff = dragCoeff + config_implicit_top_drag_coeff
+      else
+         dragCoeff = 0.0_RKIND
+      endif
 
       !*** Determine the time integration type and set associated masks
 
