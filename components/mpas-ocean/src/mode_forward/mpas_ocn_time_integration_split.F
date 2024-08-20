@@ -2374,18 +2374,6 @@ module ocn_time_integration_split
 #ifdef MPAS_OPENACC
                !$acc end parallel
 #endif
-               !$omp parallel
-               !$omp do schedule(runtime)
-               do iEdge = 1, nEdges
-                  dragTermMean(iEdge) = dragTermMean(iEdge) + &
-                     dragTermSubcycleMean(iEdge) / &
-                     (numTSIterations * normalBarotropicVelocityNew(iEdge))
-                  if (iEdge == 100) &
-                     call mpas_log_write('final dragTermMean = $r, u = $r', &
-                                      realArgs=(/dragTermMean(iEdge), normalBarotropicVelocityNew(iEdge)/))
-               end do
-               !$omp end do
-               !$omp end parallel
 
             end if
 
