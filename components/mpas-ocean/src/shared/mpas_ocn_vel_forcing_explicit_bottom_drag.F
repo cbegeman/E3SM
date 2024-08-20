@@ -78,7 +78,7 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_vel_forcing_explicit_negative_drag_tend( &
-                  btrDrag, tend, err) !{{{
+                  btrDrag, layerThickEdgeDrag, tend, err) !{{{
 
       !-----------------------------------------------------------------
       ! input variables
@@ -86,6 +86,9 @@ contains
 
       real (kind=RKIND), dimension(:), intent(in) :: &
          btrDrag !< [in] barotropic velocity
+
+      real (kind=RKIND), dimension(:,:), intent(in) :: &
+         layerThickEdgeDrag  !< [in] mean layer thickness at edge
 
       !-----------------------------------------------------------------
       ! input/output variables
@@ -104,6 +107,7 @@ contains
       ! local variables
       !-----------------------------------------------------------------
 
+      real (kind=RKIND) :: btrH
       integer :: &
          iEdge,      &! loop index for edge loop
          k            ! vertical index of lowest active layer at edge
@@ -130,11 +134,15 @@ contains
       !$acc    private(k)
 #else
       !$omp parallel
-      !$omp do schedule(runtime) private(k)
+      !$omp do schedule(runtime) private(k, btrH)
 #endif
       do iEdge = 1, nEdgesOwned
+        btrH = 0.0_RKIND
         do k = minLevelEdgeTop(iEdge), maxLevelEdgeBot(iEdge)
-           tend(k,iEdge) = tend(k,iEdge) + btrDrag(iEdge)
+           btrH = btrH + layerThickEdgeDrag(k,iEdge)
+        enddo
+        do k = minLevelEdgeTop(iEdge), maxLevelEdgeBot(iEdge)
+           tend(k,iEdge) = tend(k,iEdge) + layerThickEdgeDrag(k,iEdge) * btrDrag(iEdge) / btrH
         enddo
         if (iEdge == 100) &
           call mpas_log_write('negative drag = $r', &
@@ -268,6 +276,7 @@ contains
       dragCoeff = 0.0_RKIND
 
       !*** Reset values based on input model configuration
+      if (config_btr_bottom_drag) splitDragOff = .false.
 
       if (trim(config_bottom_drag_mode) == 'explicit') then
          explicitBottomDragOff = .false.

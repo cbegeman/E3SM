@@ -127,9 +127,9 @@ contains
                    surfaceStress, layerThickEdgeMean, tend, err1)
       err = ior(err, err1)
 
-      !call ocn_vel_forcing_explicit_negative_drag_tend(btrDrag, &
-      !             tend, err1)
-      !err = ior(err, err1)
+      call ocn_vel_forcing_explicit_negative_drag_tend(btrDrag, &
+                   layerThickEdgeDrag, tend, err1)
+      err = ior(err, err1)
 
       call ocn_vel_forcing_explicit_bottom_drag_tend(normalVelocity, &
                    kineticEnergyCell, layerThickEdgeDrag, tend, err1)
