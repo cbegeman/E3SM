@@ -1103,7 +1103,7 @@ module ocn_time_integration_split
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                            temp_mask* &
                            (normalBarotropicVelocitySubcycleCur(iEdge) &
-                            + dt/nBtrSubcycles*(CoriolisTerm + dragTerm - gravity &
+                            + dt/nBtrSubcycles*(CoriolisTerm - dragTerm - gravity &
                              *(sshSubcycleCur(cell2) - &
                                sshSubcycleCur(cell1))/dcEdge(iEdge) + &
                                barotropicForcing(iEdge)))
@@ -1402,7 +1402,7 @@ module ocn_time_integration_split
                           temp_mask * &
                           (normalBarotropicVelocitySubcycleCur(iEdge) &
                            + dt/nBtrSubcycles &
-                           *(CoriolisTerm + dragTerm - gravity* &
+                           *(CoriolisTerm - dragTerm - gravity* &
                              (sshCell2 - sshCell1)/dcEdge(iEdge) &
                            + barotropicForcing(iEdge)))
 
