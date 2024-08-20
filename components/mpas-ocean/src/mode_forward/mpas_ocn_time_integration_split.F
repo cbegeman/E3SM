@@ -1431,11 +1431,6 @@ module ocn_time_integration_split
                            + barotropicForcing(iEdge)))
 
                      dragTermCorMean(iEdge) = dragTermCorMean(iEdge) + dragTerm
-                     if (iEdge == 10) &
-                        call mpas_log_write('dragTermCorMean updated with dragTerm = $r, u = $r, h = $r', &
-                                         realArgs=(/dragTerm, normalBarotropicVelocitySubcycleCur(iEdge), &
-                           (bottomDepth(cell1) + bottomDepth(cell2) + &
-                            sshCell1 + sshCell2)/2.0_RKIND/))
 
                   end do
                   !$omp end do
@@ -1617,9 +1612,6 @@ module ocn_time_integration_split
                !$omp do schedule(runtime)
                do iEdge = 1, nEdges
                   dragTermSubcycleMean(iEdge) = dragTermSubcycleMean(iEdge) + dragTermCorMean(iEdge)
-                  if (iEdge == 10) &
-                     call mpas_log_write('dragTermSubcycleMean updated with dragTermCorMean = \t$r', &
-                                      realArgs=(/dragTermCorMean(iEdge)/))
                end do
                !$omp end do
                !$omp end parallel
@@ -2074,9 +2066,6 @@ module ocn_time_integration_split
             do iEdge = 1, nEdges
                barotropicDrag(iEdge) = barotropicDrag(iEdge) + &
                                      dragTermSubcycleMean(iEdge)
-               if (iEdge == 10) &
-                  call mpas_log_write('dragTermMean updated with dragTermSubcycleMean = \t$r', &
-                                   realArgs=(/dragTermSubcycleMean(iEdge)/))
             end do
             !$omp end do
             !$omp end parallel
@@ -2114,9 +2103,6 @@ module ocn_time_integration_split
             !$omp do schedule(runtime)
             do iEdge = 1, nEdges
                barotropicDrag(iEdge) = barotropicDrag(iEdge) / numTSIterations
-               if (iEdge == 10) &
-                  call mpas_log_write('dragTermMean = \t$r', &
-                                   realArgs=(/barotropicDrag(iEdge)/))
             end do
             !$omp end do
             !$omp end parallel
