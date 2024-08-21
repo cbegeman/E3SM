@@ -144,9 +144,6 @@ contains
         do k = minLevelEdgeTop(iEdge), maxLevelEdgeBot(iEdge)
            tend(k,iEdge) = tend(k,iEdge) + layerThickEdgeDrag(k,iEdge) * btrDrag(iEdge) / btrH
         enddo
-        if (iEdge == 100) &
-          call mpas_log_write('negative drag = $r', &
-                              realArgs=(/btrDrag(iEdge)/))
       enddo
 #ifndef MPAS_OPENACC
       !$omp end do
