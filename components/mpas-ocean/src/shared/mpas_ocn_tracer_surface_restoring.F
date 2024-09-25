@@ -615,7 +615,7 @@ contains
             deltaS = activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell)
             if (deltaS .ne. 0.0_RKIND) then
                activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) =  &
-                  deltaS - avgDeltaS
+                  deltaS
                temperatureSurfaceRestoringTendency(iCell) = &
                   activeTracersSurfaceRestoringValue(indexTemperatureSurfaceRestoringValue,iCell) &
                   * config_salinity_restoring_constant_piston_velocity
