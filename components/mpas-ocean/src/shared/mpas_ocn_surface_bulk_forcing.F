@@ -953,12 +953,38 @@ contains
       call mpas_pool_get_array(forcingPool, 'landIceFreshwaterFlux', landIceFreshwaterFlux)
 
       nCells = nCellsArray( 3 )
-      do iCell=1,nCells
+      if (associated(indexRain)) then
+        do iCell=1,nCells
           freshwaterSurfaceFlux(indexRain, iCell) = rainFlux(iCell) / rho_sw
+        enddo  !  iCell
+      else
+        call mpas_log_write('indexRain is not associated')
+        freshwaterSurfaceFlux(indexRain, :) = 0.0_RKIND
+      endif
+      if (associated(indexSnow)) then
+        do iCell=1,nCells
           freshwaterSurfaceFlux(indexSnow, iCell) = snowFlux(iCell) / rho_sw
+        enddo  !  iCell
+      else
+        call mpas_log_write('indexSnow is not associated')
+        freshwaterSurfaceFlux(indexSnow, :) = 0.0_RKIND
+      endif
+      if (associated(indexIceRunoff)) then
+        do iCell=1,nCells
           freshwaterSurfaceFluxRunoff(indexIceRunoff, iCell) = iceRunoffFlux(iCell) / rho_sw
+        enddo  !  iCell
+      else
+        call mpas_log_write('indexIceRunoff is not associated')
+        freshwaterSurfaceFlux(indexIceRunoff, :) = 0.0_RKIND
+      endif
+      if (associated(indexRiverRunoff)) then
+        do iCell=1,nCells
           freshwaterSurfaceFluxRunoff(indexRiverRunoff, iCell) = riverRunoffFlux(iCell) / rho_sw
-      enddo  !  iCell
+        enddo  !  iCell
+      else
+        call mpas_log_write('indexRiverRunoff is not associated')
+        freshwaterSurfaceFlux(indexRiverRunoff, :) = 0.0_RKIND
+      endif
       if (associated(indexSeaIceFreshWater)) then
         do iCell=1,nCells
           freshwaterSurfaceFlux(indexSeaIceFreshWater, iCell) = seaIceFreshWaterFlux(iCell) / rho_sw
