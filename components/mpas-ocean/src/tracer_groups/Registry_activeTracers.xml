@@ -201,3 +201,9 @@
 			 description="monthly surface salinity climatology interpolated to current timestep"
 		/>
 	</var_struct>
+
+	<var_struct name="surfaceTemperatureMonthlyForcing" time_levs="1">
+		<var name="surfaceTemperatureMonthlyClimatologyValue" type="real" dimensions="nCells Time" array_group="activeGRP" units="1.e-3"
+			 description="monthly surface temperature climatology interpolated to current timestep"
+		/>
+	</var_struct>
