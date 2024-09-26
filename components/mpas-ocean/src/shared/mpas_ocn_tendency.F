@@ -650,6 +650,7 @@ contains
          tracerGroup,     &! tracers in current tracer group
          tracerGroupTend, &! tendencies for current tracer group
          activeTracers,   &! retain active tracers
+         freshwaterTracers,   &! retain active tracers
          ecosysTracers,   &! retain ecosys tracers for DMS, MacroMols
          tracerGroupInteriorRestoringRate, &! int restoring timescale 
          tracerGroupInteriorRestoringValue  ! int restoring value
@@ -900,8 +901,13 @@ contains
          ! compute surface tracer flux from bulk forcing
          !
          if (config_use_tracerGroup_surface_bulk_forcing) then
-            ! This applies surface fluxes if groupName is activeTracers
+            ! This applies surface fluxes if groupName is activeTracers or freshwaterTracers
+            call mpas_pool_get_array(tracersPool, 'activeTracers', &
+                                     activeTracers, timeLevel)
+            call mpas_pool_get_array(tracersPool, 'freshwaterTracers', &
+                                     freshwaterTracers, timeLevel)
             call ocn_surface_bulk_forcing_tracers(meshPool, groupName, &
+                                  activeTracers, freshwaterTracers, &
                                   forcingPool, tracerGroup, &
                                   tracerGroupSurfaceFlux, &
                                   tracerGroupSurfaceFluxRunoff, &

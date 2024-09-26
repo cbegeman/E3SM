@@ -80,8 +80,10 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_surface_bulk_forcing_tracers(meshPool, groupName, forcingPool, tracerGroup,   &
-      tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxRemoved, dt, layerThickness, err)!{{{
+   subroutine ocn_surface_bulk_forcing_tracers( &
+      meshPool, groupName, activeTracers, freshwaterTracers, &
+      forcingPool, tracerGroup, tracersSurfaceFlux, tracersSurfaceFluxRunoff, &
+      tracersSurfaceFluxRemoved, dt, layerThickness, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -90,6 +92,8 @@ contains
       !-----------------------------------------------------------------
       type (mpas_pool_type), intent(in) :: meshPool !< Input: mesh information
       character (len=*) :: groupName !< Input: Name of tracer group
+      real (kind=RKIND), dimension(:,:,:), intent(in) :: activeTracers, &
+                                                         freshwaterTracers
 
       !-----------------------------------------------------------------
       !
@@ -124,11 +128,15 @@ contains
 
       call mpas_timer_start("bulk_" // trim(groupName))
       if ( trim(groupName) == 'activeTracers' ) then
-         call ocn_surface_bulk_forcing_active_tracers(meshPool, forcingPool, tracerGroup,  &
-            tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxRemoved, layerThickness, dt, err)
+         call ocn_surface_bulk_forcing_active_tracers( &
+            meshPool, forcingPool, tracerGroup, tracersSurfaceFlux, &
+            tracersSurfaceFluxRunoff, tracersSurfaceFluxRemoved, &
+            layerThickness, dt, err)
       elseif ( trim(groupName) == 'freshwaterTracers' ) then
-         call ocn_surface_bulk_forcing_freshwater_tracers(meshPool, forcingPool, tracerGroup,  &
-            tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxRemoved, err)
+         call ocn_surface_bulk_forcing_freshwater_tracers( &
+            meshPool, forcingPool, activeTracers, &
+            freshwaterTracers, tracersSurfaceFlux, tracersSurfaceFluxRunoff, &
+            tracersSurfaceFluxRemoved, err)
       end if
       call mpas_timer_stop("bulk_" // trim(groupName))
 
@@ -884,8 +892,10 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_surface_bulk_forcing_freshwater_tracers(meshPool, forcingPool, tracerGroup,  &
-      freshwaterSurfaceFlux, freshwaterSurfaceFluxRunoff, freshwaterSurfaceFluxRemoved, err)!{{{
+   subroutine ocn_surface_bulk_forcing_freshwater_tracers( &
+      meshPool, forcingPool, activeTracers, freshwaterTracers, &
+      freshwaterSurfaceFlux, freshwaterSurfaceFluxRunoff, &
+      freshwaterSurfaceFluxRemoved, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -893,6 +903,8 @@ contains
       !
       !-----------------------------------------------------------------
       type (mpas_pool_type), intent(in) :: meshPool !< Input: mesh information
+      real (kind=RKIND), dimension(:,:,:), intent(in) :: activeTracers, &
+                                                         freshwaterTracers
 
       !-----------------------------------------------------------------
       !
@@ -905,7 +917,6 @@ contains
       ! two dimensional arrays
       real (kind=RKIND), dimension(:,:), intent(inout) :: &
          freshwaterSurfaceFlux, freshwaterSurfaceFluxRunoff, freshwaterSurfaceFluxRemoved
-      real (kind=RKIND), dimension(:,:,:), intent(inout) :: tracerGroup
 
       !-----------------------------------------------------------------
       !
@@ -925,17 +936,21 @@ contains
       integer, dimension(:), pointer :: nCellsArray
 
       type(mpas_pool_type),pointer :: tracersSurfaceFluxPool
-      integer, pointer :: indexRain, indexSnow, indexRiverRunoff, indexIceRunoff, indexSeaIceFreshWater, &
+      integer, pointer :: indexSalt, indexRain, indexSnow, indexRiverRunoff, &
+         indexIceRunoff, indexSeaIceFreshWater, &
          indexIcebergFreshWater, indexLandIceFreshwater
+      real (kind=RKIND) :: f_w, f_ice
       real (kind=RKIND), dimension(:), pointer :: &
-         rainFlux, snowFlux, riverRunoffFlux, iceRunoffFlux, seaIceFreshWaterFlux, &
-         icebergFreshWaterFlux, landIceFreshwaterFlux
+         evaporationFlux, rainFlux, snowFlux, riverRunoffFlux, iceRunoffFlux, &
+         seaIceFreshWaterFlux, icebergFreshWaterFlux, landIceFreshwaterFlux, &
+         frazilIceFreshWaterFlux, landIceMask
 
       err = 0
 
       call mpas_pool_get_dimension(meshPool, 'nCellsArray', nCellsArray)
 
       call mpas_pool_get_subpool(forcingPool, 'tracersSurfaceFlux',tracersSurfaceFluxPool)
+      call mpas_pool_get_dimension(tracersSurfaceFluxPool, 'index_salinitySurfaceFlux', indexSalt)
       call mpas_pool_get_dimension(tracersSurfaceFluxPool, 'index_rainSurfaceFlux', indexRain)
       call mpas_pool_get_dimension(tracersSurfaceFluxPool, 'index_snowSurfaceFlux', indexSnow)
       call mpas_pool_get_dimension(tracersSurfaceFluxPool, 'index_riverRunoffFreshWaterSurfaceFlux', indexRiverRunoff)
@@ -944,18 +959,25 @@ contains
       call mpas_pool_get_dimension(tracersSurfaceFluxPool, 'index_icebergFreshWaterSurfaceFlux', indexIcebergFreshWater)
       call mpas_pool_get_dimension(tracersSurfaceFluxPool, 'index_landIceFreshwaterSurfaceFlux', indexLandIceFreshwater)
 
+      call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
       call mpas_pool_get_array(forcingPool, 'rainFlux', rainFlux)
+      call mpas_pool_get_array(forcingPool, 'evaporationFlux', evaporationFlux)
       call mpas_pool_get_array(forcingPool, 'snowFlux', snowFlux)
       call mpas_pool_get_array(forcingPool, 'riverRunoffFlux', riverRunoffFlux)
       call mpas_pool_get_array(forcingPool, 'iceRunoffFlux', iceRunoffFlux)
       call mpas_pool_get_array(forcingPool, 'seaIceFreshWaterFlux', seaIceFreshWaterFlux)
       call mpas_pool_get_array(forcingPool, 'icebergFreshWaterFlux', icebergFreshWaterFlux)
       call mpas_pool_get_array(forcingPool, 'landIceFreshwaterFlux', landIceFreshwaterFlux)
+      call mpas_pool_get_array(forcingPool, 'frazilIceFreshWaterFlux', frazilIceFreshWaterFlux)
 
       nCells = nCellsArray( 3 )
       if (associated(indexRain)) then
         do iCell=1,nCells
-          freshwaterSurfaceFlux(indexRain, iCell) = rainFlux(iCell) / rho_sw
+          ! Fraction of existing liquid precip freshwater in water column relative to all other freshwater
+          f_w = freshwaterTracers(indexRain, minLevelCell(iCell), iCell) / &
+                (1 - 1.0e-3_RKIND * activeTracers(indexSalt, minLevelCell(iCell), iCell))
+          freshwaterSurfaceFlux(indexRain, iCell) = f_w * evaporationFlux(iCell) / rho_sw + &
+                                                    rainFlux(iCell) / rho_sw
         enddo  !  iCell
       else
         call mpas_log_write('indexRain is not associated')
@@ -987,7 +1009,13 @@ contains
       endif
       if (associated(indexSeaIceFreshWater)) then
         do iCell=1,nCells
-          freshwaterSurfaceFlux(indexSeaIceFreshWater, iCell) = seaIceFreshWaterFlux(iCell) / rho_sw
+          ! Freshwater fraction in sea ice
+          f_ice = 1 - 1.0e-3_RKIND * config_frazil_sea_ice_reference_salinity
+          ! Fraction of existing sea ice freshwater in water column relative to all other freshwater
+          f_w = freshwaterTracers(indexSeaIceFreshWater, minLevelCell(iCell), iCell) / &
+                (1 - 1.0e-3_RKIND * activeTracers(indexSalt, minLevelCell(iCell), iCell))
+          freshwaterSurfaceFlux(indexSeaIceFreshWater, iCell) = &
+                (f_ice * seaIceFreshWaterFlux(iCell) + f_ice * f_w * frazilIceFreshWaterFlux(iCell)) / rho_sw
         enddo  !  iCell
       else
         call mpas_log_write('indexSeaIceFreshWater is not associated')
@@ -1004,6 +1032,13 @@ contains
       if (associated(indexLandIceFreshwater) .and. associated(landIceFreshwaterFlux)) then
         do iCell=1,nCells
           freshwaterSurfaceFlux(indexLandIceFreshwater, iCell) = landIceFreshwaterFlux(iCell) / rho_sw
+          if (landIceMask(iCell) == 1 .and. frazilIceFreshWaterFlux(iCell) /= 0.0_RKIND) then
+            ! Fraction of existing sea ice freshwater in water column relative to all other freshwater
+            f_w = freshwaterTracers(indexLandIceFreshwater, minLevelCell(iCell), iCell) / &
+                  (1 - 1.0e-3_RKIND * activeTracers(indexSalt, minLevelCell(iCell), iCell))
+            freshwaterSurfaceFlux(indexLandIceFreshwater, iCell) = freshwaterSurfaceFlux(indexLandIceFreshwater, iCell) + &
+                  f_w * frazilIceFreshWaterFlux(iCell) / rho_sw
+          endif
         enddo  !  iCell
       else
         call mpas_log_write('indexLandIceFreshwater or landIceFreshwaterFlux is not associated')
