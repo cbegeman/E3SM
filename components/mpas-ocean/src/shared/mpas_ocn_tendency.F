@@ -1389,7 +1389,7 @@ contains
 
          ! Compute tracer tendency due to production/destruction of
          ! frazil ice
-         call ocn_frazil_forcing_tracers(meshPool, tracersPool, &
+         call ocn_frazil_forcing_tracers(meshPool, timeLevelIn, tracersPool, &
                      groupName, forcingPool, tracerGroupTend, err)
 
 

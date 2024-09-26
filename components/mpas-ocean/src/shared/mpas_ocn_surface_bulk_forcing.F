@@ -932,7 +932,7 @@ contains
       !
       !-----------------------------------------------------------------
 
-      integer :: iCell, nCells
+      integer :: k, iCell, nCells
       integer, dimension(:), pointer :: nCellsArray
 
       type(mpas_pool_type),pointer :: tracersSurfaceFluxPool
@@ -943,7 +943,8 @@ contains
       real (kind=RKIND), dimension(:), pointer :: &
          evaporationFlux, rainFlux, snowFlux, riverRunoffFlux, iceRunoffFlux, &
          seaIceFreshWaterFlux, icebergFreshWaterFlux, landIceFreshwaterFlux, &
-         frazilIceFreshWaterFlux, landIceMask
+         landIceMask
+      real (kind=RKIND), dimension(:,:), pointer :: frazilLayerThicknessTendency
 
       err = 0
 
@@ -959,7 +960,6 @@ contains
       call mpas_pool_get_dimension(tracersSurfaceFluxPool, 'index_icebergFreshWaterSurfaceFlux', indexIcebergFreshWater)
       call mpas_pool_get_dimension(tracersSurfaceFluxPool, 'index_landIceFreshwaterSurfaceFlux', indexLandIceFreshwater)
 
-      call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
       call mpas_pool_get_array(forcingPool, 'rainFlux', rainFlux)
       call mpas_pool_get_array(forcingPool, 'evaporationFlux', evaporationFlux)
       call mpas_pool_get_array(forcingPool, 'snowFlux', snowFlux)
@@ -968,7 +968,6 @@ contains
       call mpas_pool_get_array(forcingPool, 'seaIceFreshWaterFlux', seaIceFreshWaterFlux)
       call mpas_pool_get_array(forcingPool, 'icebergFreshWaterFlux', icebergFreshWaterFlux)
       call mpas_pool_get_array(forcingPool, 'landIceFreshwaterFlux', landIceFreshwaterFlux)
-      call mpas_pool_get_array(forcingPool, 'frazilIceFreshWaterFlux', frazilIceFreshWaterFlux)
 
       nCells = nCellsArray( 3 )
       if (associated(indexRain)) then
@@ -1008,14 +1007,11 @@ contains
         freshwaterSurfaceFlux(indexRiverRunoff, :) = 0.0_RKIND
       endif
       if (associated(indexSeaIceFreshWater)) then
+        ! Freshwater fraction in sea ice
+        f_ice = 1 - 1.0e-3_RKIND * config_frazil_sea_ice_reference_salinity
         do iCell=1,nCells
-          ! Freshwater fraction in sea ice
-          f_ice = 1 - 1.0e-3_RKIND * config_frazil_sea_ice_reference_salinity
           ! Fraction of existing sea ice freshwater in water column relative to all other freshwater
-          f_w = freshwaterTracers(indexSeaIceFreshWater, minLevelCell(iCell), iCell) / &
-                (1 - 1.0e-3_RKIND * activeTracers(indexSalt, minLevelCell(iCell), iCell))
-          freshwaterSurfaceFlux(indexSeaIceFreshWater, iCell) = &
-                (f_ice * seaIceFreshWaterFlux(iCell) + f_ice * f_w * frazilIceFreshWaterFlux(iCell)) / rho_sw
+          freshwaterSurfaceFlux(indexSeaIceFreshWater, iCell) = f_ice * seaIceFreshWaterFlux(iCell) / rho_sw
         enddo  !  iCell
       else
         call mpas_log_write('indexSeaIceFreshWater is not associated')
@@ -1032,13 +1028,6 @@ contains
       if (associated(indexLandIceFreshwater) .and. associated(landIceFreshwaterFlux)) then
         do iCell=1,nCells
           freshwaterSurfaceFlux(indexLandIceFreshwater, iCell) = landIceFreshwaterFlux(iCell) / rho_sw
-          if (landIceMask(iCell) == 1 .and. frazilIceFreshWaterFlux(iCell) /= 0.0_RKIND) then
-            ! Fraction of existing sea ice freshwater in water column relative to all other freshwater
-            f_w = freshwaterTracers(indexLandIceFreshwater, minLevelCell(iCell), iCell) / &
-                  (1 - 1.0e-3_RKIND * activeTracers(indexSalt, minLevelCell(iCell), iCell))
-            freshwaterSurfaceFlux(indexLandIceFreshwater, iCell) = freshwaterSurfaceFlux(indexLandIceFreshwater, iCell) + &
-                  f_w * frazilIceFreshWaterFlux(iCell) / rho_sw
-          endif
         enddo  !  iCell
       else
         call mpas_log_write('indexLandIceFreshwater or landIceFreshwaterFlux is not associated')

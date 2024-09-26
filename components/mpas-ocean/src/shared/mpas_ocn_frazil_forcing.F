@@ -77,7 +77,7 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_frazil_forcing_tracers(meshPool, tracersPool, groupName, forcingPool, tracersTend, err)!{{{
+   subroutine ocn_frazil_forcing_tracers(meshPool, timeLevel, tracersPool, groupName, forcingPool, tracersTend, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -92,7 +92,8 @@ contains
       !
       !-----------------------------------------------------------------
       type (mpas_pool_type), intent(in) :: meshPool !< Input/Output: mesh information
-      type (mpas_pool_type), intent(inout) :: tracersPool !< Input/Output: tracer tendency pool
+      integer, intent(in) :: timeLevel
+      type (mpas_pool_type), intent(inout) :: tracersPool !< Input/Output: tracer pool
       type (mpas_pool_type), intent(inout) :: forcingPool  !< Input/Output: forcing pool holding frazil-induced tendencies
       real (kind=RKIND), dimension(:,:,:), intent(inout) ::  tracersTend
       !-----------------------------------------------------------------
@@ -117,6 +118,8 @@ contains
 
       if ( trim(groupName) == 'activeTracers' ) then
          call ocn_frazil_forcing_active_tracers(meshPool, tracersPool, forcingPool, tracersTend, err)
+      elseif ( trim(groupName) == 'freshwaterTracers' ) then
+         call ocn_frazil_forcing_freshwater_tracers(meshPool, timeLevel, tracersPool, forcingPool, tracersTend, err)
       end if
 
       call mpas_timer_stop("tracer frazil")
@@ -299,6 +302,139 @@ contains
       !$omp end parallel
 
    end subroutine ocn_frazil_forcing_active_tracers!}}}
+
+
+!***********************************************************************
+!
+!  routine ocn_frazil_forcing_freshwater_tracers
+!
+!> \brief   Adds the active tracers forcing due to frazil
+!> \author  Todd Ringler
+!> \date    18 October 2015
+!> \details
+!>  This routine adds the active tracers forcing due to frazil
+!>  from which tracer tendencies are computed later.
+!
+!-----------------------------------------------------------------------
+
+   subroutine ocn_frazil_forcing_freshwater_tracers(meshPool, timeLevel, tracersPool, forcingPool, freshwaterTracersTend, err)!{{{
+
+      !-----------------------------------------------------------------
+      !
+      ! input variables
+      !
+      !-----------------------------------------------------------------
+      type (mpas_pool_type), intent(in) :: meshPool !< Input: mesh information
+      integer :: timeLevel
+      type (mpas_pool_type), intent(inout) :: tracersPool !< Input: tracer pool
+      type (mpas_pool_type), intent(inout) :: forcingPool !< Input: Forcing information
+
+      !-----------------------------------------------------------------
+      !
+      ! input/output variables
+      !
+      !-----------------------------------------------------------------
+      real (kind=RKIND), dimension(:,:,:), intent(inout) :: freshwaterTracersTend
+
+      !-----------------------------------------------------------------
+      !
+      ! output variables
+      !
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< Output: Error flag
+
+      !-----------------------------------------------------------------
+      !
+      ! local variables
+      !
+      !-----------------------------------------------------------------
+
+      integer :: iCell, k, nCells
+      integer, pointer :: indexSalinityPtr
+      integer, pointer :: indexSeaIceFreshWaterPtr
+      integer, pointer :: indexLandIceFreshwaterPtr
+      integer :: indexSalinity
+      integer :: indexSeaIceFreshWater
+      integer :: indexLandIceFreshwater
+      integer, pointer, dimension(:) :: nCellsArray, landIceMask
+      integer, pointer, dimension(:) :: minLevelCell, maxLevelCell
+
+      real (kind=RKIND) :: f_ice, f_w
+      real (kind=RKIND), dimension(:,:), pointer :: seaIceFreshWaterTendency
+      real (kind=RKIND), dimension(:,:), pointer :: landIceFreshwaterTendency
+      real (kind=RKIND), dimension(:,:), pointer :: frazilLayerThicknessTendency
+      real (kind=RKIND), dimension(:,:,:), pointer, contiguous :: &
+         activeTracers, freshwaterTracers
+
+      err = 0
+
+      if ( .not. frazilFormationOn ) return
+
+      call mpas_pool_get_array(tracersPool, 'freshwaterTracers', freshwaterTracers, timeLevel)
+      if (.not. associated(freshwaterTracers)) return
+
+      call mpas_pool_get_dimension(meshPool, 'nCellsArray', nCellsArray)
+      call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracers, timeLevel)
+      call mpas_pool_get_array(meshPool, 'minLevelCell', minLevelCell)
+      call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
+      call mpas_pool_get_array(forcingPool, 'frazilLayerThicknessTendency', &
+                               frazilLayerThicknessTendency)
+      call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
+
+      call mpas_pool_get_dimension(tracersPool, 'index_salinity', indexSalinityPtr)
+      indexSalinity = indexSalinityPtr
+      call mpas_pool_get_dimension(tracersPool, 'index_seaIceFreshWater', indexSeaIceFreshWaterPtr)
+      call mpas_pool_get_dimension(tracersPool, 'index_landIceFreshwater', indexLandIceFreshwaterPtr)
+
+      ! frazil fields are needed only over 0 and 1 halos
+      nCells = nCellsArray( 2 )
+
+      if (associated(indexSeaIceFreshWaterPtr)) then
+        indexSeaIceFreshwater = indexSeaIceFreshwaterPtr
+        ! Freshwater fraction in sea ice
+        f_ice = 1 - 1.0e-3_RKIND * config_frazil_sea_ice_reference_salinity
+        ! add to surface fluxes at cell centers
+        !$omp parallel
+        !$omp do schedule(runtime) private(k)
+        do iCell = 1, nCells
+          do k = minLevelCell(iCell), maxLevelCell(iCell)
+            f_w = freshwaterTracers(indexSeaIceFreshWater, k, iCell) / &
+                  (1 - 1.0e-3_RKIND * activeTracers(indexSalinity, k, iCell))
+            freshwaterTracersTend(indexSeaIceFreshwater, k, iCell) = &
+                 freshwaterTracersTend(indexSeaIceFreshwater, k, iCell) + &
+                 f_ice * f_w * frazilLayerThicknessTendency(k, iCell)
+          end do
+        end do
+        !$omp end do
+        !$omp end parallel
+      else
+        call mpas_log_write('indexSeaIceFreshwater is not associated')
+      endif
+
+      if (associated(indexLandIceFreshwaterPtr)) then
+        indexLandIceFreshwater = indexLandIceFreshwaterPtr
+        !$omp parallel
+        !$omp do schedule(runtime) private(k)
+        do iCell = 1, nCells
+          if (landIceMask(iCell) == 1) then
+            ! Fraction of existing land ice freshwater in water column relative to all other freshwater
+            do k = minLevelCell(iCell), maxLevelCell(iCell)
+              f_w = freshwaterTracers(indexLandIceFreshwater, k, iCell) / &
+                    (1 - 1.0e-3_RKIND * activeTracers(indexSalinity, k, iCell))
+              freshwaterTracersTend(indexLandIceFreshwater, k, iCell) = &
+                  freshwaterTracersTend(indexLandIceFreshwater, k, iCell) + &
+                  f_w * frazilLayerThicknessTendency(k, iCell)
+            end do
+          endif
+        end do
+        !$omp end do
+        !$omp end parallel
+      else
+        call mpas_log_write('indexLandIceFreshwater is not associated')
+      endif
+
+   end subroutine ocn_frazil_forcing_freshwater_tracers!}}}
 
 !***********************************************************************
 !
