@@ -973,7 +973,7 @@ contains
       if (associated(indexRain)) then
         do iCell=1,nCells
           ! Fraction of existing liquid precip freshwater in water column relative to all other freshwater
-          f_w = freshwaterTracers(indexRain, minLevelCell(iCell), iCell) / &
+          f_w = max(0.0_RKIND, freshwaterTracers(indexRain, minLevelCell(iCell), iCell)) / &
                 (1 - 1.0e-3_RKIND * activeTracers(indexSalt, minLevelCell(iCell), iCell))
           freshwaterSurfaceFlux(indexRain, iCell) = f_w * evaporationFlux(iCell) / rho_sw + &
                                                     rainFlux(iCell) / rho_sw

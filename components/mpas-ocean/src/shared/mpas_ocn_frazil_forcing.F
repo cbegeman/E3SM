@@ -399,7 +399,7 @@ contains
         !$omp do schedule(runtime) private(k)
         do iCell = 1, nCells
           do k = minLevelCell(iCell), maxLevelCell(iCell)
-            f_w = freshwaterTracers(indexSeaIceFreshWater, k, iCell) / &
+            f_w = max(0.0_RKIND, freshwaterTracers(indexSeaIceFreshWater, k, iCell)) / &
                   (1 - 1.0e-3_RKIND * activeTracers(indexSalinity, k, iCell))
             freshwaterTracersTend(indexSeaIceFreshwater, k, iCell) = &
                  freshwaterTracersTend(indexSeaIceFreshwater, k, iCell) + &
@@ -420,7 +420,7 @@ contains
           if (landIceMask(iCell) == 1) then
             ! Fraction of existing land ice freshwater in water column relative to all other freshwater
             do k = minLevelCell(iCell), maxLevelCell(iCell)
-              f_w = freshwaterTracers(indexLandIceFreshwater, k, iCell) / &
+              f_w = max(0.0_RKIND, freshwaterTracers(indexLandIceFreshwater, k, iCell)) / &
                     (1 - 1.0e-3_RKIND * activeTracers(indexSalinity, k, iCell))
               freshwaterTracersTend(indexLandIceFreshwater, k, iCell) = &
                   freshwaterTracersTend(indexLandIceFreshwater, k, iCell) + &
