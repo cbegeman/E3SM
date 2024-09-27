@@ -477,6 +477,8 @@ module ocn_time_integration_split
          normalBaroclinicVelocityCur(k,iEdge)
          wettingVelocityBaroclinicNew(k,iEdge) = &
          wettingVelocityBaroclinicCur(k,iEdge)
+         if (wettingVelocityBaroclinicCur(k,iEdge) .ne. 1.0_RKIND) &
+            call mpas_log_write('wettingVelocityBaroclinicCur at beg timestep is not 1')
       end do
       end do
 #ifndef MPAS_OPENACC
@@ -806,6 +808,8 @@ module ocn_time_integration_split
                            + wettingVelocityBaroclinicCur(k,iEdge) * &
                              ( normalVelocityNew(k,iEdge) &
                              + sshGrad ))
+                  if (wettingVelocityBaroclinicCur(k,iEdge) .ne. 1.0_RKIND) &
+                     call mpas_log_write('wettingVelocityBaroclinicCur at cor iter is not 1')
                enddo ! vertical
 
                ! thicknessSum is initialized outside the loop because
@@ -1148,6 +1152,8 @@ module ocn_time_integration_split
                               ( CoriolisTerm - gravity * &
                                 (sshSubcycleCur(cell2) - sshSubcycleCur(cell1)) / dcEdge(iEdge) + &
                                 barotropicForcing(iEdge)))
+                     if (wettingVelocityBarotropicSubcycleCur(iEdge) .ne. 1.0_RKIND) &
+                        call mpas_log_write('wettingVelocityBarotropicSubcycleCur at vel pred is not 1')
 
                   end do ! edges
                   !$omp end do
@@ -1240,6 +1246,8 @@ module ocn_time_integration_split
                      sshTend(iCell) = sshTend(iCell) + &
                                       edgeSignOncell(i, iCell)*flux* &
                                       dvEdge(iEdge)
+                     if (wettingVelocityBarotropicSubcycleNew(iEdge) .ne. 1.0_RKIND) &
+                        call mpas_log_write('wettingVelocityBarotropicSubcycleNew at ssh pred is not 1')
 
                   end do ! edges on cell
 
@@ -1454,6 +1462,8 @@ module ocn_time_integration_split
                              ( CoriolisTerm - gravity * &
                                (sshCell2 - sshCell1) / dcEdge(iEdge) + &
                                barotropicForcing(iEdge)))
+                     if (wettingVelocityBarotropicSubcycleNew(iEdge) .ne. 1.0_RKIND) &
+                        call mpas_log_write('wettingVelocityBarotropicSubcycleNew at vel corr is not 1')
 
                   end do
                   !$omp end do
@@ -1675,6 +1685,8 @@ module ocn_time_integration_split
                   wettingVelocityBaroclinicNew(k, iEdge) = &
                   wettingVelocityBaroclinicNew(k, iEdge) &
                         / (nBtrSubcycles*config_btr_subcycle_loop_factor + 1)
+                  if (wettingVelocityBaroclinicNew(k,iEdge) .ne. 1.0_RKIND) &
+                     call mpas_log_write('wettingVelocityBaroclinicNew after accum is not 1')
                end do
             end do
             !$omp end do
