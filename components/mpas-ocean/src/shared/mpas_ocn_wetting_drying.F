@@ -985,6 +985,8 @@ contains
 
       err = 0
 
+      hCrit = config_drying_min_cell_height
+
       if (.not. config_zero_drying_velocity) return
 
       allocate(columnThickness(nCellsAll))
