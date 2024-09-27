@@ -673,7 +673,8 @@ contains
                 if ( cellNei > nCellsAll ) cellNei = iCell ! check with Steven on how to handle this index
                 sshNei = sshNew(cellNei)
                 wctNei = sshNew(cellNei) + bottomDepth(cellNei)
-                if ( wctNei <= hCrit .and. sshNew(iCell) < sshNei ) then
+                ! if ( wctNei <= hCrit .and. sshNew(iCell) < sshNei ) then
+                if ( wctNei <= hCrit .or. sshNew(iCell) >= sshNei ) then
                   wettingVelocityBarotropic(iEdge) = 0.0_RKIND
                 end if     
               end if
@@ -774,6 +775,7 @@ contains
         if (wct <= hCrit) then
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
+            ! Don't allow any flux to leave thin cells
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
               wettingVelocityBarotropic(iEdge) = 0.0_RKIND
             end if
@@ -819,7 +821,8 @@ contains
                 if ( cellNei > nCellsAll ) cellNei = iCell ! check with Steven on how to handle this index
                 sshNei = sshNew(cellNei)
                 wctNei = sshNew(cellNei) + bottomDepth(cellNei)
-                if ( wctNei <= hCrit .and. sshNew(iCell) < sshNei ) then
+                ! if ( wctNei <= hCrit .and. sshNew(iCell) < sshNei ) then
+                if ( wctNei <= hCrit .or. sshNew(iCell) >= sshNei ) then
                   wettingVelocityBarotropic(iEdge) = 0.0_RKIND
                 end if     
               end if
@@ -880,6 +883,7 @@ contains
 
       real (kind=RKIND), dimension(:,:), intent(inout) :: &
          wettingVelocityFactor          !< Input/Output: velocity wettingVelocityFactor
+                                        !  1 disallows fluxes, 0 allows fluxes
 
       !-----------------------------------------------------------------
       !
@@ -1003,7 +1007,8 @@ contains
                     if ( cellNei > nCellsAll ) cellNei = iCell ! check with Steven on how to handle this index
                     sshCur = columnThickness(iCell) - bottomDepth(iCell)
                     sshNei = columnThickness(cellNei) - bottomDepth(cellNei)
-                    if ( columnThickness(cellNei) <= hCrit .and. sshCur < sshNei ) then
+                    ! if ( columnThickness(cellNei) <= hCrit .and. sshCur < sshNei ) then
+                    if ( columnThickness(cellNei) <= hCrit .or. sshCur >= sshNei ) then
                       wettingVelocityFactor(k, iEdge) = 1.0_RKIND
                     end if     
                   end if
@@ -1074,6 +1079,7 @@ contains
 
       real (kind=RKIND), dimension(:,:), intent(inout) :: &
          wettingVelocityFactor          !< Input/Output: velocity wettingVelocityFactor
+                                        !  1 disallows fluxes, 0 allows fluxes
 
       !-----------------------------------------------------------------
       !
@@ -1212,7 +1218,8 @@ contains
                 sshCur = columnThickness(iCell) - bottomDepth(iCell)
                 sshNei = columnThickness(cellNei) - bottomDepth(cellNei)
                 if (config_zero_drying_velocity_ramp) then
-                  if ( layerThickness(k, cellNei) <= hCrit .and. sshCur < sshNei ) then
+                  if ( layerThickness(k, cellNei) <= hCrit .or. sshCur >= sshNei ) then
+                  ! if ( layerThickness(k, cellNei) <= hCrit .and. sshCur < sshNei ) then
                     wettingVelocityFactor(k, iEdge) = 1.0_RKIND
                   end if
                 else
