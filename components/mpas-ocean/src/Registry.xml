@@ -1218,6 +1218,10 @@
 					description="If true, use take into account the ssh gradient across previously flux-limited edges in the wetting and drying algorithm"
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_use_land_ice_forcing" type="logical" default_value=".false." units="unitless"
+					description="If true, use land ice draft from forcing pool to constrain wet/dry regions"
+					possible_values=".true. or .false."
+		/>
 	</nml_record>
 	<nml_record name="ocean_constants">
 		<nml_option name="config_density0" type="real" default_value="1026.0" units="kg m^-3"
