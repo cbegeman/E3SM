@@ -539,7 +539,7 @@ contains
             do k = minLevelCell(iCell), maxLevelCell(iCell)
               columnThickness = columnThickness + layerThicknessCell(k, iCell)
             enddo
-            sshCell(iCell) = columnThickness - bottomDepth(iCell)
+            sshCell(iCell) = columnThickness - bottomDepth(iCell) + sshLandIceAdjustment(iCell)
           enddo
           !$omp end do
           !$omp end parallel
