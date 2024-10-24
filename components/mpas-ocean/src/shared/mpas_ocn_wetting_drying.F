@@ -69,6 +69,65 @@ module ocn_wetting_drying
 
 contains
 
+   subroutine ocn_enforce_grounding_line(forcingPool, wettingVelocityFactor, &
+                                         err)
+      !-----------------------------------------------------------------
+      !
+      ! input variables
+      !
+      !-----------------------------------------------------------------
+      type (mpas_pool_type), intent(in) :: forcingPool
+
+      !-----------------------------------------------------------------
+      !
+      ! input/output variables
+      !
+      !-----------------------------------------------------------------
+      real (kind=RKIND), dimension(:, :), intent(inout) :: wettingVelocityFactor
+
+      !-----------------------------------------------------------------
+      !
+      ! output variables
+      !
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< Output: error flag
+
+      !-----------------------------------------------------------------
+      !
+      ! local variables
+      !
+      !-----------------------------------------------------------------
+      ! real (kind=RKIND), dimension(:), pointer :: landIceDraft
+      real (kind=RKIND), dimension(:), pointer :: landIcePressure
+      real (kind=RKIND) :: landIceDraftMin, landIceDraftMax
+      real (kind=RKIND) :: beta, rho_ice, g
+
+      if (.not. config_use_land_ice_forcing) return
+
+      call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
+      ! call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
+
+      ! Fudge factor in knowledge of ocean density in fraction that land ice draft
+      ! could be adjusted by
+      g = 9.81 ! get const instead
+      beta = 0.1 ! make this a config option
+      rho_ice = 918.0 ! make this a config option if not already
+      do iCell = 1, nCellsAll
+        landIceDraftMin = -landIcePressure(iCell) / ((1 + beta) * rho_ice * g)
+        landIceDraftMax = -landIcePressure(iCell) / ((1 - beta) * rho_ice * g)
+        if (landIceDraftMax < -bottomDepth(iCell) + hCrit) then
+           wettingVelocityFactor(:, iCell) = 1.0_RKIND
+           call mpas_log_write('Cell forced dry because draft $r scaled to $r < bottomDepth $r', &
+                               realArgs=(/(landIcePressure(iCell) / (rho_ice * g)), &
+                                         landIceDraftMax, -bottomDepth(iCell)/)
+        elseif (landIceDraftMin > -bottomDepth(iCell) + hCrit) then
+           wettingVelocityFactor(:, iCell) = 0.0_RKIND
+        endif
+      enddo
+
+   end subroutine ocn_enforce_grouding_line
+
    subroutine ocn_compute_land_ice_ssh_adjustment(forcingPool, ssh_land_ice_adjustment, &
                                                   err)
       !-----------------------------------------------------------------
@@ -348,6 +407,7 @@ contains
              domain, layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
              normalTransportVelocity, rkSubstepWeight, &
              sshLandIceAdjustment, wettingVelocityFactor, err)
+     call ocn_enforce_grounding_line(forcingPool, bottomDepth, wettingVelocityFactor, err)
 
      !$omp parallel
      !$omp do schedule(runtime) private(k)
