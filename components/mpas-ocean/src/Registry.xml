@@ -1270,6 +1270,18 @@
 					description="If true, use land ice draft from forcing pool to constrain wet/dry regions"
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_land_ice_dynamic_height" type="real" default_value="0.0" units="m"
+					description="The amount of water column perturbation allowed overburden in grounded regions according to landIceDraft. Only used to force dry regions when config_use_land_ice_forcing is true."
+					possible_values="Any real"
+		/>
+		<nml_option name="config_use_land_ice_overburden_height" type="logical" default_value=".false." units="unitless"
+					description="If true, use config_land_ice_overburden_height to adjust the maximum land ice pressure in grounded regions. If false, land ice pressure is unmodified"
+					possible_values=".true. or .false."
+		/>
+		<nml_option name="config_land_ice_overburden_height" type="real" default_value="0.0" units="m"
+					description="The amount of pressure overburden allowed in grounded regions. If ice must float at level of critical thickness, set equal to -1 * critical thickness"
+					possible_values="Any real"
+		/>
 	</nml_record>
 	<nml_record name="ocean_constants">
 		<nml_option name="config_density0" type="real" default_value="1026.0" units="kg m^-3"

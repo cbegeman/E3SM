@@ -55,7 +55,6 @@ module ocn_wetting_drying
 
    public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4
    public :: ocn_wetting_velocity_factor_on_cell_edges
-   public :: ocn_compute_land_ice_ssh_adjustment
 
    !--------------------------------------------------------------------
    !
@@ -69,14 +68,15 @@ module ocn_wetting_drying
 
 contains
 
-   subroutine ocn_enforce_grounding_line(landIcePressure, wettingVelocityFactor, &
+   subroutine ocn_enforce_grounding_line(landIcePressure, landIceDraft, wettingVelocityFactor, &
                                          err)
       !-----------------------------------------------------------------
       !
       ! input variables
       !
       !-----------------------------------------------------------------
-      real (kind=RKIND), dimension(:), pointer, intent(in) :: landIcePressure
+      real (kind=RKIND), dimension(:), intent(in) :: landIcePressure
+      real (kind=RKIND), dimension(:), intent(in) :: landIceDraft
 
       !-----------------------------------------------------------------
       !
@@ -110,26 +110,34 @@ contains
 
       ! Fudge factor in knowledge of ocean density in fraction that land ice draft
       ! could be adjusted by
-      g = 9.81 ! get const instead
-      beta = 0.1 ! make this a config option
+      ! beta = 0.1 ! make this a config option
       do iCell = 1, nCellsAll
-        landIceDraftMin = -(1 + beta) * landIcePressure(iCell) / (rho_sw * g)
-        landIceDraftMax = -(1 - beta) * landIcePressure(iCell) / (rho_sw * g)
-        if (wettingVelocityFactor(1, iCell) == 0.0_RKIND .and. &
-            landIceDraftMax < -bottomDepth(iCell)) then
-           wettingVelocityFactor(:, iCell) = 1.0_RKIND
-           call mpas_log_write('Cell forced dry because draft $r scaled to $r < bottomDepth $r', &
-                               realArgs=(/(landIcePressure(iCell) / (rho_sw * g)), &
-                                         landIceDraftMax, -bottomDepth(iCell)/))
+        if (wettingVelocityFactor(1, iCell) == 0.0_RKIND) then
+          !if (surfacePressure(iCell) / (gravity * rho_sw) > bottomDepth(iCell)) then
+          !   wettingVelocityFactor(:, iCell) = 1.0_RKIND
+          !end if
+          if (-landIceDraft(iCell) > bottomDepth(iCell) - config_land_ice_dynamic_height) then
+             wettingVelocityFactor(:, iCell) = 1.0_RKIND
+          end if
+        end if
+        !landIceDraftMin = -(1 + beta) * landIcePressure(iCell) / (rho_sw * g)
+        !landIceDraftMax = -(1 - beta) * landIcePressure(iCell) / (rho_sw * g)
+        !if (wettingVelocityFactor(1, iCell) == 0.0_RKIND .and. &
+        !    landIceDraftMax < -bottomDepth(iCell)) then
+        !   wettingVelocityFactor(:, iCell) = 1.0_RKIND
+        !   call mpas_log_write('Cell forced dry because draft $r scaled to $r < bottomDepth $r', &
+        !                       realArgs=(/(landIcePressure(iCell) / (rho_sw * g)), &
+        !                                 landIceDraftMax, -bottomDepth(iCell)/))
         ! elseif (landIceDraftMin > -bottomDepth(iCell)) then
         !    wettingVelocityFactor(:, iCell) = 0.0_RKIND
         !    call mpas_log_write('Cell forced wet because draft $r scaled to $r > bottomDepth $r', &
         !                        realArgs=(/(landIcePressure(iCell) / (rho_sw * g)), &
         !                                  landIceDraftMin, -bottomDepth(iCell)/))
-        endif
+        !endif
       enddo
 
    end subroutine ocn_enforce_grounding_line
+
 
    subroutine ocn_compute_land_ice_ssh_floatation(landIcePressure, ssh_floatation, &
                                                   err)
@@ -138,7 +146,7 @@ contains
       ! input variables
       !
       !-----------------------------------------------------------------
-      real (kind=RKIND), dimension(:), pointer, intent(in) :: landIcePressure
+      real (kind=RKIND), dimension(:), intent(in) :: landIcePressure
 
       !-----------------------------------------------------------------
       !
@@ -187,8 +195,8 @@ contains
       ! input variables
       !
       !-----------------------------------------------------------------
-      integer, dimension(:), pointer, intent(in) :: landIceMask
-      real (kind=RKIND), dimension(:), pointer, intent(in) :: landIcePressure
+      integer, dimension(:), intent(in) :: landIceMask
+      real (kind=RKIND), dimension(:), intent(in) :: landIcePressure
 
       !-----------------------------------------------------------------
       !
@@ -211,27 +219,26 @@ contains
       !
       !-----------------------------------------------------------------
       integer :: iCell
-      real (kind=RKIND), dimension(:), allocatable :: ssh_floatation
-      real (kind=RKIND) :: ssh_crit, hCrit
+      real (kind=RKIND), dimension(:), allocatable :: landIcePressureMax, rho_mean, ssh_floatation
+      real (kind=RKIND) :: dPressure, ssh_crit, hCrit
 
       err = 0
 
       if ( .not. config_zero_drying_velocity ) return
       if ( .not. landIcePressureOn ) return
 
+      allocate(rho_mean(nCellsAll))
+      allocate(landIcePressureMax(nCellsAll))
       allocate(ssh_floatation(nCellsAll))
+      rho_mean(:) = rho_sw
+      landIcePressureMax(:) = 0.0_RKIND
       ssh_floatation(:) = 0.0_RKIND
-
-      call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
 
       call ocn_compute_land_ice_ssh_floatation(landIcePressure, ssh_floatation, err)
 
       !$omp parallel
-      !$omp do schedule(runtime) private(ssh_floatation, ssh_crit)
+      !$omp do schedule(runtime) private(dPressure, ssh_crit, hCrit)
       do iCell = 1, nCellsAll
-
-         beta = min(bottomDepth(iCell) + ssh_floatation(iCell), 0.0_RKIND) / bottomDepth(iCell)
-         ! the ssh below which the wetting-and-drying factor is active
          hCrit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
          ssh_crit = hCrit - bottomDepth(iCell)
 
@@ -421,7 +428,7 @@ contains
      type (mpas_pool_type), pointer :: statePool
      type (mpas_pool_type), pointer :: provisStatePool
      type (mpas_pool_type), pointer :: forcingPool
-     real (kind=RKIND), dimension(:), pointer :: landIcePressure
+     real (kind=RKIND), dimension(:), pointer :: landIcePressure, landIceDraft
      integer, dimension(:), pointer :: landIceMask
      real (kind=RKIND), dimension(:, :), pointer :: layerThicknessCur
      real (kind=RKIND), dimension(:, :), pointer :: layerThicknessProvis
@@ -441,6 +448,7 @@ contains
      call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessCur, 1)
      call mpas_pool_get_array(provisStatePool, 'layerThickness', layerThicknessProvis, 1)
      call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
+     call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
      call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
 
      !$omp parallel
@@ -457,7 +465,7 @@ contains
      call ocn_wetting_drying_wettingVelocity( &
              domain, layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
              normalTransportVelocity, rkSubstepWeight, &
-             landIcePressure, wettingVelocityFactor, err)
+             landIceMask, landIcePressure, landIceDraft, wettingVelocityFactor, err)
 
      !$omp parallel
      !$omp do schedule(runtime) private(k)
@@ -493,7 +501,7 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_wetting_drying_wettingVelocity(domain, layerThickEdgeFlux, layerThicknessCur, layerThicknessProvis, &
-                                                 normalVelocity, dt, landIceMask, landIcePressure, wettingVelocityFactor, err)!{{{
+                                                 normalVelocity, dt, landIceMask, landIcePressure, landIceDraft, wettingVelocityFactor, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -516,10 +524,10 @@ contains
       real (kind=RKIND), intent(in) :: &
          dt     !< Input: time step
 
-      integer, dimension(:), pointer, intent(in) :: landIceMask
+      integer, dimension(:), intent(in) :: landIceMask
 
       real (kind=RKIND), dimension(:), intent(in) :: &
-         landIcePressure      
+         landIcePressure, landIceDraft 
 
       !-----------------------------------------------------------------
       !
@@ -552,7 +560,7 @@ contains
 
       real (kind=RKIND) :: divOutFlux
       real (kind=RKIND) :: columnThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal, hOut
 
       character (len=100) :: log_string
 
@@ -576,10 +584,6 @@ contains
          call mpas_log_write("config_use_ssh_gradient_wetting_drying was designed for " // &
                              "config_pressure_gradient_type = 'ssh_gradient'", MPAS_LOG_WARN)
       endif
-
-      hRampMin = config_zero_drying_velocity_ramp_hmin
-      hRampMax = config_zero_drying_velocity_ramp_hmax
-      hCrit = config_drying_min_cell_height + config_drying_safety_height
 
       layerThicknessCell => layerThicknessCellWetDry
       ! need predicted transport velocity to limit drying flux
@@ -609,10 +613,10 @@ contains
 
       allocate(sshLandIceAdjustment(nCellsAll))
       sshLandIceAdjustment(:) = 0.0_RKIND
-      call ocn_compute_land_ice_ssh_adjustment(landIceMask, landIcePressure, sshLandIceAdjustment, err)
+      call ocn_compute_land_ice_ssh_adjustment(landIcePressure, landIceMask, sshLandIceAdjustment, err)
 
       !$omp parallel
-      !$omp do schedule(runtime) private(i, k, nVertLevelsCell)
+      !$omp do schedule(runtime) private(k, nVertLevelsCell)
       do iCell = 1, nCellsAll
         nVertLevelsCell = maxLevelCell(iCell) - minLevelCell(iCell) + 1
         do k = minLevelCell(iCell), maxLevelCell(iCell)
@@ -627,7 +631,22 @@ contains
       !$omp end do
       !$omp end parallel
 
-      call ocn_enforce_grounding_line(landIcePressure, wettingVelocityFactor, err)
+      call ocn_enforce_grounding_line(landIcePressure, landIceDraft, wettingVelocityFactor, err)
+      !$omp parallel
+      !$omp do schedule(runtime) private(k, hOut, hCrit)
+      do iCell = 1, nCellsAll
+        hOut = 0.0_RKIND
+        do k = minLevelCell(iCell), maxLevelCell(iCell)
+          hOut = hOut + layerThicknessCell(k,iCell)
+        end do
+        hCrit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+        if (hOut > hCrit .and. wettingVelocityFactor(1, iCell) == 1.0_RKIND) &
+           call mpas_log_write('Column forced inactive but water left behind: bottomDepth $r, landIceDraft $r, hOut $r, ssh_floatation $r', &
+                               realArgs=(/bottomDepth(iCell), -landIceDraft(iCell), hOut, &
+                                         landIcePressure(iCell) / (gravity * rho_sw)/))
+      end do
+      !$omp end do
+      !$omp end parallel
 
       call mpas_dmpar_field_halo_exch(domain, 'layerThicknessCellWetDry')
 
@@ -681,6 +700,10 @@ contains
           !$omp end do
           !$omp end parallel
         end if
+
+        hRampMin = config_zero_drying_velocity_ramp_hmin
+        hRampMax = config_zero_drying_velocity_ramp_hmax
+        hCrit = config_drying_min_cell_height + config_drying_safety_height
 
         !$omp parallel
         !$omp do schedule(runtime) private(k, i, iEdge, cellDummy, cellNei, cellCur, sshCur, sshNei)
