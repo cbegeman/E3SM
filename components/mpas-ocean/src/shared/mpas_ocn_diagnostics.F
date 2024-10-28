@@ -2512,6 +2512,7 @@ contains
 
    end subroutine ocn_diagnostic_solve_vertVel_remap!}}}
 
+
 !***********************************************************************
 !
 !  routine ocn_diagnostic_solve_surface_pressure
@@ -2551,10 +2552,15 @@ contains
       !-----------------------------------------------------------------
 
       integer :: iCell ! cell loop index
+      integer, dimension(:), pointer :: landIceMask
       real (kind=RKIND) :: h_crit, ssh_crit, floatation_pressure
       real (kind=RKIND), dimension(:), pointer :: &
          frazilSurfacePressure, &! frazil ice pressure from forcing
+         landIceDraft, &         ! land ice draft
          landIcePressure         ! land ice pressure
+      real (kind=RKIND), dimension(:), allocatable :: landIcePressureMax
+      real (kind=RKIND), dimension(:), allocatable :: rho_mean
+      integer :: err
 
       ! End preamble
       !-----------------------------------------------------------------
@@ -2566,6 +2572,8 @@ contains
                                              frazilSurfacePressure)
       call mpas_pool_get_array(forcingPool, 'landIcePressure', &
                                              landIcePressure)
+      call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
+      call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
 
       ! Compute pressure for generalized coordinates.
       ! Pressure at top surface may be due to atmospheric pressure,
@@ -2613,7 +2621,12 @@ contains
       ! Add land ice pressure if needed
 
       if (landIcePressureOn) then
-         if (config_use_wetting_drying .and. config_zero_drying_velocity) then
+         if (config_use_land_ice_overburden_height) then
+            allocate(rho_mean(nCellsAll))
+            allocate(landIcePressureMax(nCellsAll))
+            rho_mean(:) = rho_sw
+            landIcePressureMax(:) = 0.0_RKIND
+
 #ifdef MPAS_OPENACC
             !$acc parallel loop &
             !$acc    present(surfacePressure)
@@ -2622,18 +2635,17 @@ contains
             !!acc    present(surfacePressure, landIcePressure)
 #else
             !$omp parallel
-            !$omp do schedule(runtime) &
-            !$omp private(floatation_pressure, h_crit, ssh_crit)
+            !$omp do schedule(runtime) private(floatation_pressure, h_crit, ssh_crit)
 #endif
             do iCell = 1, nCellsAll
-               ! the ssh below which the wetting-and-drying factor is active
-               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
-               ssh_crit = h_crit - bottomDepth(iCell)
                ! the maximum pressure is the one that results in ssh at the critical
                ! thickness (gravity is positive)
-               floatation_pressure = - gravity * rho_sw * ssh_crit
+               ! TODO floatation pressure shouldn't be necessary because tests show that it is slightly less than landIcePressure
+               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+               ssh_crit = bottomDepth(iCell) - h_crit + config_land_ice_overburden_height
+               landIcePressureMax(iCell) = gravity * rho_sw * ssh_crit
                surfacePressure(iCell) = surfacePressure(iCell) + &
-                                        min(floatation_pressure, landIcePressure(iCell))
+                                        min(landIcePressureMax(iCell), landIcePressure(iCell))
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
