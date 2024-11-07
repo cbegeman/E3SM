@@ -346,7 +346,7 @@ contains
       ! inputs: atmosphericPressure, seaIcePressure, frazilSurfacePressure, landIcePressure
       ! outputs: surfacePressure
       call ocn_diagnostic_solve_surface_pressure(forcingPool, atmosphericPressure, &
-                seaIcePressure, surfacePressure)
+                seaIcePressure, ssh, surfacePressure)
 
 
       !
@@ -2527,7 +2527,8 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_diagnostic_solve_surface_pressure(forcingPool, &
-               atmosphericPressure, seaIcePressure, surfacePressure)!{{{
+               atmosphericPressure, seaIcePressure, sshCur, &
+               surfacePressure)!{{{
 
       !-----------------------------------------------------------------
       ! input variables
@@ -2538,14 +2539,15 @@ contains
 
       real (kind=RKIND), dimension(:), intent(in) :: &
          atmosphericPressure, &!< [in] atmospheric pressure on surface
-         seaIcePressure        !< [in] sea-ice pressure on surface
+         seaIcePressure, &     !< [in] sea-ice pressure on surface
+         sshCur                !< [in] current SSH
 
       !-----------------------------------------------------------------
       ! output variables
       !-----------------------------------------------------------------
 
-      real (kind=RKIND), dimension(:), intent(out) :: &
-         surfacePressure       !< [out] total surface pressure
+      real (kind=RKIND), dimension(:), intent(inout) :: &
+         surfacePressure !< [out] total surface pressure
 
       !-----------------------------------------------------------------
       ! local variables
@@ -2559,8 +2561,9 @@ contains
          landIceDraft, &         ! land ice draft
          landIcePressure         ! land ice pressure
       real (kind=RKIND), dimension(:), allocatable :: landIcePressureMax
+      real (kind=RKIND), dimension(:), allocatable :: surfacePressureCur
       real (kind=RKIND), dimension(:), allocatable :: rho_mean
-      integer :: err
+      integer :: adjust_count, err
 
       ! End preamble
       !-----------------------------------------------------------------
@@ -2574,6 +2577,8 @@ contains
                                              landIcePressure)
       call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
       call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
+      allocate(surfacePressureCur(nCellsAll))
+      surfacePressureCur(:) = surfacePressure(:)
 
       ! Compute pressure for generalized coordinates.
       ! Pressure at top surface may be due to atmospheric pressure,
@@ -2582,7 +2587,7 @@ contains
 
 #ifdef MPAS_OPENACC
       !$acc parallel loop &
-      !$acc    present(surfacePressure, atmosphericPressure, &
+      !$acc    present(surfacePressureNew, atmosphericPressure, &
       !$acc            seaIcePressure)
 #else
       !$omp parallel
@@ -2671,6 +2676,35 @@ contains
             !$omp end do
             !$omp end parallel
 #endif
+         endif
+         if (config_use_land_ice_pressure_relaxation) then
+#ifdef MPAS_OPENACC
+            !$acc parallel loop &
+            !$acc    present(surfacePressure, surfacePressureCur, sshCur)
+            !! need this eventually, but there is currently
+            !! an issue, probably with the re-retrieval of pointer
+            !!acc    present(surfacePressure, landIcePressure)
+#else
+            !!$omp parallel
+            !!$omp do schedule(runtime) &
+            !!$omp private(h_crit, ssh_crit, adjust_count)
+#endif
+            adjust_count = 0
+            do iCell = 1, nCellsAll
+               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+               ssh_crit = h_crit - bottomDepth(iCell)
+               if (sshCur(iCell) > ssh_crit) then
+                  surfacePressure(iCell) = surfacePressure(iCell) + &
+                           min(config_land_ice_pressure_increment, &
+                               landIcePressure(iCell) - surfacePressureCur(iCell))
+                  adjust_count = adjust_count + 1
+               endif
+            end do
+#ifndef MPAS_OPENACC
+            !!$omp end do
+            !!$omp end parallel
+#endif
+            if (adjust_count > 0) call mpas_log_write('Increment pressure for $i cells', intArgs=(/adjust_count/))
          endif
       endif ! land ice pressure
 
