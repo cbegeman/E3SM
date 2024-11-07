@@ -224,6 +224,7 @@ contains
 
       err = 0
 
+      if ( .not. config_use_land_ice_ssh_adjustment ) return
       if ( .not. config_zero_drying_velocity ) return
       if ( .not. landIcePressureOn ) return
 
