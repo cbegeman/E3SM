@@ -561,11 +561,13 @@ contains
 
       real (kind=RKIND) :: divOutFlux
       real (kind=RKIND) :: columnThickness
-      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal, hOut
+      real (kind=RKIND) :: hCrit, hRampMin, hRampMax, hEdgeTotal, hOut, hPred, hCur
 
       character (len=100) :: log_string
 
-      integer:: cellDummy(2), cellCur, CellNei, nVertLevelsCell
+      integer :: cellDummy(2), cellCur, CellNei, nVertLevelsCell, ssh_adj_count, &
+                 dry_cell_count, dry_partial_cell_count, dry_edge_count, dry_level_count, dry_partial_level_count, &
+                 ramp_cell_count, ramp_partial_cell_count, ramp_edge_count, ramp_level_count, ramp_partial_level_count
       real (kind=RKIND) :: sshCur, sshNei
       real (kind=RKIND), dimension(:), pointer :: sshCell
       real (kind=RKIND), dimension(:, :), pointer :: layerThicknessCell
@@ -615,39 +617,108 @@ contains
       allocate(sshLandIceAdjustment(nCellsAll))
       sshLandIceAdjustment(:) = 0.0_RKIND
       call ocn_compute_land_ice_ssh_adjustment(landIcePressure, landIceMask, sshLandIceAdjustment, err)
-
+      ssh_adj_count = 0
+      hCrit = config_drying_min_cell_height + config_drying_safety_height
       !$omp parallel
-      !$omp do schedule(runtime) private(k, nVertLevelsCell)
+      !$omp do schedule(runtime) private(k, nVertLevelsCell, ssh_adj_count)
       do iCell = 1, nCellsAll
         nVertLevelsCell = maxLevelCell(iCell) - minLevelCell(iCell) + 1
+        if (sshLandIceAdjustment(iCell) < 0.0_RKIND) ssh_adj_count = ssh_adj_count + 1
         do k = minLevelCell(iCell), maxLevelCell(iCell)
           layerThicknessCell(k, iCell) = layerThicknessCell(k, iCell) + &
                                          sshLandIceAdjustment(iCell) / nVertLevelsCell
           if ( .not. config_use_ssh_gradient_wetting_drying ) then
-             call ocn_wetting_velocity_factor_on_cell_edges( &
-                      wettingVelocityFactor, layerThicknessCell(k, iCell), normalVelocity, iCell, k)
+             if (layerThicknessCell(k,iCell) <= hCrit / nVertLevelsCell) then
+                do i = 1, nEdgesOnCell(iCell)
+                   iEdge = edgesOnCell(i, iCell)
+                   if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
+                      if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+                         wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+                      end if
+                   end if
+                end do
+             elseif (config_zero_drying_velocity_ramp .and. &
+                     (layerThicknessCell(k,iCell) > hCrit / nVertLevelsCell) .and. &
+                     (layerThicknessCell(k,iCell) <= config_zero_drying_velocity_ramp_hmax)) then
+
+                hRampMin = config_zero_drying_velocity_ramp_hmin
+                ! Following O'Dea et al. (2021), if total upwinded wct is less than
+                ! 2*critical thickness, apply damping at each edge
+                do i = 1, nEdgesOnCell(iCell)
+                   iEdge = edgesOnCell(i, iCell)
+                   if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
+                      if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+                         wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
+                             tanh(50.0_RKIND * (layerThicknessCell(k,iCell) - hRampMin)/hRampMin)
+                         !call mpas_log_write('Apply ramp: wettingFactor $r', realArgs=(/wettingVelocityFactor(k,iEdge)/))
+                      end if
+                   end if
+                end do
+             end if
           end if
         end do
       end do
       !$omp end do
       !$omp end parallel
+      call mpas_log_write('SSH adjusted for wetdry factor for $i cells', intArgs=(/ssh_adj_count/))
 
       call ocn_enforce_grounding_line(landIcePressure, landIceDraft, wettingVelocityFactor, err)
-      !$omp parallel
-      !$omp do schedule(runtime) private(k, hOut, hCrit)
+
+      dry_cell_count = 0
+      dry_partial_cell_count = 0
+      ramp_cell_count = 0
+      ramp_partial_cell_count = 0
       do iCell = 1, nCellsAll
         hOut = 0.0_RKIND
+        hCur = 0.0_RKIND
+        hPred = 0.0_RKIND
+        dry_edge_count = 0
+        dry_partial_level_count = 0
+        ramp_edge_count = 0
+        ramp_partial_level_count = 0
         do k = minLevelCell(iCell), maxLevelCell(iCell)
           hOut = hOut + layerThicknessCell(k,iCell)
+          hCur = hCur + layerThicknessCur(k,iCell)
+          hPred = hPred + layerThicknessProvis(k,iCell)
         end do
-        hCrit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
-        if (hOut > hCrit .and. wettingVelocityFactor(1, iCell) == 1.0_RKIND) &
-           call mpas_log_write('Column forced inactive but water left behind: bottomDepth $r, landIceDraft $r, hOut $r, ssh_floatation $r', &
-                               realArgs=(/bottomDepth(iCell), -landIceDraft(iCell), hOut, &
-                                         landIcePressure(iCell) / (gravity * rho_sw)/))
+        do iEdge = 1, nEdgesOnCell(iCell)
+          ramp_level_count = 0
+          dry_level_count = 0
+          do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
+            if (wettingVelocityFactor(k, iEdge) == 1.0_RKIND) &
+              !call mpas_log_write('Column forced inactive but water left behind: bottomDepth $r, landIceDraft $r, hOut $r, ssh_floatation $r', &
+              !                    realArgs=(/bottomDepth(iCell), -landIceDraft(iCell), hOut, &
+              !                              landIcePressure(iCell) / (gravity * rho_sw)/), sshLandIceAdjustment(iCell))
+              dry_level_count = dry_level_count + 1
+              call mpas_log_write('Layer forced inactive: hOut $r, hCur $r, hPred $r, hFloat $r', &
+                                  realArgs=(/ & !hAdj $r, hOut + sshLandIceAdjustment(iCell), &
+                                             hOut, hCur, hPred, &
+                                             bottomDepth(iCell) - landIcePressure(iCell) / (gravity * rho_sw)/))
+            if (wettingVelocityFactor(k, iEdge) > 0.0_RKIND .and. wettingVelocityFactor(k, iEdge) < 1.0_RKIND) &
+              ramp_level_count = ramp_level_count + 1
+          enddo
+          if (dry_level_count > 0) then
+            dry_edge_count = dry_edge_count + 1
+            if (dry_level_count < maxLevelCell(iCell)) dry_partial_level_count = dry_partial_level_count + 1
+          endif
+          if (ramp_level_count > 0) then
+            ramp_edge_count = ramp_edge_count + 1
+            if (ramp_level_count < maxLevelCell(iCell)) ramp_partial_level_count = ramp_partial_level_count + 1
+          endif
+        enddo
+        if (dry_edge_count > 0) then
+          dry_cell_count = dry_cell_count + 1
+          if (dry_edge_count < nEdgesOnCell(iCell)) dry_partial_cell_count = dry_partial_cell_count + 1
+        endif
+        if (ramp_edge_count > 0) then
+          ramp_cell_count = ramp_cell_count + 1
+          if (ramp_edge_count < nEdgesOnCell(iCell)) ramp_partial_cell_count = ramp_partial_cell_count + 1
+        endif
       end do
-      !$omp end do
-      !$omp end parallel
+      call mpas_log_write('Dry applied to $i cells, $i of which are partial', intArgs=(/dry_cell_count, dry_partial_cell_count/))
+      call mpas_log_write('Dry applied to $i edges, $i of which are partial levels', intArgs=(/dry_edge_count, dry_partial_level_count/))
+      call mpas_log_write('Ramp applied to $i cells, $i of which are partial', intArgs=(/ramp_cell_count, ramp_partial_cell_count/))
+      call mpas_log_write('Ramp applied to $i edges, $i of which are partial levels', intArgs=(/ramp_edge_count, ramp_partial_level_count/))
 
       call mpas_dmpar_field_halo_exch(domain, 'layerThicknessCellWetDry')
 
@@ -870,7 +941,8 @@ contains
             if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
                if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                   wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                  tanh(50.0_RKIND * (layerThicknessTmp - hRampMin)/hRampMin)
+                      tanh(50.0_RKIND * (layerThicknessTmp - hRampMin)/hRampMin)
+                  call mpas_log_write('Apply ramp: wettingFactor $r', realArgs=(/wettingVelocityFactor(k,iEdge)/))
                end if
             end if
          end do
