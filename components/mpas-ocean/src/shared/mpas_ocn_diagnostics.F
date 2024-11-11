@@ -75,6 +75,7 @@ module ocn_diagnostics
    !
    !--------------------------------------------------------------------
 
+   logical :: landIcePressureInitialized
    integer :: ke_cell_flag, ke_vertex_flag
    real (kind=RKIND) ::  fCoef
    real (kind=RKIND) ::  landIceTopDragCoeff
@@ -2468,7 +2469,7 @@ contains
       ! output variables
       !-----------------------------------------------------------------
 
-      real (kind=RKIND), dimension(:), intent(out) :: &
+      real (kind=RKIND), dimension(:), intent(inout) :: &
          landIcePressureApplied  !< [out] land ice pressure applied
 
       real (kind=RKIND), dimension(:), intent(out) :: &
@@ -2550,6 +2551,8 @@ contains
 
       if (landIcePressureOn) then
          allocate(landIcePressureMax(nCellsAll))
+         if (.not. landIcePressureInitialized) &
+            landIcePressureApplied(:) = landIcePressure(:)
          landIcePressureMax(:) = landIcePressure(:)
 
          if (config_use_land_ice_overburden_height) then
@@ -2616,12 +2619,15 @@ contains
 #endif
          ! Update landIcePressureApplied and surfacePressure
          do iCell = 1, nCellsAll
+            call mpas_log_write('landIcePressureNew, Cur, Max = $r, $r, $r', &
+                                realArgs=(/landIcePressure(iCell), landIcePressureApplied(iCell), landIcePressureMax(iCell)/))
             landIcePressureApplied(iCell) = min(landIcePressureMax(iCell), &
                                                 landIcePressure(iCell))
             surfacePressure(iCell) = surfacePressure(iCell) + &
                                      landIcePressureApplied(iCell)
             if (landIcePressureApplied(iCell) .ne. landIcePressure(iCell)) &
                adjust_count = adjust_count + 1
+            landIcePressureInitialized = .true.
          end do
 #ifndef M_OPENACC
          !$omp end do
@@ -4675,6 +4681,7 @@ contains
 
       call ocn_diagnostics_variables_init(domain, jenkinsOn, &
                                           hollandJenkinsOn, err)
+      landIcePressureInitialized = .false.
 
     end subroutine ocn_diagnostics_init!}}}
 

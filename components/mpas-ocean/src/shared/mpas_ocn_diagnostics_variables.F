@@ -254,7 +254,8 @@ contains
 
       integer, intent(out) :: err !< Output: Error flag
 
-      type (mpas_pool_type), pointer :: diagnosticsPool
+      type (mpas_pool_type), pointer :: diagnosticsPool, forcingPool
+      real (kind=RKIND), dimension(:), pointer :: landIcePressure
 
       ! Local pointers for pool retrievals
       integer, pointer :: &
@@ -269,6 +270,8 @@ contains
       err = 0
 
       call mpas_pool_get_subpool(domain % blocklist % structs, 'diagnostics', diagnosticsPool)
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'forcing', forcingPool)
+      call mpas_pool_get_array(forcingPool, 'landIcePressure', landIcePressure)
 
       if (config_use_topographic_wave_drag) then
          call mpas_pool_get_array(diagnosticsPool, 'topo_rinv', topo_rinv)
