@@ -2550,7 +2550,7 @@ contains
 
       if (landIcePressureOn) then
          allocate(landIcePressureMax(nCellsAll))
-         landIcePressureMax = landIcePressure
+         landIcePressureMax(:) = landIcePressure(:)
 
          if (config_use_land_ice_overburden_height) then
 #ifdef MPAS_OPENACC
@@ -2588,8 +2588,8 @@ contains
             do iCell = 1, nCellsAll
                ssh_crit = config_drying_min_cell_height - bottomDepth(iCell)
                if (ssh(iCell) > ssh_crit .and. &
-                   landIcePressureMax(iCell) > surfacePressure(iCell)) then
-                   !landIcePressureMax(iCell) > landIcePressureApplied(iCell)) then
+                   landIcePressureMax(iCell) > landIcePressureApplied(iCell)) then
+                   !landIcePressureMax(iCell) > surfacePressure(iCell)) then
                   landIcePressureMax(iCell) = landIcePressureApplied(iCell) + config_land_ice_pressure_increment
                   adjust_count = adjust_count + 1
                endif
