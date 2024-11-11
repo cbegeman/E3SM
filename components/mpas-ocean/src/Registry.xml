@@ -2396,6 +2396,10 @@
 			description="Mass per unit area of frazil ice produced under land ice.  Only computed when not coupled to a dynamic land-ice model."
 			packages="frazilIce"
 		/>
+		<var name="landIcePressureApplied" type="real" dimensions="nCells Time" units="Pa"
+			description="landIcePressure as used in state"
+			packages="landIcePressurePKG"
+		/>
 
 		<!-- FIELDS FOR SPLIT EXPLICIT TIME INTEGRATOR -->
 		<var name="normalBarotropicVelocity" type="real" dimensions="nEdges Time" units="m s^-1"
