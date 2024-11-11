@@ -345,7 +345,7 @@ contains
       ! inputs: atmosphericPressure, seaIcePressure, frazilSurfacePressure, landIcePressure
       ! outputs: surfacePressure
       call ocn_diagnostic_solve_surface_pressure(forcingPool, atmosphericPressure, &
-                ssh, seaIcePressure, surfacePressure)
+                ssh, seaIcePressure, landIcePressureApplied, surfacePressure)
 
 
       !
