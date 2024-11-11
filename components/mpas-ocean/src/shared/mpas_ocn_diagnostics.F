@@ -141,7 +141,7 @@ contains
       logical :: full_compute = .true.
 
       real (kind=RKIND), dimension(:), pointer :: &
-        frazilSurfacePressure, landIcePressure, landIceDraft, landIceFraction
+        frazilSurfacePressure, landIcePressureApplied, landIcePressure, landIceDraft, landIceFraction
 
       integer, dimension(:), pointer :: &
         landIceFloatingMask
@@ -171,6 +171,7 @@ contains
       call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel)
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
       call mpas_pool_get_array(statePool, 'ssh', ssh, timeLevel)
+      call mpas_pool_get_array(statePool, 'landIcePressureApplied', landIcePressureApplied, timeLevel)
 
       call mpas_pool_get_array(forcingPool, 'seaIcePressure', seaIcePressure)
       call mpas_pool_get_array(forcingPool, 'atmosphericPressure', atmosphericPressure)
@@ -346,7 +347,7 @@ contains
       ! inputs: atmosphericPressure, seaIcePressure, frazilSurfacePressure, landIcePressure
       ! outputs: surfacePressure
       call ocn_diagnostic_solve_surface_pressure(forcingPool, atmosphericPressure, &
-                seaIcePressure, surfacePressure)
+                ssh, seaIcePressure, landIcePressureApplied, surfacePressure)
 
 
       !
@@ -2526,7 +2527,8 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_diagnostic_solve_surface_pressure(forcingPool, &
-               atmosphericPressure, seaIcePressure, surfacePressure)!{{{
+               ssh, atmosphericPressure, seaIcePressure, landIcePressureApplied, &
+               surfacePressure)!{{{
 
       !-----------------------------------------------------------------
       ! input variables
@@ -2536,8 +2538,10 @@ contains
          forcingPool         !< [in] Forcing information
 
       real (kind=RKIND), dimension(:), intent(in) :: &
+         ssh, &
          atmosphericPressure, &!< [in] atmospheric pressure on surface
-         seaIcePressure        !< [in] sea-ice pressure on surface
+         seaIcePressure, &     !< [in] sea-ice pressure on surface
+         landIcePressureApplied!< [in] land-ice pressure on surface
 
       !-----------------------------------------------------------------
       ! output variables
@@ -2551,10 +2555,16 @@ contains
       !-----------------------------------------------------------------
 
       integer :: iCell ! cell loop index
-
+      integer, dimension(:), pointer :: landIceMask
+      real (kind=RKIND) :: h_crit, ssh_crit, floatation_pressure
       real (kind=RKIND), dimension(:), pointer :: &
          frazilSurfacePressure, &! frazil ice pressure from forcing
+         landIceDraft, &         ! land ice draft
          landIcePressure         ! land ice pressure
+      real (kind=RKIND), dimension(:), allocatable :: landIcePressureMax
+      real (kind=RKIND), dimension(:), allocatable :: surfacePressureCur
+      real (kind=RKIND), dimension(:), allocatable :: rho_mean
+      integer :: adjust_count, err
 
       ! End preamble
       !-----------------------------------------------------------------
@@ -2566,6 +2576,8 @@ contains
                                              frazilSurfacePressure)
       call mpas_pool_get_array(forcingPool, 'landIcePressure', &
                                              landIcePressure)
+      call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
+      call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
 
       ! Compute pressure for generalized coordinates.
       ! Pressure at top surface may be due to atmospheric pressure,
@@ -2606,30 +2618,94 @@ contains
          !$omp end do
 #endif
       endif ! frazil pressure
+#ifndef MPAS_OPENACC
+      !$omp end parallel
+#endif
 
       ! Add land ice pressure if needed
 
       if (landIcePressureOn) then
+         if (config_use_land_ice_overburden_height) then
+            allocate(rho_mean(nCellsAll))
+            allocate(landIcePressureMax(nCellsAll))
+            rho_mean(:) = rho_sw
+            landIcePressureMax(:) = 0.0_RKIND
+
 #ifdef MPAS_OPENACC
-         !$acc parallel loop &
-         !$acc    present(surfacePressure)
-         !! need this eventually, but there is currently
-         !! an issue, probably with the re-retrieval of pointer
-         !!acc    present(surfacePressure, landIcePressure)
+            !$acc parallel loop &
+            !$acc    present(surfacePressure)
+            !! need this eventually, but there is currently
+            !! an issue, probably with the re-retrieval of pointer
+            !!acc    present(surfacePressure, landIcePressure)
 #else
-         !$omp do schedule(runtime)
+            !$omp parallel
+            !$omp do schedule(runtime) private(floatation_pressure, h_crit, ssh_crit)
 #endif
-         do iCell = 1, nCellsAll
-            surfacePressure(iCell) = surfacePressure(iCell) &
-                                   + landIcePressure(iCell)
-         end do
+            do iCell = 1, nCellsAll
+               ! the maximum pressure is the one that results in ssh at the critical
+               ! thickness (gravity is positive)
+               ! TODO floatation pressure shouldn't be necessary because tests show that it is slightly less than landIcePressure
+               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+               ssh_crit = bottomDepth(iCell) - h_crit + config_land_ice_overburden_height
+               landIcePressureMax(iCell) = gravity * rho_sw * ssh_crit
+               surfacePressure(iCell) = surfacePressure(iCell) + &
+                                        min(landIcePressureMax(iCell), landIcePressure(iCell))
+            end do
 #ifndef MPAS_OPENACC
-         !$omp end do
+            !$omp end do
+            !$omp end parallel
 #endif
+         else
+#ifdef MPAS_OPENACC
+            !$acc parallel loop &
+            !$acc    present(surfacePressure)
+            !! need this eventually, but there is currently
+            !! an issue, probably with the re-retrieval of pointer
+            !!acc    present(surfacePressure, landIcePressure)
+#else
+            !$omp parallel
+            !$omp do schedule(runtime) &
+            !$omp private(floatation_pressure, h_crit, ssh_crit)
+#endif
+            do iCell = 1, nCellsAll
+               surfacePressure(iCell) = surfacePressure(iCell) + &
+                                        landIcePressure(iCell)
+            end do
+#ifndef MPAS_OPENACC
+            !$omp end do
+            !$omp end parallel
+#endif
+         endif
+         if (config_use_land_ice_pressure_relaxation) then
+#ifdef MPAS_OPENACC
+            !$acc parallel loop &
+            !$acc    present(surfacePressure, surfacePressure, ssh)
+            !! need this eventually, but there is currently
+            !! an issue, probably with the re-retrieval of pointer
+            !!acc    present(surfacePressure, landIcePressure)
+#else
+            !!$omp parallel
+            !!$omp do schedule(runtime) &
+            !!$omp private(h_crit, ssh_crit, adjust_count)
+#endif
+            adjust_count = 0
+            do iCell = 1, nCellsAll
+               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+               ssh_crit = h_crit - bottomDepth(iCell)
+               if (ssh(iCell) > ssh_crit .and. &
+                   landIcePressureMax(iCell) > surfacePressure(iCell)) then
+                  surfacePressure(iCell) = surfacePressure(iCell) + &
+                           config_land_ice_pressure_increment
+                  adjust_count = adjust_count + 1
+               endif
+            end do
+#ifndef MPAS_OPENACC
+            !!$omp end do
+            !!$omp end parallel
+#endif
+            if (adjust_count > 0) call mpas_log_write('Increment pressure for $i cells', intArgs=(/adjust_count/))
+         endif
       endif ! land ice pressure
-#ifndef MPAS_OPENACC
-      !$omp end parallel
-#endif
 
    !--------------------------------------------------------------------
 
