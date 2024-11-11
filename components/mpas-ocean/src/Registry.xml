@@ -2396,10 +2396,6 @@
 			description="Mass per unit area of frazil ice produced under land ice.  Only computed when not coupled to a dynamic land-ice model."
 			packages="frazilIce"
 		/>
-		<var name="landIcePressureApplied" type="real" dimensions="nCells Time" units="Pa"
-			description="landIcePressure as used in state"
-			packages="landIcePressurePKG"
-		/>
 
 		<!-- FIELDS FOR SPLIT EXPLICIT TIME INTEGRATOR -->
 		<var name="normalBarotropicVelocity" type="real" dimensions="nEdges Time" units="m s^-1"
@@ -2911,6 +2907,9 @@
 		</var_array>
 		<var name="surfacePressure" type="real" dimensions="nCells Time" units="Pa"
 			description="Pressure at the sea surface due to atmosphere, sea ice, frazil and land ice"
+		/>
+		<var name="landIcePressureApplied" type="real" dimensions="nCells Time" units="Pa"
+			description="landIcePressure as used in state"
 		/>
 		<var_array name="SSHGradient" type="real" dimensions="nCells Time" packages="forwardMode;analysisMode">
 			<var name="SSHGradientZonal" array_group="ssh_zonal" units="1"
