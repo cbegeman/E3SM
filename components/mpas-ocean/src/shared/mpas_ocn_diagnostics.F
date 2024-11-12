@@ -2481,12 +2481,12 @@ contains
 
       integer :: iCell ! cell loop index
       integer, dimension(:), pointer :: landIceMask
-      real (kind=RKIND) :: ssh_crit, floatation_pressure
+      real (kind=RKIND) :: ssh_crit, floatation_pressure, landIcePressureMaxOld
       real (kind=RKIND), dimension(:), pointer :: &
          frazilSurfacePressure, &! frazil ice pressure from forcing
          landIceDraft, &         ! land ice draft
          landIcePressure         ! land ice pressure
-      real (kind=RKIND), dimension(:), allocatable :: landIcePressureMax
+      real (kind=RKIND), dimension(:), allocatable :: landIcePressureDiff, landIcePressureMax, landIcePressureFloat
       real (kind=RKIND), dimension(:), allocatable :: surfacePressureCur
       real (kind=RKIND), dimension(:), allocatable :: rho_mean
       integer :: adjust_count, err
@@ -2548,34 +2548,62 @@ contains
 #endif
 
       ! Add land ice pressure if needed
-
+      ! At the beginning of the run, we've adjusted ssh to match landIcePressure
+      ! It's possible that ssh has diverged from landIceDraft
+      ! For the dynamics, we need to adjust landIcePressure so that it doesn't
+      ! provide too much overburden
+      ! We continue to store the full landIcePressure as landIcePressure
+      ! At the first time step, we set landIcePressureApplied to rho_i * g * ssh_crit (overburden = 0)
+      ! We need to store landIcePressureApplied for restarts (or estimate it from surfacePressure)
+      ! Any grounding happens progressively, limiting the rate of landIcePressure increase
       if (landIcePressureOn) then
          allocate(landIcePressureMax(nCellsAll))
-         if (.not. landIcePressureInitialized) &
-            landIcePressureApplied(:) = landIcePressure(:)
-         landIcePressureMax(:) = landIcePressure(:)
+         if (.not. landIcePressureInitialized) then
 
-         if (config_use_land_ice_overburden_height) then
+            ! First initialize landIcePressure unchanged, then modify in grounded regions
+            landIcePressureApplied(:) = landIcePressure(:)
+
 #ifdef MPAS_OPENACC
             !$acc parallel loop &
-            !$acc    present(surfacePressure)
+            !$acc    present(landIcePressureFloat, landIcePressureMax)
 #else
             !$omp parallel
             !$omp do schedule(runtime) private(ssh_crit)
 #endif
             do iCell = 1, nCellsAll
-               ! the maximum pressure is the one that results in ssh at the critical
-               ! thickness (gravity is positive)
-               ! TODO floatation pressure shouldn't be necessary because tests show that it is slightly less than landIcePressure
-               ssh_crit = bottomDepth(iCell) - config_drying_min_cell_height + config_land_ice_overburden_height
-               landIcePressureMax(iCell) = gravity * rho_sw * ssh_crit
+               ssh_crit = config_drying_min_cell_height - bottomDepth(iCell) ! This is overburden_height = 0
+               is_grounded = (landIceDraft(iCell) < ssh_crit)
+               ! is_grounded = (landIceDraft(iCell) < -bottomDepth(iCell)) ! This would also be valid
+               if ( is_grounded ) then
+                  landIcePressureApplied(iCell) = -config_ice_density * gravity * ssh_crit
+               endif
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
             !$omp end parallel
 #endif
-         endif
-         if (config_use_land_ice_pressure_relaxation) then
+            landIcePressureInitialized = .true.
+         endif ! initialization
+
+#ifdef MPAS_OPENACC
+         !$acc parallel loop &
+         !$acc    present(landIcePressureFloat, landIcePressureMax)
+#else
+         !$omp parallel
+         !$omp do schedule(runtime) private(ssh_crit)
+#endif
+         do iCell = 1, nCellsAll
+            ! We only enforce a maximum pressure perturbation in the case that the water column is drying
+            landIcePressureDiff(iCell) = landIcePressure(iCell) - landIcePressureApplied(iCell)
+         end do
+#ifndef MPAS_OPENACC
+         !$omp end do
+         !$omp end parallel
+#endif
+
+         ! every time step: check for grounding; if not, increase landIcePressureApplied
+         ! TODO verify that dP/dt doesn't need limiting outside of grounded regions
+         if (config_limit_grounded_land_ice_pressure) then
             adjust_count = 0
 #ifdef MPAS_OPENACC
             !$acc parallel loop &
@@ -2586,26 +2614,41 @@ contains
 #else
             !$omp parallel
             !$omp do schedule(runtime) &
-            !$omp private(ssh_crit, adjust_count)
+            !$omp private(ssh_crit, adjust_count, landIcePressureMaxOld)
 #endif
             do iCell = 1, nCellsAll
                ssh_crit = config_drying_min_cell_height - bottomDepth(iCell)
-               if (ssh(iCell) > ssh_crit .and. &
-                   landIcePressureMax(iCell) > landIcePressureApplied(iCell)) then
-                   !landIcePressureMax(iCell) > surfacePressure(iCell)) then
-                  landIcePressureMax(iCell) = landIcePressureApplied(iCell) + config_land_ice_pressure_increment
+               is_grounded = (landIceDraft(iCell) < ssh_crit)
+
+               ! We only adjust landIcePressure if the cell is grounded according
+               ! to landIceDraft but the water column is too thick
+               if (is_grounded .and. ssh(iCell) > ssh_crit) then
                   adjust_count = adjust_count + 1
+                  landIcePressureDiff(iCell) = min(landIcePressureDiff(iCell) / tau_relax, config_land_ice_increment) ! TODO
+                  call mpas_log_write('Increase pressure: H, dP, Pcur, Pfull = $r, $r, $r, $r', &
+                                      realArgs=(/bottomDepth(iCell) + ssh(iCell), &
+                                                 landIcePressureDiff(iCell), &
+                                                 landIcePressureApplied(iCell), &
+                                                 landIcePressure(iCell)/))
                endif
+               ! We don't allow the landIcePressure to exceed a prescribed amount of overburden
+               ! this could be below the seafloor if overburden_height > drying_height
+               ssh_overburden = ssh_crit - config_land_ice_overburden_height
+               landIcePressureMax(iCell) = -gravity * config_density_ice * ssh_overburden
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
             !$omp end parallel
 #endif
+
             if (adjust_count > 0) &
                call mpas_log_write('Increment pressure for $i cells', intArgs=(/adjust_count/))
          endif
+         iCell = 1
+         call mpas_log_write('After relaxation: landIcePressureNew, Cur, Max = $r, $r, $r', &
+                             realArgs=(/landIcePressure(iCell), landIcePressureApplied(iCell), landIcePressureMax(iCell)/))
 
-         adjust_count = 0
+         ! Update landIcePressureApplied and surfacePressure
 #ifdef MPAS_OPENACC
          !$acc parallel loop &
          !$acc    present(surfacePressure)
@@ -2617,22 +2660,23 @@ contains
          !$omp do schedule(runtime) &
          !$omp private(adjust_count)
 #endif
-         ! Update landIcePressureApplied and surfacePressure
          do iCell = 1, nCellsAll
-            call mpas_log_write('landIcePressureNew, Cur, Max = $r, $r, $r', &
-                                realArgs=(/landIcePressure(iCell), landIcePressureApplied(iCell), landIcePressureMax(iCell)/))
-            landIcePressureApplied(iCell) = min(landIcePressureMax(iCell), &
-                                                landIcePressure(iCell))
+
+            landIcePressureApplied(iCell) = landIcePressureApplied(iCell) &
+                                          + landIcePressureDiff(iCell)
+            if (landIcePressureApplied(iCell) > landIcePressure(iCell)) &
+               call mpas_log_write('ERROR: landIcePressureApplied exceeds landIcePressure after update', MPAS_LOG_CRIT)
+
             surfacePressure(iCell) = surfacePressure(iCell) + &
                                      landIcePressureApplied(iCell)
-            if (landIcePressureApplied(iCell) .ne. landIcePressure(iCell)) &
-               adjust_count = adjust_count + 1
-            landIcePressureInitialized = .true.
          end do
 #ifndef M_OPENACC
          !$omp end do
          !$omp end parallel
 #endif
+         iCell = 1
+         call mpas_log_write('After update: landIcePressureNew, Cur, Max = $r, $r, $r', &
+                             realArgs=(/landIcePressure(iCell), landIcePressureApplied(iCell), landIcePressureMax(iCell)/))
          if (adjust_count > 0) &
             call mpas_log_write('Land ice pressure altered for $i cells', intArgs=(/adjust_count/))
       endif ! land ice pressure
