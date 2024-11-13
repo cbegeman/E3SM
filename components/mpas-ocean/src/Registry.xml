@@ -2964,6 +2964,9 @@
 		<var name="surfacePressure" type="real" dimensions="nCells Time" units="Pa"
 			description="Pressure at the sea surface due to atmosphere, sea ice, frazil and land ice"
 		/>
+		<var name="landIcePressureApplied" type="real" dimensions="nCells Time" units="Pa"
+			description="landIcePressure as used in state"
+		/>
 		<var_array name="SSHGradient" type="real" dimensions="nCells Time" packages="forwardMode;analysisMode">
 			<var name="SSHGradientZonal" array_group="ssh_zonal" units="1"
 				 description="Zonal gradient of SSH reconstructed at cell centers"
