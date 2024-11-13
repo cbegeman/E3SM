@@ -631,40 +631,42 @@ contains
           layerThicknessCell(k, iCell) = layerThicknessCell(k, iCell) + &
                                          sshLandIceAdjustment(iCell) / nVertLevelsCell
           if ( .not. config_use_ssh_gradient_wetting_drying ) then
-             if (layerThicknessCell(k,iCell) <= hCrit / nVertLevelsCell) then
-                dry_cell_count = dry_cell_count + 1
-                !call mpas_log_write('Layer forced inactive: hOut $r, hCur $r, hPred $r, hFloat $r', &
-                !                    realArgs=(/ & !hAdj $r, hOut + sshLandIceAdjustment(iCell), &
-                !                               layerThicknessCell(k, iCell), layerThicknessCur(k,iCell), layerThicknessProvis(k,iCell), &
-                !                               bottomDepth(iCell) - landIcePressure(iCell) / (gravity * rho_sw)/))
-                do i = 1, nEdgesOnCell(iCell)
-                   iEdge = edgesOnCell(i, iCell)
-                   if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-                      if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                         wettingVelocityFactor(k, iEdge) = 1.0_RKIND
-                      end if
-                   end if
-                end do
-             elseif (config_zero_drying_velocity_ramp .and. &
-                     (layerThicknessCell(k,iCell) > hCrit / nVertLevelsCell) .and. &
-                     (layerThicknessCell(k,iCell) <= config_zero_drying_velocity_ramp_hmax)) then
+             call ocn_wetting_velocity_factor_on_cell_edges( &
+                      wettingVelocityFactor, layerThicknessCell(k, iCell), normalVelocity, iCell, k)
+             !if (layerThicknessCell(k,iCell) <= hCrit / nVertLevelsCell) then
+             !   dry_cell_count = dry_cell_count + 1
+             !   !call mpas_log_write('Layer forced inactive: hOut $r, hCur $r, hPred $r, hFloat $r', &
+             !   !                    realArgs=(/ & !hAdj $r, hOut + sshLandIceAdjustment(iCell), &
+             !   !                               layerThicknessCell(k, iCell), layerThicknessCur(k,iCell), layerThicknessProvis(k,iCell), &
+             !   !                               bottomDepth(iCell) - landIcePressure(iCell) / (gravity * rho_sw)/))
+             !   do i = 1, nEdgesOnCell(iCell)
+             !      iEdge = edgesOnCell(i, iCell)
+             !      if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
+             !         if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+             !            wettingVelocityFactor(k, iEdge) = 1.0_RKIND
+             !         end if
+             !      end if
+             !   end do
+             !elseif (config_zero_drying_velocity_ramp .and. &
+             !        (layerThicknessCell(k,iCell) > hCrit / nVertLevelsCell) .and. &
+             !        (layerThicknessCell(k,iCell) <= config_zero_drying_velocity_ramp_hmax)) then
 
-                ramp_cell_count = ramp_cell_count + 1
+             !   ramp_cell_count = ramp_cell_count + 1
 
-                hRampMin = config_zero_drying_velocity_ramp_hmin
-                ! Following O'Dea et al. (2021), if total upwinded wct is less than
-                ! 2*critical thickness, apply damping at each edge
-                do i = 1, nEdgesOnCell(iCell)
-                   iEdge = edgesOnCell(i, iCell)
-                   if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
-                      if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
-                         wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                             tanh(50.0_RKIND * (layerThicknessCell(k,iCell) - hRampMin)/hRampMin)
-                         !call mpas_log_write('Apply ramp: wettingFactor $r', realArgs=(/wettingVelocityFactor(k,iEdge)/))
-                      end if
-                   end if
-                end do
-             end if
+             !   hRampMin = config_zero_drying_velocity_ramp_hmin
+             !   ! Following O'Dea et al. (2021), if total upwinded wct is less than
+             !   ! 2*critical thickness, apply damping at each edge
+             !   do i = 1, nEdgesOnCell(iCell)
+             !      iEdge = edgesOnCell(i, iCell)
+             !      if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
+             !         if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
+             !            wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
+             !                tanh(50.0_RKIND * (layerThicknessCell(k,iCell) - hRampMin)/hRampMin)
+             !            !call mpas_log_write('Apply ramp: wettingFactor $r', realArgs=(/wettingVelocityFactor(k,iEdge)/))
+             !         end if
+             !      end if
+             !   end do
+             !end if
           end if
         end do
       end do
