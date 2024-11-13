@@ -706,7 +706,6 @@ contains
                 surfacePressure)
       call mpas_pool_get_array(diagnosticsPool, 'landIcePressureApplied', &
                 landIcePressureApplied)
-
       ! Semi-implicit Array Pointer retrievals
       if (trim(config_time_integrator) == 'split_implicit') then
          call mpas_pool_get_array(diagnosticsPool, 'SIvec_r0', SIvec_r0)
