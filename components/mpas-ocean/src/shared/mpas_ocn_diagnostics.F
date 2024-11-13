@@ -345,7 +345,7 @@ contains
       ! inputs: atmosphericPressure, seaIcePressure, frazilSurfacePressure, landIcePressure
       ! outputs: surfacePressure
       call ocn_diagnostic_solve_surface_pressure(forcingPool, atmosphericPressure, &
-                seaIcePressure, ssh, surfacePressure)
+                seaIcePressure, ssh, landIcePressureApplied, surfacePressure)
 
 
       !
@@ -2449,7 +2449,7 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_diagnostic_solve_surface_pressure(forcingPool, &
-               atmosphericPressure, seaIcePressure, sshCur, &
+               atmosphericPressure, seaIcePressure, sshCur, landIcePressureApplied, &
                surfacePressure)!{{{
 
       !-----------------------------------------------------------------
@@ -2467,6 +2467,9 @@ contains
       !-----------------------------------------------------------------
       ! output variables
       !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), intent(inout) :: &
+         landIcePressureApplied  !< [out] land ice pressure applied
 
       real (kind=RKIND), dimension(:), intent(inout) :: &
          surfacePressure !< [out] total surface pressure
@@ -2548,6 +2551,10 @@ contains
       ! Add land ice pressure if needed
 
       if (landIcePressureOn) then
+
+         ! First initialize landIcePressure unchanged, then modify in grounded regions
+         landIcePressureApplied(:) = landIcePressure(:)
+
          if (config_use_land_ice_overburden_height) then
             allocate(rho_mean(nCellsAll))
             allocate(landIcePressureMax(nCellsAll))
@@ -2571,8 +2578,14 @@ contains
                h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                ssh_crit = bottomDepth(iCell) - h_crit + config_land_ice_overburden_height
                landIcePressureMax(iCell) = gravity * rho_sw * ssh_crit
-               surfacePressure(iCell) = surfacePressure(iCell) + &
-                                        min(landIcePressureMax(iCell), landIcePressure(iCell))
+               landIcePressureApplied(iCell) = &
+                  min(landIcePressureMax(iCell), landIcePressure(iCell))
+               if (landIcePressureApplied(iCell) .ne. landIcePressure(iCell)) then
+                  call mpas_log_write('landIcePressureApplied $r not equal landIcePressure, max $r', &
+                                      realArgs=(/min(landIcePressureMax(iCell), landIcePressure(iCell)), landIcePressureMax(iCell)/))
+                  call mpas_log_write('-------- ssh_crit $r, landIceDraft $r', &
+                                      realArgs=(/ssh_crit, landIceDraft(iCell)/))
+               end if
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
@@ -2592,7 +2605,7 @@ contains
 #endif
             do iCell = 1, nCellsAll
                surfacePressure(iCell) = surfacePressure(iCell) + &
-                                        landIcePressure(iCell)
+                                        landIcePressureApplied(iCell)
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
