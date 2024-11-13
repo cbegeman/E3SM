@@ -2556,7 +2556,7 @@ contains
       integer :: iCell ! cell loop index
       integer, dimension(:), pointer :: landIceMask
       logical :: is_grounded
-      real (kind=RKIND) :: h_crit, ssh_crit, floatation_pressure
+      real (kind=RKIND) :: h_crit, ssh_crit, floatation_pressure, dP, tau_relax
       real (kind=RKIND), dimension(:), pointer :: &
          frazilSurfacePressure, &! frazil ice pressure from forcing
          landIceDraft, &         ! land ice draft
@@ -2670,6 +2670,7 @@ contains
 #endif
          endif
          if (config_use_land_ice_pressure_relaxation) then
+            tau_relax = 10.
             adjust_count = 0
 #ifdef MPAS_OPENACC
             !$acc parallel loop &
@@ -2680,20 +2681,29 @@ contains
 #else
             !$omp parallel
             !$omp do schedule(runtime) &
-            !$omp private(h_crit, ssh_crit, adjust_count, is_grounded)
+            !$omp private(h_crit, ssh_crit, adjust_count, is_grounded, dP)
 #endif
             do iCell = 1, nCellsAll
                h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                ssh_crit = h_crit - bottomDepth(iCell)
                is_grounded = (sshCur(iCell) > ssh_crit)
                if (is_grounded) then
-                  landIcePressureApplied(iCell) = landIcePressureApplied(iCell) + &
-                           min(config_land_ice_pressure_increment, &
-                               landIcePressure(iCell) - landIcePressureCur(iCell))
-                  !landIcePressureApplied(iCell) = &
-                  !   max(landIcePressureApplied(iCell),
-                  !       min(landIcePressure(iCell), &
-                  !           landIcePressureCur(iCell) + config_land_ice_pressure_increment))
+                  !landIcePressureApplied(iCell) = landIcePressureApplied(iCell) + &
+                  !         min(config_land_ice_pressure_increment, &
+                  !             landIcePressure(iCell) - landIcePressureCur(iCell))
+
+                  ! Limit the pressure increase to the max increment
+                  ! Pressure change in dry regions is not limited in negative 
+                  dP = landIcePressure(iCell) - landIcePressureCur(iCell)
+                  if (dP > 0) dP = dP / tau_relax
+                  landIcePressureApplied(iCell) = landIcePressureCur(iCell) + &
+                     min(landIcePressureApplied(iCell) - landIcePressureCur(iCell),
+                         config_land_ice_pressure_increment,
+                         dP)
+                  ! Ensure that we don't exceed the landIcePressure from forcing
+                  ! This might mean that some regions that MALI thinks are grounded go afloat
+                  landIcePressureApplied(iCell) = &
+                     min(landIcePressure(iCell), landIcePressureApplied(iCell))
                   adjust_count = adjust_count + 1
                endif
             end do
