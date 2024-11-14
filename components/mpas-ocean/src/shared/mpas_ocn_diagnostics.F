@@ -2685,7 +2685,7 @@ contains
             !$omp private(h_crit, ssh_crit, adjust_count, is_wet, is_grounded, dP, iEdge)
 #endif
             do iCell = 1, nCellsAll
-               h_crit = (config_drying_min_cell_height + config_drying_safety_height) * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                ssh_crit = h_crit - bottomDepth(iCell)
                is_grounded = (landIceDraft(iCell) < ssh_crit)
                is_wet = (sshCur(iCell) > ssh_crit)
