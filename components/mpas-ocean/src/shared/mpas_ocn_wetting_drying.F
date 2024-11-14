@@ -633,21 +633,6 @@ contains
       !$omp end parallel
 
       call ocn_enforce_grounding_line(landIcePressure, landIceDraft, wettingVelocityFactor, err)
-      !$omp parallel
-      !$omp do schedule(runtime) private(k, hOut, hCrit)
-      do iCell = 1, nCellsAll
-        hOut = 0.0_RKIND
-        do k = minLevelCell(iCell), maxLevelCell(iCell)
-          hOut = hOut + layerThicknessCell(k,iCell)
-        end do
-        hCrit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
-        if (hOut > hCrit .and. wettingVelocityFactor(1, iCell) == 1.0_RKIND) &
-           call mpas_log_write('Column forced inactive but water left behind: bottomDepth $r, landIceDraft $r, hOut $r, ssh_floatation $r', &
-                               realArgs=(/bottomDepth(iCell), -landIceDraft(iCell), hOut, &
-                                         landIcePressure(iCell) / (gravity * rho_sw)/))
-      end do
-      !$omp end do
-      !$omp end parallel
 
       call mpas_dmpar_field_halo_exch(domain, 'layerThicknessCellWetDry')
 
@@ -847,8 +832,7 @@ contains
 
       ! if layer thickness is too small, limit divergence flux outwards with
       ! opposite velocity
-      if (layerThicknessTmp <= &
-         hCrit + config_drying_safety_height) then
+      if (layerThicknessTmp <= hCrit) then
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
@@ -858,8 +842,7 @@ contains
             end if
          end do
       elseif (config_zero_drying_velocity_ramp .and. &
-              (layerThicknessTmp > &
-              hCrit + config_drying_safety_height) .and. &
+              (layerThicknessTmp > hCrit) .and. &
               (layerThicknessTmp <= config_zero_drying_velocity_ramp_hmax)) then
 
          hRampMin = config_zero_drying_velocity_ramp_hmin
