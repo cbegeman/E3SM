@@ -829,9 +829,9 @@ contains
       real (kind=RKIND) :: hRampMin
 
       if (config_zero_drying_velocity_ramp) then
-          hRampMin = config_zero_drying_velocity_ramp_hmin
+          hRampMin = config_zero_drying_velocity_ramp_hmin + config_drying_safety_height
       else
-          hRampMin = config_drying_min_cell_height
+          hRampMin = config_drying_min_cell_height + config_drying_safety_height
       endif
 
       ! if layer thickness is too small, limit divergence flux outwards with
