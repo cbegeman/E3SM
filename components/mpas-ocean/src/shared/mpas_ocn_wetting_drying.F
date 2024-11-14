@@ -826,13 +826,17 @@ contains
 
       integer :: i, iEdge
 
-      real (kind=RKIND) :: hCrit, hRampMin
+      real (kind=RKIND) :: hRampMin
 
-      hCrit = config_drying_min_cell_height
+      if (config_zero_drying_velocity_ramp) then
+          hRampMin = config_zero_drying_velocity_ramp_hmin
+      else
+          hRampMin = config_drying_min_cell_height
+      endif
 
       ! if layer thickness is too small, limit divergence flux outwards with
       ! opposite velocity
-      if (layerThicknessTmp <= hCrit) then
+      if (layerThicknessTmp <= hRampMin) then
          do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
@@ -842,10 +846,9 @@ contains
             end if
          end do
       elseif (config_zero_drying_velocity_ramp .and. &
-              (layerThicknessTmp > hCrit) .and. &
+              (layerThicknessTmp > hRampMin) .and. &
               (layerThicknessTmp <= config_zero_drying_velocity_ramp_hmax)) then
 
-         hRampMin = config_zero_drying_velocity_ramp_hmin
          ! Following O'Dea et al. (2021), if total upwinded wct is less than
          ! 2*critical thickness, apply damping at each edge
          do i = 1, nEdgesOnCell(iCell)
