@@ -2576,8 +2576,8 @@ contains
 #endif
             do iCell = 1, nCellsAll
                ! the maximum pressure is the one that results in ssh at the critical
-               ! thickness (gravity is positive)
-               ! TODO floatation pressure shouldn't be necessary because tests show that it is slightly less than landIcePressure
+               ! thickness (gravity is positive), but we also allow some amount of overburden
+               ! because rho may deviate significantly from rho_sw
                h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                ssh_crit = bottomDepth(iCell) - h_crit + config_land_ice_overburden_height
                landIcePressureMax(iCell) = gravity * rho_sw * ssh_crit
@@ -2602,6 +2602,7 @@ contains
 #endif
          endif
          if (config_use_land_ice_pressure_relaxation) then
+            ! Add some additional overburden in case some cells still aren't grounded
             tau_relax = 10.
             adjust_count = 0
 #ifdef MPAS_OPENACC
@@ -2635,6 +2636,8 @@ contains
                   ! We don't allow the pressure to decrease or to increase by less than max increment
                   !dP = min(config_land_ice_pressure_increment, &
                   !         (landIcePressure(iCell) - landIcePressureCur(iCell)) / tau_relax)
+                  dP = config_land_ice_pressure_increment * &
+                       tanh( max(bottomDepth(iCell) + sshCur(iCell) - h_crit, 0.0_RKIND) / h_crit)
                   ! landIcePressure now doesn't depend on floatation pressure at all
                   !landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
                   !if (landIcePressureApplied(iCell) > landIcePressure(iCell)) then
