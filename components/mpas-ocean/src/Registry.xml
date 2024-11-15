@@ -1282,6 +1282,10 @@
 					description=""
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_excess_land_ice_pressure_max" type="real" default_value="0.0" units="Pa"
+					description=""
+					possible_values="Any real"
+		/>
 		<nml_option name="config_use_land_ice_pressure_relaxation" type="logical" default_value=".false." units="unitless"
 					description="If true, use config_land_ice_pressure_increment to adjust the land ice pressure in wet regions that are not currently forced with the full land ice pressure. If false, land ice pressure is unmodified"
 					possible_values=".true. or .false."
