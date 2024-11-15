@@ -2732,13 +2732,13 @@ contains
                ! Ensure that we don't exceed the landIcePressure from forcing
                ! This might mean that some regions that MALI thinks are grounded go afloat
                if (landIcePressureApplied(iCell) > landIcePressure(iCell)) then
-                  call mpas_log_write('iCell $i, landIcePressureApplied $r exceeds landIcePressure $r', &
-                                      intArgs=(/iCell/), realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
-               !   call mpas_log_write('landIcePressureApplied $r reset to landIcePressure $r', &
-               !                       realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
+               !   call mpas_log_write('iCell $i, landIcePressureApplied $r exceeds landIcePressure $r', &
+               !                       intArgs=(/iCell/), realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
+                  call mpas_log_write('landIcePressureApplied $r reset to landIcePressure $r', &
+                                      realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
                endif
-               !landIcePressureApplied(iCell) = &
-               !   min(landIcePressure(iCell), landIcePressureApplied(iCell))
+               landIcePressureApplied(iCell) = &
+                  min(landIcePressure(iCell), landIcePressureApplied(iCell))
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
