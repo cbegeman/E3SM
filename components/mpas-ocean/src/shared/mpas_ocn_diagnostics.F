@@ -75,6 +75,7 @@ module ocn_diagnostics
    !
    !--------------------------------------------------------------------
 
+   logical :: landIcePressureInitialized
    integer :: ke_cell_flag, ke_vertex_flag
    real (kind=RKIND) ::  fCoef
    real (kind=RKIND) ::  landIceTopDragCoeff
@@ -2580,7 +2581,10 @@ contains
       call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
 
       ! First initialize landIcePressure unchanged, then modify in grounded regions
-      landIcePressureApplied(:) = landIcePressure(:)
+      if (.not. landIcePressureInitialized) then
+         landIcePressureApplied(:) = landIcePressure(:)
+         landIcePressureInitialized = .true.
+      endif
 
       allocate(landIcePressureCur(nCellsAll))
       landIcePressureCur(:) = landIcePressureApplied(:)
@@ -2657,13 +2661,18 @@ contains
                landIcePressureMax(iCell) = gravity * rho_sw * ssh_crit
                landIcePressureApplied(iCell) = &
                   min(landIcePressureMax(iCell), landIcePressure(iCell))
+               if (landIcePressureCur(iCell) > landIcePressure(iCell)) &
+                  call mpas_log_write('iCell $i, landIcePressureCur $r exceeds landIcePressure $r', &
+                                      intArgs=(/iCell/), realArgs=(/landIcePressureCur(iCell), landIcePressure(iCell)/))
                if (landIcePressureApplied(iCell) < landIcePressure(iCell)) then
                   call mpas_log_write('landIcePressureApplied set by floatation pressure $r, landIcePressure $r', &
                                       realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
                   call mpas_log_write('-------- ssh_crit $r, landIceDraft $r', &
                                       realArgs=(/ssh_crit, landIceDraft(iCell)/))
-                  
-               end if
+               else
+                  call mpas_log_write('landIcePressureApplied set by landIcePressure $r', &
+                                      realArgs=(/landIcePressure(iCell)/))
+               endif
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
@@ -2690,39 +2699,46 @@ contains
                is_grounded = (landIceDraft(iCell) < ssh_crit)
                is_wet = (sshCur(iCell) > ssh_crit)
                if (is_grounded .and. is_wet) then
+                  dP = config_land_ice_pressure_increment
                   call mpas_log_write('iCell $i is grounded and wet: ssh $r, landIceDraft $r, ssh_crit $r', &
                                       intArgs=(/iCell/), realArgs=(/sshCur(iCell), landIceDraft(iCell), ssh_crit/))
+                  if (abs(landIcePressureCur(iCell) - landIcePressure(iCell)) < 1.0e-10_RKIND) then
+                     call mpas_log_write('-- already at max pressure, dP $r', realArgs=(/landIcePressureCur(iCell) - landIcePressure(iCell)/))
+                     !cycle
+                  endif
+                  landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
                   !landIcePressureApplied(iCell) = landIcePressureApplied(iCell) + &
                   !         min(config_land_ice_pressure_increment, &
                   !             landIcePressure(iCell) - landIcePressureCur(iCell))
                   ! We don't allow the pressure to decrease or to increase by less than max increment
                   !dP = min(config_land_ice_pressure_increment, &
                   !         (landIcePressure(iCell) - landIcePressureCur(iCell)) / tau_relax)
-                  dP = config_land_ice_pressure_increment
                   ! landIcePressure now doesn't depend on floatation pressure at all
-                  landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
-                  if (landIcePressureApplied(iCell) > landIcePressure(iCell)) then
-                     call mpas_log_write('-- landIcePressureApplied would be set by dP but limited to landIcePressure $r', &
-                                         realArgs=(/landIcePressure(iCell)/))
-                  else
-                     call mpas_log_write('-- landIcePressureApplied set by dP $r, landIcePressureApplied $r, landIcePressure $r', &
-                                         realArgs=(/dP, landIcePressureApplied(iCell), landIcePressure(iCell)/))
-                  endif
-                  do iEdge = 1, nEdgesOnCell(iCell)
-                     if (wettingVelocityFactor(1, iEdge) > 0.0_RKIND) &
-                        call mpas_log_write('----- Flow restricted through iCell $i, iEdge $i of $i, factor $r', &
-                                            intArgs=(/iCell, iEdge, nEdgesOnCell(iCell)/), realArgs=(/wettingVelocityFactor(1,iEdge)/))
-                  enddo
-                  adjust_count = adjust_count + 1
+                  !landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
+                  !if (landIcePressureApplied(iCell) > landIcePressure(iCell)) then
+                  !   call mpas_log_write('-- landIcePressureApplied would be set by dP but limited to landIcePressure $r', &
+                  !                       realArgs=(/landIcePressure(iCell)/))
+                  !else
+                  !   call mpas_log_write('-- landIcePressureApplied set by dP $r, landIcePressureApplied $r, landIcePressure $r', &
+                  !                       realArgs=(/dP, landIcePressureApplied(iCell), landIcePressure(iCell)/))
+                  !endif
+                  !do iEdge = 1, nEdgesOnCell(iCell)
+                  !   if (wettingVelocityFactor(1, iEdge) > 0.0_RKIND) &
+                  !      call mpas_log_write('----- Flow restricted through iCell $i, iEdge $i of $i, factor $r', &
+                  !                          intArgs=(/iCell, iEdge, nEdgesOnCell(iCell)/), realArgs=(/wettingVelocityFactor(1,iEdge)/))
+                  !enddo
+                  !adjust_count = adjust_count + 1
                endif
                ! Ensure that we don't exceed the landIcePressure from forcing
                ! This might mean that some regions that MALI thinks are grounded go afloat
-               !if (landIcePressureApplied(iCell) > landIcePressure(iCell)) then
+               if (landIcePressureApplied(iCell) > landIcePressure(iCell)) then
+                  call mpas_log_write('iCell $i, landIcePressureApplied $r exceeds landIcePressure $r', &
+                                      intArgs=(/iCell/), realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
                !   call mpas_log_write('landIcePressureApplied $r reset to landIcePressure $r', &
                !                       realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
-               !endif
-               landIcePressureApplied(iCell) = &
-                  min(landIcePressure(iCell), landIcePressureApplied(iCell))
+               endif
+               !landIcePressureApplied(iCell) = &
+               !   min(landIcePressure(iCell), landIcePressureApplied(iCell))
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
