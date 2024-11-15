@@ -2503,7 +2503,7 @@ contains
       call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
 
       ! First initialize landIcePressure unchanged, then modify in grounded regions
-      if (.not. landIcePressureInitialized) then
+      if (.not. landIcePressureInitialized .and. .not. config_do_restart) then
          landIcePressureApplied(:) = landIcePressure(:)
          landIcePressureInitialized = .true.
       endif
@@ -2662,12 +2662,12 @@ contains
                !   call mpas_log_write('-- already at max pressure, dP $r', realArgs=(/landIcePressureCur(iCell) - landIcePressure(iCell)/))
                !   !cycle
                !endif
-               if (landIcePressureCur(iCell) + dP > landIcePressure(iCell) .and. .not. config_allow_excess_land_ice_pressure) then
+               if (landIcePressureCur(iCell) + dP > landIcePressure(iCell) + config_excess_land_ice_pressure_max) then
                !   call mpas_log_write('iCell $i, landIcePressureApplied $r exceeds landIcePressure $r', &
                !                       intArgs=(/iCell/), realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
                   call mpas_log_write('landIcePressureApplied $r reset to landIcePressure $r', &
                                       realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
-                  dP = landIcePressure(iCell) - landIcePressureCur(iCell)
+                  dP = landIcePressure(iCell) + config_excess_land_ice_pressure_max - landIcePressureCur(iCell)
                endif
                if (dP .ne. 0.0_RKIND) then
                   landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
