@@ -2557,7 +2557,7 @@ contains
       integer :: iCell, iEdge ! cell loop index
       integer, dimension(:), pointer :: landIceMask
       logical :: is_grounded, is_wet
-      real (kind=RKIND) :: h_crit, ssh_crit, floatation_pressure, dP, tau_relax
+      real (kind=RKIND) :: h_incr, h_crit, ssh_crit, floatation_pressure, dP, tau_relax
       real (kind=RKIND), dimension(:), pointer :: &
          frazilSurfacePressure, &! frazil ice pressure from forcing
          landIceDraft, &         ! land ice draft
@@ -2683,6 +2683,7 @@ contains
             ! Add some additional overburden in case some cells still aren't grounded
             tau_relax = 10.
             adjust_count = 0
+            h_incr = 2.0_RKIND * rho_sw * gravity * config_land_ice_pressure_increment
 #ifdef MPAS_OPENACC
             !$acc parallel loop &
             !$acc    present(surfacePressure, landIcePressureCur, sshCur)
@@ -2695,27 +2696,28 @@ contains
             !$omp private(h_crit, ssh_crit, adjust_count, is_wet, is_grounded, dP, iEdge)
 #endif
             do iCell = 1, nCellsAll
+               dP = 0.0_RKIND
+               if (config_land_ice_pressure_relaxation_mode == 'always') then
+                  dP = config_land_ice_pressure_increment * &
+                       tanh( max(sshCur(iCell) - landIceDraft(iCell), 0.0_RKIND) / h_incr)
+               endif
                h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                ssh_crit = h_crit - bottomDepth(iCell)
                is_grounded = (landIceDraft(iCell) < ssh_crit)
                is_wet = (sshCur(iCell) > ssh_crit)
                if (is_grounded .and. is_wet) then
-                  dP = config_land_ice_pressure_increment
                   call mpas_log_write('iCell $i is grounded and wet: ssh $r, landIceDraft $r, ssh_crit $r', &
                                       intArgs=(/iCell/), realArgs=(/sshCur(iCell), landIceDraft(iCell), ssh_crit/))
-                  if (abs(landIcePressureCur(iCell) - landIcePressure(iCell)) < 1.0e-10_RKIND) then
-                     call mpas_log_write('-- already at max pressure, dP $r', realArgs=(/landIcePressureCur(iCell) - landIcePressure(iCell)/))
-                     !cycle
+                  if (config_land_ice_pressure_relaxation_mode == 'wetgrounded') then
+                     dP = config_land_ice_pressure_increment * &
+                          tanh( max(bottomDepth(iCell) + sshCur(iCell) - h_crit, 0.0_RKIND) / h_crit)
                   endif
-                  landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
                   !landIcePressureApplied(iCell) = landIcePressureApplied(iCell) + &
                   !         min(config_land_ice_pressure_increment, &
                   !             landIcePressure(iCell) - landIcePressureCur(iCell))
                   ! We don't allow the pressure to decrease or to increase by less than max increment
                   !dP = min(config_land_ice_pressure_increment, &
                   !         (landIcePressure(iCell) - landIcePressureCur(iCell)) / tau_relax)
-                  dP = config_land_ice_pressure_increment * &
-                       tanh( max(bottomDepth(iCell) + sshCur(iCell) - h_crit, 0.0_RKIND) / h_crit)
                   ! landIcePressure now doesn't depend on floatation pressure at all
                   !landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
                   !if (landIcePressureApplied(iCell) > landIcePressure(iCell)) then
@@ -2734,14 +2736,22 @@ contains
                endif
                ! Ensure that we don't exceed the landIcePressure from forcing
                ! This might mean that some regions that MALI thinks are grounded go afloat
-               if (landIcePressureApplied(iCell) > landIcePressure(iCell)) then
+               !if (abs(landIcePressureCur(iCell) - landIcePressure(iCell)) < 1.0e-10_RKIND) then
+               !   call mpas_log_write('-- already at max pressure, dP $r', realArgs=(/landIcePressureCur(iCell) - landIcePressure(iCell)/))
+               !   !cycle
+               !endif
+               if (landIcePressureCur(iCell) + dP > landIcePressure(iCell) .and. .not. config_allow_excess_land_ice_pressure) then
                !   call mpas_log_write('iCell $i, landIcePressureApplied $r exceeds landIcePressure $r', &
                !                       intArgs=(/iCell/), realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
                   call mpas_log_write('landIcePressureApplied $r reset to landIcePressure $r', &
                                       realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
+                  dP = landIcePressure(iCell) - landIcePressureCur(iCell)
                endif
-               landIcePressureApplied(iCell) = &
-                  min(landIcePressure(iCell), landIcePressureApplied(iCell))
+               if (dP .ne. 0.0_RKIND) then
+                  landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
+                  call mpas_log_write('iCell $i adjusted by dP $r, landIceDraft $r, ssh $r', &
+                                      intArgs=(/iCell/), realArgs=(/dP, landIceDraft(iCell), sshCur(iCell)/))
+               endif
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
