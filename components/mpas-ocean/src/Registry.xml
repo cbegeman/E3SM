@@ -1230,9 +1230,17 @@
 					description="If true, use config_land_ice_pressure_increment to adjust the land ice pressure in wet regions that are not currently forced with the full land ice pressure. If false, land ice pressure is unmodified"
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_allow_excess_land_ice_pressure" type="logical" default_value=".false." units="unitless"
+					description=""
+					possible_values=".true. or .false."
+		/>
 		<nml_option name="config_use_land_ice_pressure_relaxation" type="logical" default_value=".false." units="unitless"
 					description="If true, use config_land_ice_pressure_increment to adjust the land ice pressure in wet regions that are not currently forced with the full land ice pressure. If false, land ice pressure is unmodified"
 					possible_values=".true. or .false."
+		/>
+		<nml_option name="config_land_ice_pressure_relaxation_mode" type="character" default_value="off" units="unitless"
+					description=""
+					possible_values="One of always, wetgrounded or off"
 		/>
 		<nml_option name="config_land_ice_pressure_increment" type="real" default_value="0.0" units="m"
 					description="The pressure increment by which to adjust wet regions not currently at full land ice pressure."
@@ -2000,6 +2008,7 @@
 			<var name="xtime"/>
 			<var name="simulationStartTime"/>
 			<var name="landIcePressure"/>
+			<var name="landIcePressureApplied"/>
 			<var name="landIceDraft"/>
 			<var name="landIceFraction"/>
 			<var name="landIceMask"/>
