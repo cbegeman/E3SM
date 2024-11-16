@@ -2555,7 +2555,7 @@ contains
       !-----------------------------------------------------------------
 
       integer :: iCell, iEdge ! cell loop index
-      integer, dimension(:), pointer :: landIceMask
+      integer, dimension(:), pointer :: landIceMask, landIceFloatingMask
       logical :: is_grounded, is_wet
       real (kind=RKIND) :: h_incr, h_crit, ssh_crit, floatation_pressure, dP, tau_relax
       real (kind=RKIND), dimension(:), pointer :: &
@@ -2579,6 +2579,7 @@ contains
                                              landIcePressure)
       call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
       call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
+      call mpas_pool_get_array(forcingPool, 'landIceFloatingMask', landIceFloatingMask)
 
       ! First initialize landIcePressure unchanged, then modify in grounded regions
       if (.not. landIcePressureInitialized .and. .not. config_do_restart) then
@@ -2705,6 +2706,7 @@ contains
                ssh_crit = h_crit - bottomDepth(iCell)
                is_grounded = (landIceDraft(iCell) < ssh_crit)
                is_wet = (sshCur(iCell) > ssh_crit)
+               if (is_grounded) landIceFloatingMask(iCell) == 0
                if (is_grounded .and. is_wet) then
                   call mpas_log_write('iCell $i is grounded and wet: ssh $r, landIceDraft $r, ssh_crit $r', &
                                       intArgs=(/iCell/), realArgs=(/sshCur(iCell), landIceDraft(iCell), ssh_crit/))
