@@ -1149,6 +1149,7 @@ contains
             hRampFactor = config_zero_drying_velocity_ramp_factor
          else
             hMin = config_drying_min_cell_height
+            hMax = config_drying_min_cell_height
          endif
       endif
 
