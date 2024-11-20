@@ -1250,6 +1250,10 @@
 					description=""
 					possible_values="Any real"
 		/>
+		<nml_option name="config_use_land_ice_draft_for_floatation" type="logical" default_value=".false." units="unitless"
+					description="If true, use land ice draft, bottomDepth, and config_drying_min_cell_height to determine the landIceFloatingMask and landIceFloatingFraction. Ice is only floating if water column thickness exceeds config_drying_min_cell_height * num_active_vert_levels."
+					possible_values=".true. or .false."
+		/>
 		<nml_option name="config_use_land_ice_pressure_relaxation" type="logical" default_value=".false." units="unitless"
 					description="If true, use config_land_ice_pressure_increment to adjust the land ice pressure in wet regions that are not currently forced with the full land ice pressure. If false, land ice pressure is unmodified"
 					possible_values=".true. or .false."

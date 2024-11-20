@@ -2604,6 +2604,26 @@ contains
             !$omp end parallel
 #endif
          endif
+         if (config_use_land_ice_draft_for_floatation) then
+#ifndef MPAS_OPENACC
+            !$omp parallel
+            !$omp do schedule(runtime) &
+            !$omp private(h_crit, ssh_crit, is_grounded)
+#endif
+            do iCell = 1, nCellsAll
+               h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+               ssh_crit = h_crit - bottomDepth(iCell)
+               is_grounded = (landIceDraft(iCell) < ssh_crit)
+               if (is_grounded) then
+                  landIceFloatingMask(iCell) = 0
+                  landIceFloatingFraction(iCell) = 0.0_RKIND
+               endif
+            end do
+#ifndef MPAS_OPENACC
+            !$omp end do
+            !$omp end parallel
+#endif
+         endif
          if (config_use_land_ice_pressure_relaxation) then
             ! Add some additional overburden in case some cells still aren't grounded
             tau_relax = 10.
@@ -2630,10 +2650,6 @@ contains
                ssh_crit = h_crit - bottomDepth(iCell)
                is_grounded = (landIceDraft(iCell) < ssh_crit)
                is_wet = (sshCur(iCell) > ssh_crit)
-               if (is_grounded) then
-                  landIceFloatingMask(iCell) = 0
-                  landIceFloatingFraction(iCell) = 0.0_RKIND
-               endif
                if (is_grounded .and. is_wet) then
                   call mpas_log_write('iCell $i is grounded and wet: ssh $r, landIceDraft $r, ssh_crit $r', &
                                       intArgs=(/iCell/), realArgs=(/sshCur(iCell), landIceDraft(iCell), ssh_crit/))
