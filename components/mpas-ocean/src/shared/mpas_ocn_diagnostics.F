@@ -2669,15 +2669,14 @@ contains
                !   call mpas_log_write('-- already at max pressure, dP $r', realArgs=(/landIcePressureCur(iCell) - landIcePressure(iCell)/))
                !   !cycle
                !endif
-               if (landIcePressureCur(iCell) + dP > landIcePressure(iCell) + config_excess_land_ice_pressure_max) then
+               if (dP .ne. 0.0_RKIND) then
+                  landIcePressureApplied(iCell) = min(landIcePressureMax(iCell) + config_excess_land_ice_pressure_max, &
+                                                      landIcePressureCur(iCell) + dP)
                !   call mpas_log_write('iCell $i, landIcePressureApplied $r exceeds landIcePressure $r', &
                !                       intArgs=(/iCell/), realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
                !   call mpas_log_write('landIcePressureApplied $r reset to landIcePressure $r', &
                !                       realArgs=(/landIcePressureApplied(iCell), landIcePressure(iCell)/))
-                  dP = landIcePressure(iCell) + config_excess_land_ice_pressure_max - landIcePressureCur(iCell)
-               endif
-               if (dP .ne. 0.0_RKIND) then
-                  landIcePressureApplied(iCell) = landIcePressureCur(iCell) + dP
+                  dP = landIcePressureApplied(iCell) - landIcePressureCur(iCell)
                   call mpas_log_write('iCell $i adjusted by dP $r, landIceDraft $r, ssh $r', &
                                       intArgs=(/iCell/), realArgs=(/dP, landIceDraft(iCell), sshCur(iCell)/))
                endif
