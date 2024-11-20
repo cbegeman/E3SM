@@ -37,6 +37,7 @@ module ocn_time_integration_rk4
 
    use ocn_equation_of_state
    use ocn_vmix
+   use ocn_vertical_remap
    use ocn_time_average_coupled
    use ocn_wetting_drying
 
@@ -163,7 +164,7 @@ module ocn_time_integration_rk4
 
       ! State Array Pointers
       real (kind=RKIND), dimension(:,:), pointer :: normalVelocityCur, normalVelocityNew
-      real (kind=RKIND), dimension(:,:), pointer :: layerThicknessCur, layerThicknessNew
+      real (kind=RKIND), dimension(:,:), pointer :: layerThicknessCur, layerThicknessNew, layerThicknessLagNew
       real (kind=RKIND), dimension(:,:), pointer :: highFreqThicknessCur, highFreqThicknessNew
       real (kind=RKIND), dimension(:,:), pointer :: lowFreqDivergenceCur, lowFreqDivergenceNew
       real (kind=RKIND), dimension(:), pointer :: sshCur, sshNew
@@ -572,6 +573,30 @@ module ocn_time_integration_rk4
         end if
 
         call mpas_timer_stop("RK4- check wet cells")
+      end if
+
+      if ( configVertAdvMethod == vertAdvRemap ) then
+
+         call mpas_timer_start("vertical remap")
+
+         block => domain % blocklist
+         do while (associated(block))
+            call mpas_pool_get_subpool(block % structs, 'state', statePool)
+            call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessNew, 2)
+            call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
+
+            ! Store the current, Lagrangian location for computation of the
+            ! Eulerian vertical velocity induced by remapping
+            layerThicknessLagNew = layerThicknessNew
+
+            ! Perform the remapping
+            call ocn_remap_vert_state(block, err)
+
+            block => block % next
+         end do
+
+         call mpas_timer_stop("vertical remap")
+
       end if
 
       call mpas_timer_stop("RK4-main loop")
