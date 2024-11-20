@@ -2617,6 +2617,9 @@ contains
                if (is_grounded) then
                   landIceFloatingMask(iCell) = 0
                   landIceFloatingFraction(iCell) = 0.0_RKIND
+               else
+                  landIceFloatingMask(iCell) = 1
+                  landIceFloatingFraction(iCell) = 1.0_RKIND
                endif
             end do
 #ifndef MPAS_OPENACC
