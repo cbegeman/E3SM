@@ -37,6 +37,7 @@ module ocn_time_integration_rk4
 
    use ocn_equation_of_state
    use ocn_vmix
+   use ocn_vertical_advection
    use ocn_vertical_remap
    use ocn_time_average_coupled
    use ocn_wetting_drying
