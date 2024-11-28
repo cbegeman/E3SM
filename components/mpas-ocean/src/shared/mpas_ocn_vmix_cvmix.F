@@ -64,7 +64,7 @@ module ocn_vmix_cvmix
    type(cvmix_shear_params_type)  :: cvmix_shear_params
    type(cvmix_tidal_params_type)  :: cvmix_tidal_params
 
-   logical :: cvmixOn, cvmixConvectionOn, cvmixKPPOn, thinFilmRampOn, thinFilmViscOn
+   logical :: cvmixOn, cvmixConvectionOn, cvmixKPPOn, thinFilmViscOn
    real (kind=RKIND) :: backgroundVisc, backgroundDiff, thinFilmViscConstant, hMin, hMax, hRampFactor
 
    integer :: cvmixBackgroundChoice        ! user choice of cvmix background scheme
@@ -332,7 +332,7 @@ contains
                   vertViscTopOfCell(k, iCell) = max(vertViscTopOfCell(k, iCell), &
                                                     thinFilmViscConstant)
                end do
-            elseif (columnThickness < hMax * num_levels .and. thinFilmRampOn) then
+            elseif (columnThickness < hMax * num_levels) then
                do k = 1, nVertLevelsP1
                   vertViscTopOfCell(k, iCell) = max(vertViscTopOfCell(k, iCell), &
                      thinFilmViscConstant * tanh(hRampFactor * &
@@ -1121,17 +1121,11 @@ contains
       endif
 
       thinFilmViscOn = config_use_thin_film_viscosity
-      thinFilmRampOn = config_zero_drying_velocity_ramp
       if (thinFilmViscOn) then
          thinFilmViscConstant = config_thin_film_viscosity_constant
-         if (thinFilmRampOn) then
-            hMin = config_zero_drying_velocity_ramp_hmin
-            hMax = config_zero_drying_velocity_ramp_hmax
-            hRampFactor = config_zero_drying_velocity_ramp_factor
-         else
-            hMin = config_drying_min_cell_height
-            hMax = config_drying_min_cell_height
-         endif
+         hMin = config_thin_film_viscosity_hmin
+         hMax = config_thin_film_viscosity_hmax
+         hRampFactor = config_zero_drying_velocity_ramp_factor
       endif
 
    !--------------------------------------------------------------------
