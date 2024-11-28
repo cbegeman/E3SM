@@ -415,7 +415,7 @@ module ocn_vertical_remap
 
       if ( config_time_integrator == 'RK4' ) then
          CALL mpas_log_write('Vertical remap not supported for RK4', &
-            MPAS_LOG_CRIT)
+            MPAS_LOG_WARN)
       endif
 
       ! Options for remapping
