@@ -475,9 +475,13 @@ contains
 
          if (abs(wettingVelocityFactor(k, iEdge)) > 0.0_RKIND) then
            normalTransportVelocity(k, iEdge) = (1.0_RKIND - &
-             wettingVelocityFactor(k, iEdge)) * normalTransportVelocity(k, iEdge)
+             min(1.0_RKIND - config_zero_drying_velocity_max_factor, &
+                 wettingVelocityFactor(k, iEdge))) * &
+             normalTransportVelocity(k, iEdge)
            normalVelocity(k, iEdge) = (1.0_RKIND - &
-             wettingVelocityFactor(k, iEdge)) * normalVelocity(k, iEdge)
+             min(1.0_RKIND - config_zero_drying_velocity_max_factor, &
+                 wettingVelocityFactor(k, iEdge))) * &
+             normalVelocity(k, iEdge)
          end if
 
        end do
