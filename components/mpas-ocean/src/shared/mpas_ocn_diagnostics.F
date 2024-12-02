@@ -2614,10 +2614,10 @@ contains
                h_crit = config_drying_min_cell_height * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                ssh_crit = h_crit - bottomDepth(iCell)
                is_grounded = (landIceDraft(iCell) < ssh_crit)
-               if (is_grounded) then
+               if (is_grounded .or. landIceMask(iCell) .ne. 1) then
                   landIceFloatingMask(iCell) = 0
                   landIceFloatingFraction(iCell) = 0.0_RKIND
-               else
+               elseif (landIceMask(iCell) == 1) then
                   landIceFloatingMask(iCell) = 1
                   landIceFloatingFraction(iCell) = 1.0_RKIND
                endif
