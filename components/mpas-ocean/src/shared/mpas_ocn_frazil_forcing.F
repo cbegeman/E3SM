@@ -468,7 +468,7 @@ contains
       !$omp private(underFloatingLandIce, underLandIce, kBottomFrazil, columnTemperatureMin, k, sumNewFrazilIceThickness, &
       !$omp         sumNewThicknessWeightedSaltContent, oceanFreezingTemperature, potential, &
       !$omp         freezingEnergy, meltingEnergy, frazilSalinity, newFrazilIceThickness, &
-      !$omp         newThicknessWeightedSaltContent, meltedFrazilIceThickness, lowSalinityFrazilIce, &
+      !$omp         newThicknessWeightedSaltContent, meltedFrazilIceThickness, &
       !$omp         meltedThicknessWeightedSaltContent)
       do iCell=1,nCells
 
