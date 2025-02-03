@@ -84,7 +84,7 @@ module elm_varcon
   ! These are tunable constants from clm2_3
 
   real(r8) :: zlnd = 0.01_r8        ! Roughness length for soil [m]
-  real(r8) :: zsno = 0.0024_r8      ! Roughness length for snow [m]
+  real(r8) :: zsno = 0.0001_r8      ! Roughness length for snow [m]
   real(r8) :: csoilc = 0.004_r8     ! Drag coefficient for soil under canopy [-]
   real(r8) :: capr   = 0.34_r8      ! Tuning factor to turn first layer T into surface T
   real(r8) :: cnfac  = 0.5_r8       ! Crank Nicholson factor between 0 and 1
