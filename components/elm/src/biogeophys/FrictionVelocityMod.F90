@@ -484,7 +484,7 @@ contains
     rib=grav*zldis*dthv/(thv*um*um)
 
     if (rib >= 0._r8) then      ! neutral or stable
-       zeta = rib*log(zldis/z0m)/(1._r8-5._r8*min(rib,0.19_r8))
+       zeta = rib*log(zldis/z0m)/(1._r8-5._r8*min(rib,0.10_r8))
        zeta = min(2._r8,max(zeta,0.01_r8 ))
     else                     ! unstable
        zeta=rib*log(zldis/z0m)
