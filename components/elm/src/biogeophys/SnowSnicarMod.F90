@@ -80,7 +80,7 @@ module SnowSnicarMod
   integer,  parameter :: snw_rds_max_tbl = 1500          ! maximum effective radius defined in Mie lookup table [microns]
   integer,  parameter :: snw_rds_min_tbl = 30            ! minimium effective radius defined in Mie lookup table [microns]
   real(r8), parameter :: snw_rds_max     = 1500._r8      ! maximum allowed snow effective radius [microns]
-  real(r8)            :: snw_rds_refrz   = 1000._r8      ! effective radius of re-frozen snow [microns]
+  real(r8)            :: snw_rds_refrz   = 500._r8      ! effective radius of re-frozen snow [microns]
   !$acc declare copyin(snw_rds_max_tbl)
   !$acc declare copyin(snw_rds_min_tbl)
   !$acc declare copyin(snw_rds_max    )
@@ -1442,9 +1442,9 @@ contains
             endif
 
             if (use_firn_percolation_and_compaction) then
-                snw_rds_refrz   = 1500._r8
+                snw_rds_refrz   = 500._r8
             else
-                snw_rds_refrz   = 1000._r8 
+                snw_rds_refrz   = 500._r8 
             endif
 
             ! snow that has re-frozen [kg/m2]
