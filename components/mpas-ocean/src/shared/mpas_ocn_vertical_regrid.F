@@ -94,6 +94,7 @@ module ocn_vertical_regrid
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
             totalThickness = totalThickness + layerThicknessLag(k,iCell)
          end do
+         if (iCell == 1) call mpas_log_write('totalThickness = $r', realArgs=(/totalThickness/))
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
             layerThicknessTarget(k, iCell) = restingThickness(k, iCell) * &
                                              totalThickness / bottomDepth(iCell)

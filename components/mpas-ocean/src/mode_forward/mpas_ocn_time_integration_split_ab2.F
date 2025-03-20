@@ -196,6 +196,7 @@ module ocn_time_integration_split_ab2
          normalVelocityCorrection, &! velocity correction
          temp,             &! temp for holding vars at new time
          temp_h,           &! temporary for phi
+         totalThicknessTend,&! temporary mask (edgeMask)
          temp_mask,        &! temporary mask (edgeMask)
          lat,              &! cell latitude
          sshCell1,         &! sea sfc height in neighboring cells
@@ -1890,15 +1891,17 @@ module ocn_time_integration_split_ab2
             !$acc update host(tracersSurfaceValue)
 #else
             !$omp parallel
-            !$omp do schedule(runtime) private(i, k, temp_h, temp)
+            !$omp do schedule(runtime) private(i, k, temp_h, temp, totalThicknessTend)
 #endif
             do iCell = 1, nCellsAll
+            totalThicknessTend = 0.0_RKIND
             do k = minLevelCell(iCell), maxLevelCell(iCell)
 
                ! this is h_{n+1}
                temp_h = layerThicknessCur(k,iCell) + dt* &
                layerThicknessTend(k,iCell)
-
+               totalThicknessTend = totalThicknessTend + dt* &
+                                    layerThicknessTend(k,iCell)
                ! this is h_{n+1/2}
                layerThicknessNew(k,iCell) = 0.5* &
                (layerThicknessCur(k,iCell) + temp_h)
@@ -1914,6 +1917,7 @@ module ocn_time_integration_split_ab2
                             (tracersGroupCur(i,k,iCell) + temp)
                end do ! tracer index
             end do ! vertical
+            if (iCell == 1) call mpas_log_write('totalThicknessTend = $r', realArgs=(/totalThicknessTend/))
             end do ! iCell
 #ifndef MPAS_OPENACC
             !$omp end do

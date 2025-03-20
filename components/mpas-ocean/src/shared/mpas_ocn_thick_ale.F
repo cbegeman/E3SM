@@ -126,6 +126,7 @@ contains
 
       real (kind=RKIND) :: &
          weightSum,    &! sum of weights in vertical
+         ALE_thickness_sum, &! total thickness
          thicknessSum, &! total thickness
          remainder,    &! track remainder in mix/max alteration
          newThickness   ! temp used during min/max adjustment
@@ -176,7 +177,7 @@ contains
 #else
          !$omp parallel
          !$omp do schedule(runtime) &
-         !$omp    private(k, kMin, kMax, thicknessSum)
+         !$omp    private(k, kMin, kMax, thicknessSum, ALE_thickness_sum)
 #endif
          do iCell = 1, nCells
             kMax = maxLevelCell(iCell)
@@ -193,11 +194,14 @@ contains
             ! terms are perturbations about zero.
             ! This is equation 4 and 6 in Petersen et al 2015,
             ! but with eqn 6
+            ALE_thickness_sum = 0.0_RKIND
             do k = kMin, kMax
                ALE_thickness(k,iCell) = restingThickness(k,iCell) &
                   + (SSH(iCell)*vertCoordMovementWeights(k)* &
                      restingThickness(k,iCell) )/thicknessSum
+               ALE_thickness_sum = ALE_thickness_sum + ALE_thickness(k,iCell)
             end do
+            if (iCell == 1) call mpas_log_write('ALEThickness = $r', realArgs=(/ALE_thickness_sum/))
          enddo
 #ifndef MPAS_OPENACC
          !$omp end do

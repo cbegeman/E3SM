@@ -405,6 +405,8 @@ contains
         surfaceThicknessFlux(iCell) = surfaceThicknessFlux(iCell) + ( snowFlux(iCell) + rainFlux(iCell) + evaporationFlux(iCell) &
                                     + seaIceFreshWaterFlux(iCell) + icebergFreshWaterFlux(iCell) + iceRunoffFlux(iCell) ) / rho_sw
         surfaceThicknessFluxRunoff(iCell) = riverRunoffFlux(iCell) / rho_sw
+        if (iCell == 1) call mpas_log_write('surfaceThicknessFlux + surfaceThicknessFluxRunoff = $r', &
+                                            realArgs=(/surfaceThicknessFlux(iCell) + surfaceThicknessFluxRunoff(iCell)/))
       end do
 #ifndef MPAS_OPENACC
       !$omp end do
