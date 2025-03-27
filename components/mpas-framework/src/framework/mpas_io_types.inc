@@ -3,7 +3,7 @@
 #else
    integer, parameter :: MPAS_IO_OFFSET_KIND = PIO_OFFSET
 #endif
-
+   integer, parameter :: PIO_iotype_adiosc= 6
    ! File access modes
    integer, parameter :: MPAS_IO_READ  = 1, &
                          MPAS_IO_WRITE = 2
