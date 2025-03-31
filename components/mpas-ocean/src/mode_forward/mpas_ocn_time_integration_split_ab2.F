@@ -2855,6 +2855,15 @@ module ocn_time_integration_split_ab2
 #endif
       end if
 
+      if ( configVertAdvMethod == vertAdvRemap ) then
+         call mpas_timer_start("vertical remap")
+         call mpas_log_write('Call remap at SE fini before final diagnostic solve')
+         ! Perform the remapping
+         call ocn_remap_vert_state(block, err, 2)
+
+         call mpas_timer_stop("vertical remap")
+      end if
+
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
 
