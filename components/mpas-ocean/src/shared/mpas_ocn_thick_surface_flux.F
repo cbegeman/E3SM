@@ -136,6 +136,7 @@ contains
       !$omp do schedule(runtime) private(remainingFlux, remainingFluxRunoff, k)
 #endif
       do iCell = 1, nCellsOwned
+        if (iCell == 1) call mpas_log_write('surfaceThicknessFlux = $r', realArgs=(/surfaceThicknessFlux(iCell)/))
         remainingFlux = 1.0_RKIND
         remainingFluxRunoff = 1.0_RKIND
         do k = minLevelCell(iCell), maxLevelCell(iCell)
