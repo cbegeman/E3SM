@@ -2660,6 +2660,21 @@ module ocn_time_integration_split_ab2
 
       call mpas_timer_start("se implicit vert mix")
 
+      if ( configVertAdvMethod == vertAdvRemap ) then
+         call mpas_timer_start("vertical remap")
+         call mpas_log_write('Call remap before vmix')
+         call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
+
+         ! Store the current, Lagrangian location for computation of the
+         ! Eulerian vertical velocity induced by remapping
+         layerThicknessLagNew = layerThicknessNew
+
+         ! Perform the remapping
+         call ocn_remap_vert_state(block, err, 2)
+
+         call mpas_timer_stop("vertical remap")
+      end if
+
       ! Call ocean diagnostic solve in preparation for vertical mixing.
       ! Note it is called again after vertical mixing, because u and
       ! tracers change. For Richardson vertical mixing, only density,
@@ -2853,15 +2868,6 @@ module ocn_time_integration_split_ab2
          !$omp end do
          !$omp end parallel
 #endif
-      end if
-
-      if ( configVertAdvMethod == vertAdvRemap ) then
-         call mpas_timer_start("vertical remap")
-         call mpas_log_write('Call remap at SE fini before final diagnostic solve')
-         ! Perform the remapping
-         call ocn_remap_vert_state(block, err, 2)
-
-         call mpas_timer_stop("vertical remap")
       end if
 
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
