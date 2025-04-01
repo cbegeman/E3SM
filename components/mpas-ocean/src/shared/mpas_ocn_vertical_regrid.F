@@ -33,6 +33,7 @@ module ocn_vertical_regrid
    use ocn_constants
    use ocn_config
    use ocn_mesh
+   use ocn_thick_ale
 
    implicit none
    private
@@ -68,37 +69,66 @@ module ocn_vertical_regrid
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_vert_regrid(restingThickness, layerThicknessLag, &
-                              layerThicknessTarget, err)
+   subroutine ocn_vert_regrid(verticalMeshPool, layerThicknessLag, &
+                              layerThicknessTarget, err, newHighFreqThickness)
+
+      type (mpas_pool_type), intent(in) :: &
+         verticalMeshPool  ! vertical mesh information
 
       real (kind=RKIND), dimension(:, :), intent(in) :: &
-         layerThicknessLag, & ! layerThickness after the lagrangian step
-         restingThickness
+         layerThicknessLag ! layerThickness after the lagrangian step
+
+      !  alters ALE thickness when freq-filtering
+      real (kind=RKIND), dimension(:,:), intent(in), optional :: &
+         newHighFreqThickness     !< [in] high frequency thickness
+
       real (kind=RKIND), dimension(:, :), intent(out) :: &
          layerThicknessTarget ! adjusted target layerThickness for remapping
+
       integer, intent(out) :: err !< Output: Error flag
 
       integer :: iCell, k, kmin, kmax
 
-      real (kind=RKIND) :: totalThickness
+      real (kind=RKIND), dimension(:), allocatable :: projectedSSH
+      real (kind=RKIND) :: totalThicknessTarget
 
       err = 0
 
-      ! Calculate z-star layer locations
-      layerThicknessTarget = 0.0_RKIND
+      allocate(projectedSSH(nCellsAll))
 
       !$omp parallel
-      !$omp do schedule(runtime) private(k,totalThickness)
+      !$omp do schedule(runtime) private(k)
       do iCell = 1, nCellsAll
-         totalThickness = 0.0_RKIND
+         projectedSSH(iCell) = -bottomDepth(iCell)
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
-            totalThickness = totalThickness + layerThicknessLag(k,iCell)
+            projectedSSH(iCell) = projectedSSH(iCell) + layerThicknessLag(k,iCell)
          end do
-         if (iCell == 1) call mpas_log_write('totalThickness = $r', realArgs=(/totalThickness/))
+         if (iCell == 1) call mpas_log_write('totalThickness = $r', realArgs=(/bottomDepth(iCell) + projectedSSH(iCell)/))
+         if (iCell == 1) call mpas_log_write('layerThickness(kTop) = $r', realArgs=(/layerThicknessLag(minLevelCell(iCell), iCell)/))
+      end do
+      !$omp end do
+      !$omp end parallel
+
+      !
+      ! Compute desired thickness at new time
+      !
+      if (present(newHighFreqThickness)) then
+        call ocn_ALE_thickness(verticalMeshPool, projectedSSH, &
+                               layerThicknessTarget, err, newHighFreqThickness)
+      else
+        call ocn_ALE_thickness(verticalMeshPool, projectedSSH, &
+                               layerThicknessTarget, err)
+      endif
+
+      !$omp parallel
+      !$omp do schedule(runtime) private(k,totalThicknessTarget)
+      do iCell = 1, nCellsAll
+         totalThicknessTarget = 0.0_RKIND
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
-            layerThicknessTarget(k, iCell) = restingThickness(k, iCell) * &
-                                             totalThickness / bottomDepth(iCell)
+            totalThicknessTarget = totalThicknessTarget + layerThicknessTarget(k,iCell)
          end do
+         if (iCell == 1) call mpas_log_write('totalThicknessTarget = $r', realArgs=(/totalThicknessTarget/))
+         if (iCell == 1) call mpas_log_write('layerThicknessTarget(kTop) = $r', realArgs=(/layerThicknessTarget(minLevelCell(iCell), iCell)/))
       end do
       !$omp end do
       !$omp end parallel
