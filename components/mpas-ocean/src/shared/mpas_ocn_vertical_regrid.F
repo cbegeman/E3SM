@@ -74,7 +74,7 @@ module ocn_vertical_regrid
       real (kind=RKIND), dimension(:, :), intent(in) :: &
          layerThicknessLag, & ! layerThickness after the lagrangian step
          restingThickness
-      real (kind=RKIND), dimension(:, :), intent(out) :: &
+      real (kind=RKIND), dimension(:, :), intent(inout) :: &
          layerThicknessTarget ! adjusted target layerThickness for remapping
       integer, intent(out) :: err !< Output: Error flag
 
