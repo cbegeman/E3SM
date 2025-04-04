@@ -604,7 +604,6 @@ module ocn_time_integration_split_ab2
       endif
       if ( configVertAdvMethod == vertAdvRemap ) then
          call mpas_timer_start("vertical remap")
-         call mpas_log_write('Call remap at beginning of outer loop')
          ! Perform the remapping
          call ocn_remap_vert_state(block, err, 2)
 
@@ -1946,7 +1945,6 @@ module ocn_time_integration_split_ab2
                             (tracersGroupCur(i,k,iCell) + temp)
                end do ! tracer index
             end do ! vertical
-            if (iCell == 1) call mpas_log_write('totalThicknessTend = $r', realArgs=(/totalThicknessTend/))
             end do ! iCell
 #ifndef MPAS_OPENACC
             !$omp end do
@@ -2573,8 +2571,6 @@ module ocn_time_integration_split_ab2
 #ifdef MPAS_OPENACC
             !$acc end parallel
 #endif
-            !call mpas_log_write('ab2 se loop: layerThicknessCur(kTop) = $r', realArgs=(/layerThicknessNew(minLevelCell(1), 1)/))
-            !call mpas_log_write('ab2 se loop: layerThicknessNew(kTop) = $r', realArgs=(/layerThicknessNew(minLevelCell(1), 1)/))
 
          endif ! splitExplicitStep
 
