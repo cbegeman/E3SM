@@ -435,7 +435,7 @@ module ocn_vertical_remap
       block => domain % blocklist
       do while (associated(block))
          call mpas_pool_get_subpool(block % structs, 'state', statePool)
-         call mpas_pool_get_array(statePool, 'layerThicknessCur', layerThicknessCur, 1)
+         call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessCur, 1)
          call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagCur, 1)
          !$omp parallel
          !$omp do schedule(runtime) private(k)
