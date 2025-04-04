@@ -1953,24 +1953,6 @@ module ocn_time_integration_split_ab2
             !$omp end parallel
 #endif
 
-            !if ( configVertAdvMethod == vertAdvRemap ) then
-
-            !   call mpas_timer_start("vertical remap")
-            !   call mpas_log_write('Call remap each TS iteration')
-
-            !   call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
-
-            !   ! Store the current, Lagrangian location for computation of the
-            !   ! Eulerian vertical velocity induced by remapping
-            !   layerThicknessLagNew = layerThicknessNew
-
-            !   ! Perform the remapping
-            !   call ocn_remap_vert_state(block, err)
-
-            !   call mpas_timer_stop("vertical remap")
-
-            !end if
-
 #ifdef MPAS_OPENACC
             !$acc update device(layerThicknessNew)
             !$acc update device(activeTracersNew)
@@ -2671,24 +2653,6 @@ module ocn_time_integration_split_ab2
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       call mpas_timer_start("se implicit vert mix")
-
-      if ( configVertAdvMethod == vertAdvRemap ) then
-         call mpas_timer_start("vertical remap")
-         call mpas_log_write('Call remap before vmix')
-         !call mpas_pool_get_array(statePool, 'layerThickness', &
-         !                                     layerThicknessNew, 2)
-         !call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
-
-         ! Store the current, Lagrangian location for computation of the
-         ! Eulerian vertical velocity induced by remapping
-         ! layerThicknessLagNew = layerThicknessNew
-         !call mpas_log_write('ab2: layerThicknessLag(kTop) = $r', realArgs=(/layerThicknessLagNew(minLevelCell(1), 1)/))
-
-         ! Perform the remapping
-         call ocn_remap_vert_state(block, err, 2)
-
-         call mpas_timer_stop("vertical remap")
-      end if
 
       ! Call ocean diagnostic solve in preparation for vertical mixing.
       ! Note it is called again after vertical mixing, because u and
