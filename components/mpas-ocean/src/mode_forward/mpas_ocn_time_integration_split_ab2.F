@@ -385,6 +385,8 @@ module ocn_time_integration_split_ab2
       call mpas_pool_get_array(statePool, 'lowFreqDivergence', &
                                            lowFreqDivergenceNew, 2)
 
+      call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
+
       call mpas_pool_get_dimension_scalar(tracersPool, 'index_salinity', &
                                                         indexSalinity)
 
@@ -494,6 +496,24 @@ module ocn_time_integration_split_ab2
       !$omp end do
       !$omp end parallel
 #endif
+
+      if ( associated(layerThicknessLagNew) ) then
+#ifdef MPAS_OPENACC
+      !$acc loop collapse(2)
+#else
+      !$omp do schedule(runtime) private(k)
+#endif
+         do iCell= 1,nCellsAll
+         do k = 1,nVertLevels
+            ! Store the current, Lagrangian location for computation of the
+            ! Eulerian vertical velocity induced by remapping
+            layerThicknessLagNew(k,iCell) = layerThicknessNew(k,iCell)
+         end do
+         end do
+#ifndef MPAS_OPENACC
+         !$omp end do
+#endif
+      endif
 
       call mpas_pool_begin_iteration(tracersPool)
       do while ( mpas_pool_get_next_member(tracersPool, groupItr))
@@ -2244,11 +2264,18 @@ module ocn_time_integration_split_ab2
 #endif
             if ( configVertAdvMethod == vertAdvRemap ) then
 
+               call mpas_log_write('ab2 se assign b4 get: layerThicknessCur(kTop) = $r', realArgs=(/layerThicknessNew(minLevelCell(1), 1)/))
+               call mpas_log_write('ab2 se assign b4 get: layerThicknessNew(kTop) = $r', realArgs=(/layerThicknessNew(minLevelCell(1), 1)/))
+               call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessCur, 1)
+               call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessNew, 2)
+               call mpas_log_write('ab2 se assign: layerThicknessCur(kTop) = $r', realArgs=(/layerThicknessCur(minLevelCell(1), 1)/))
+               call mpas_log_write('ab2 se assign: layerThicknessNew(kTop) = $r', realArgs=(/layerThicknessNew(minLevelCell(1), 1)/))
                call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
 
                ! Store the current, Lagrangian location for computation of the
                ! Eulerian vertical velocity induced by remapping
-               layerThicknessLagNew = layerThicknessNew
+               ! layerThicknessLagNew = layerThicknessNew
+               call mpas_log_write('ab2 se assign: layerThicknessLag(kTop) = $r', realArgs=(/layerThicknessLagNew(minLevelCell(1), 1)/))
 
             end if
 
@@ -2675,7 +2702,7 @@ module ocn_time_integration_split_ab2
 
          ! Store the current, Lagrangian location for computation of the
          ! Eulerian vertical velocity induced by remapping
-         layerThicknessLagNew = layerThicknessNew
+         ! layerThicknessLagNew = layerThicknessNew
          call mpas_log_write('ab2: layerThicknessLag(kTop) = $r', realArgs=(/layerThicknessLagNew(minLevelCell(1), 1)/))
 
          ! Perform the remapping
