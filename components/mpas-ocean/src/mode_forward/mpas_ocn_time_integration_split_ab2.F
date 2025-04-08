@@ -604,8 +604,12 @@ module ocn_time_integration_split_ab2
       endif
       if ( configVertAdvMethod == vertAdvRemap ) then
          call mpas_timer_start("vertical remap")
+         call mpas_log_write('Validate ocean state before remap')
+         call ocn_validate_state(domain, timeLevel=2)
          ! Perform the remapping
          call ocn_remap_vert_state(block, err, 2)
+         call mpas_log_write('Validate ocean state after remap')
+         call ocn_validate_state(domain, timeLevel=2)
 
          call mpas_timer_stop("vertical remap")
       end if
@@ -2678,8 +2682,11 @@ module ocn_time_integration_split_ab2
          !$acc enter data copyin(landIceDraft)
       endif
 #endif
+      call mpas_log_write('Diagnostics ocean state before vmix')
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
+      call mpas_log_write('Validate ocean state before vmix')
+      call ocn_validate_state(domain, timeLevel=2)
 
       call mpas_dmpar_field_halo_exch(domain, 'surfaceFrictionVelocity')
       call mpas_dmpar_field_halo_exch(domain, 'tangentialVelocity')
@@ -2845,8 +2852,11 @@ module ocn_time_integration_split_ab2
 #endif
       end if
 
+      call mpas_log_write('Diagnostics ocean state after vmix')
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
+      call mpas_log_write('Validate ocean state after vmix')
+      call ocn_validate_state(domain, timeLevel=2)
 
       ! Update the effective desnity in land ice if we're coupling to
       ! land ice
