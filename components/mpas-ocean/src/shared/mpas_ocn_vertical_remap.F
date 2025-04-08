@@ -81,7 +81,7 @@ module ocn_vertical_remap
       integer, intent(in) :: timeLevel
       integer, intent(out) :: err
 
-      real (kind=RKIND) :: predSSH
+      real (kind=RKIND) :: predSSH, totalTracerNew, totalTracerNow, totalMomentumNow, totalMomentumNew
       integer :: nCells, nEdges
       integer :: nLayers, nLevels, nVars, nDoFs, nTracers
       integer :: cell1, cell2, iCell, jCell, iEdge, iTrac
@@ -173,7 +173,7 @@ module ocn_vertical_remap
                heightCellNew(k + 1, iCell) - layerThicknessNew(k, iCell)
          end do
          predSSH = heightCellNew(minLevelCell(iCell)+1, iCell) - layerThicknessNew(minLevelCell(iCell), iCell)
-         if (iCell == 1 .and. abs(predSSH - heightCellNew(minLevelCell(iCell), iCell)) > 0.1_RKIND) &
+         if (abs(predSSH - heightCellNew(minLevelCell(iCell), iCell)) > 0.1_RKIND) &
             call mpas_log_write('remap cell $i, sshNew = $r, ssh = $r', &
                                 intArgs=(/iCell/), realArgs=(/predSSH, heightCellNew(minLevelCell(iCell), iCell)/))
       end do
@@ -244,9 +244,6 @@ module ocn_vertical_remap
       !$omp end do
       !$omp end parallel
 
-      ! Assign new layerThicknesses
-      layerThickness = layerThicknessNew
-
       !----------------------------------------------------------------------------
       ! ACTUAL REMAPPING FROM HERE
 
@@ -307,7 +304,7 @@ module ocn_vertical_remap
       else
          !$omp parallel
          !$omp do schedule(runtime) &
-         !$omp private(kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
+         !$omp private(k, totalMomentumNow, totalMomentumNew, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
          do iEdge = 1, nEdges
 
             kTop = minLevelEdgeBot(iEdge)
@@ -327,7 +324,14 @@ module ocn_vertical_remap
                bcUpper, bcLower, work, opts)
 
             normalVelocity   (kTop:kBot, iEdge) = dataNew(1, 1, 1:nLayers)
-
+            totalMomentumNow = 0.0_RKIND
+            totalMomentumNew = 0.0_RKIND
+            do k = kTop, kBot
+               totalMomentumNow = totalMomentumNow + layerThickEdgeMean(k, iEdge) * dataNow(1, 1, k)
+               totalMomentumNew = totalMomentumNew + layerThickEdgeNew(k, iEdge) * dataNew(1, 1, k)
+            end do
+            if (abs((totalMomentumNew - totalMomentumNow) / totalMomentumNow) > 0.01_RKIND) &
+               call mpas_log_write('totalMomentum diff exceeds 0.01 for iEdge $i', intArgs=(/iEdge/))
          end do
          !$omp end do
          !$omp end parallel
@@ -358,7 +362,7 @@ module ocn_vertical_remap
 
                !$omp parallel
                !$omp do schedule(runtime) &
-               !$omp private(iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
+               !$omp private(iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work, totalTracerNew, totalTracerNow)
                do iCell = 1, nCells
 
                   kTop = minLevelCell(iCell)
@@ -379,6 +383,14 @@ module ocn_vertical_remap
                      heightCellNew(kTop:kBot+1, iCell), &
                      dataNow, dataNew, &
                      bcUpper, bcLower, work, opts)
+                  totalTracerNow = 0.0_RKIND
+                  totalTracerNew = 0.0_RKIND
+                  do k = kTop, kBot
+                     totalTracerNow = totalTracerNow + layerThickness(k, iEdge) * dataNow(1, iTrac, k)
+                     totalTracerNew = totalTracerNew + layerThicknessNew(k, iEdge) * dataNew(1, iTrac, k)
+                  end do
+                  if (abs((totalTracerNew - totalTracerNow) / totalTracerNow) > 0.01_RKIND) &
+                     call mpas_log_write('totalTracer diff exceeds 0.01 for iTrac $i, iCell $i', intArgs=(/iTrac, iCell/))
 
                   do iTrac = 1, nTracers
                      tracersGroup(iTrac, kTop:kBot, iCell) = dataNew(1, iTrac, 1:nLayers)
@@ -395,6 +407,9 @@ module ocn_vertical_remap
             end if
          end if
       end do
+
+      ! Assign new layerThicknesses
+      layerThickness = layerThicknessNew
 
       deallocate(heightCellNow)
       deallocate(heightEdgeNow)
