@@ -173,9 +173,14 @@ module ocn_vertical_remap
                heightCellNew(k + 1, iCell) - layerThicknessNew(k, iCell)
          end do
          predSSH = heightCellNew(minLevelCell(iCell)+1, iCell) - layerThicknessNew(minLevelCell(iCell), iCell)
-         if (abs(predSSH - heightCellNew(minLevelCell(iCell), iCell)) > 0.1_RKIND) &
+         if (abs(predSSH - heightCellNew(minLevelCell(iCell), iCell)) > 0.1_RKIND) then
+            do k = minLevelCell(iCell), maxLevelCell(iCell)
+               call mpas_log_write('remap k $i, hNow = $r, hNew = $r', &
+                                   intArgs=(/k/), realArgs=(/layerThickness(k, iCell), layerThicknessNew(k, iCell)/))
+            end do
             call mpas_log_write('remap cell $i, sshNew = $r, ssh = $r', &
-                                intArgs=(/iCell/), realArgs=(/predSSH, heightCellNew(minLevelCell(iCell), iCell)/))
+                                intArgs=(/iCell/), realArgs=(/predSSH, heightCellNew(minLevelCell(iCell), iCell)/), messageType=MPAS_LOG_CRIT)
+         end if
       end do
       !$omp end do
       !$omp end parallel
@@ -349,11 +354,15 @@ module ocn_vertical_remap
             if ( associated(tracersGroup) ) then
 
                nTracers = size(tracersGroup, dim=1)
+               call mpas_log_write('Remap before init: nTracers $i for tracerGroup '//groupItr % memberName, &
+                                   intArgs=(/nTracers/))
 
                allocate(dataNow(nDoFs, nTracers, nVertLevels))
                allocate(dataNew(nDoFs, nTracers, nVertLevels))
 
                call work%init(nVertLevels + 1, nTracers, opts)
+               call mpas_log_write('Remap after init: nTracers $i for tracerGroup '//groupItr % memberName, &
+                                   intArgs=(/nTracers/))
 
                allocate(bcUpper(nTracers))
                allocate(bcLower(nTracers))
@@ -376,6 +385,9 @@ module ocn_vertical_remap
                   do iTrac = 1, nTracers
 
                      dataNow(1, iTrac, 1:nLayers) = tracersGroup(iTrac, kTop:kBot, iCell)
+                     if (iCell == 1) &
+                        call mpas_log_write('Remap before rmap1d: iCell $i, iTrac $i, nTracers $i for tracerGroup '//groupItr % memberName, &
+                                            intArgs=(/iCell, iTrac, nTracers/))
 
                   end do
                   call rmap1d(nLevels, nLevels, nTracers,nDoFs, &
@@ -383,16 +395,28 @@ module ocn_vertical_remap
                      heightCellNew(kTop:kBot+1, iCell), &
                      dataNow, dataNew, &
                      bcUpper, bcLower, work, opts)
-                  totalTracerNow = 0.0_RKIND
-                  totalTracerNew = 0.0_RKIND
-                  do k = kTop, kBot
-                     totalTracerNow = totalTracerNow + layerThickness(k, iEdge) * dataNow(1, iTrac, k)
-                     totalTracerNew = totalTracerNew + layerThicknessNew(k, iEdge) * dataNew(1, iTrac, k)
-                  end do
-                  if (abs((totalTracerNew - totalTracerNow) / totalTracerNow) > 0.01_RKIND) &
-                     call mpas_log_write('totalTracer diff exceeds 0.01 for iTrac $i, iCell $i', intArgs=(/iTrac, iCell/))
 
                   do iTrac = 1, nTracers
+                     if (iCell == 1) &
+                        call mpas_log_write('Remap after rmap1d: iCell $i, iTrac $i, nTracers $i for tracerGroup '//groupItr % memberName, &
+                                            intArgs=(/iCell, iTrac, nTracers/))
+                     totalTracerNow = 0.0_RKIND
+                     totalTracerNew = 0.0_RKIND
+                     do k = kTop, kBot
+                        totalTracerNow = totalTracerNow + layerThickness(k, iCell) * dataNow(1, iTrac, k)
+                        totalTracerNew = totalTracerNew + layerThicknessNew(k, iCell) * dataNew(1, iTrac, k)
+                     end do
+                     if (abs((totalTracerNew - totalTracerNow) / totalTracerNow) > 0.01_RKIND) then
+                        do k = kTop, kBot
+                           call mpas_log_write('iCell $i, k $i, hNow $r, trNow $r', &
+                                               intArgs=(/iCell, k/), &
+                                               realArgs=(/layerThickness(k, iCell), dataNow(1, iTrac, k)/))
+                           call mpas_log_write('iCell $i, k $i, hNew $r, trNew $r', &
+                                               intArgs=(/iCell, k/), &
+                                               realArgs=(/layerThicknessNew(k, iCell), dataNew(1, iTrac, k)/))
+                        end do
+                        call mpas_log_write('totalTracer diff exceeds 0.01 for iTrac $i, iCell $i', messageType=MPAS_LOG_CRIT, intArgs=(/iTrac, iCell/))
+                     endif
                      tracersGroup(iTrac, kTop:kBot, iCell) = dataNew(1, iTrac, 1:nLayers)
                   end do
 
