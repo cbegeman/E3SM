@@ -167,6 +167,7 @@ contains
 
       ! restingThickness_times_weights
       case (ALEthickProportionThickTimesWgts)
+         call mpas_log_write('Start ALEthickProportionThickTimesWgts')
 
 #ifdef MPAS_OPENACC
          !xacc parallel loop &
@@ -201,12 +202,18 @@ contains
                      restingThickness(k,iCell) )/thicknessSum
                ALE_thickness_sum = ALE_thickness_sum + ALE_thickness(k,iCell)
             end do
-            if (iCell == 1) call mpas_log_write('ALEThickness = $r', realArgs=(/ALE_thickness_sum/))
+            if (abs(ALE_thickness_sum - thicknessSum) > 1.0_RKIND) then
+               call mpas_log_write('iCell $i, SSH = $r', intArgs=(/iCell/), realArgs=(/SSH(iCell)/))
+               call mpas_log_write('iCell $i, bottomDepth + SSH = $r', intArgs=(/iCell/), realArgs=(/bottomDepth(iCell) + SSH(iCell)/))
+               call mpas_log_write('iCell $i, thicknessSum = $r', intArgs=(/iCell/), realArgs=(/thicknessSum/))
+               call mpas_log_write('iCell $i, ALEThickness = $r', intArgs=(/iCell/), realArgs=(/ALE_thickness_sum/), messageType=MPAS_LOG_CRIT)
+            endif
          enddo
 #ifndef MPAS_OPENACC
          !$omp end do
          !$omp end parallel
 #endif
+         call mpas_log_write('Stop ALEthickProportionThickTimesWgts')
    
       ! weights_only
       case (ALEthickProportionWgtsOnly)
