@@ -158,7 +158,7 @@ contains
                                                   restingThickness)
       !xacc enter data copyin(restingThickness) 
 
-      nCells = nCellsHalo(1)
+      nCells = nCellsAll
 
       !
       ! ALE thickness alteration due to SSH (z-star)
@@ -201,12 +201,16 @@ contains
                   + (SSH(iCell)*vertCoordMovementWeights(k)* &
                      restingThickness(k,iCell) )/thicknessSum
                ALE_thickness_sum = ALE_thickness_sum + ALE_thickness(k,iCell)
+               if (iCell == 3890) then
+                  call mpas_log_write('iCell $i, thicknessSum = $r', intArgs=(/iCell/), realArgs=(/thicknessSum/))
+                  call mpas_log_write('iCell $i, ALEThickness = $r', intArgs=(/iCell/), realArgs=(/ALE_thickness_sum/))
+               endif
             end do
             if (abs(ALE_thickness_sum - thicknessSum) > 1.0_RKIND) then
-               call mpas_log_write('iCell $i, SSH = $r', intArgs=(/iCell/), realArgs=(/SSH(iCell)/))
-               call mpas_log_write('iCell $i, bottomDepth + SSH = $r', intArgs=(/iCell/), realArgs=(/bottomDepth(iCell) + SSH(iCell)/))
+               !call mpas_log_write('iCell $i, SSH = $r', intArgs=(/iCell/), realArgs=(/SSH(iCell)/))
+               !call mpas_log_write('iCell $i, bottomDepth + SSH = $r', intArgs=(/iCell/), realArgs=(/bottomDepth(iCell) + SSH(iCell)/))
                call mpas_log_write('iCell $i, thicknessSum = $r', intArgs=(/iCell/), realArgs=(/thicknessSum/))
-               call mpas_log_write('iCell $i, ALEThickness = $r', intArgs=(/iCell/), realArgs=(/ALE_thickness_sum/), messageType=MPAS_LOG_CRIT)
+               call mpas_log_write('iCell $i, ALEThickness = $r', intArgs=(/iCell/), realArgs=(/ALE_thickness_sum/)) !, messageType=MPAS_LOG_CRIT)
             endif
          enddo
 #ifndef MPAS_OPENACC
