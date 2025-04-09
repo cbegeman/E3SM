@@ -3077,7 +3077,9 @@ contains
          return
       end if
 
+      call mpas_log_write('Call vert_vel')
       allocate(div_hu(nVertLevels, nCellsAll), &
+
                projectedSSH(nCellsAll), &
                ALE_Thickness(nVertLevels, nCellsAll))
       !$acc enter data create(projectedSSH, ALE_Thickness, div_hu)
@@ -3163,6 +3165,15 @@ contains
                 vertAleTransportTop(k+1,iCell) - div_hu(k,iCell) &
                      - (ALE_Thickness(k,iCell) - &
                         oldLayerThickness(k,iCell))/dt
+            if (abs(vertAleTransportTop(k,iCell)) > 1.0E-10_RKIND) &
+               call mpas_log_write('vert_vel: iCell $i, k $i, w $r', &
+                                   intArgs=(/iCell, k/), realArgs=(/vertAleTransportTop(k,iCell)/))
+            if (abs(div_hu(k,iCell)) > 1.0E-10_RKIND) &
+               call mpas_log_write('vert_vel: iCell $i, k $i, div_hu $r', &
+                                   intArgs=(/iCell, k/), realArgs=(/div_hu(k,iCell)/))
+            if (abs(ALE_Thickness(k,iCell) - oldLayerThickness(k,iCell)) > 1.0E-10_RKIND) &
+               call mpas_log_write('vert_vel: iCell $i, k $i, layerThicknessCur $r /= ALE_Thickness $r', &
+                                   intArgs=(/iCell, k/), realArgs=(/oldLayerThickness(k,iCell), ALE_Thickness(k,iCell)/))
          end do
       end do
 #ifndef MPAS_OPENACC
