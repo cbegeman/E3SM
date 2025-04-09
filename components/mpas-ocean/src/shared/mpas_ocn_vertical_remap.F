@@ -177,11 +177,12 @@ module ocn_vertical_remap
          predSSH = heightCellNew(minLevelCell(iCell)+1, iCell) - layerThicknessNew(minLevelCell(iCell), iCell)
          if (abs(predSSH - heightCellNew(minLevelCell(iCell), iCell)) > 0.1_RKIND) then
             do k = minLevelCell(iCell), maxLevelCell(iCell)
-               call mpas_log_write('remap k $i, hNow = $r, hNew = $r', &
-                                   intArgs=(/k/), realArgs=(/layerThickness(k, iCell), layerThicknessNew(k, iCell)/))
+               call mpas_log_write('remap cell $i, k $i, hNow = $r, hNew = $r', &
+                                   intArgs=(/iCell, k/), realArgs=(/layerThickness(k, iCell), layerThicknessNew(k, iCell)/))
             end do
             call mpas_log_write('remap cell $i, sshNew = $r, ssh = $r', &
-                                intArgs=(/iCell/), realArgs=(/predSSH, heightCellNew(minLevelCell(iCell), iCell)/), messageType=MPAS_LOG_CRIT)
+                                intArgs=(/iCell/), realArgs=(/predSSH, heightCellNew(minLevelCell(iCell), iCell)/))
+            call mpas_log_write('Exit because ssh reconstruction incorrect', messageType=MPAS_LOG_CRIT)
          end if
       end do
       !$omp end do
