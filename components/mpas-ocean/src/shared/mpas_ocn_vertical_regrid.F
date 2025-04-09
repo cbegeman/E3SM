@@ -103,8 +103,10 @@ module ocn_vertical_regrid
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
             projectedSSH(iCell) = projectedSSH(iCell) + layerThicknessLag(k,iCell)
          end do
-         if (iCell == 1) call mpas_log_write('totalThickness = $r', realArgs=(/bottomDepth(iCell) + projectedSSH(iCell)/))
-         if (iCell == 1) call mpas_log_write('layerThickness(kTop) = $r', realArgs=(/layerThicknessLag(minLevelCell(iCell), iCell)/))
+         if (iCell == 3890) then
+            call mpas_log_write('totalThickness = $r', realArgs=(/bottomDepth(iCell) + projectedSSH(iCell)/))
+            call mpas_log_write('layerThickness(kTop) = $r', realArgs=(/layerThicknessLag(minLevelCell(iCell), iCell)/))
+         end if
       end do
       !$omp end do
       !$omp end parallel
@@ -127,8 +129,10 @@ module ocn_vertical_regrid
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
             totalThicknessTarget = totalThicknessTarget + layerThicknessTarget(k,iCell)
          end do
-         if (iCell == 1) call mpas_log_write('totalThicknessTarget = $r', realArgs=(/totalThicknessTarget/))
-         if (iCell == 1) call mpas_log_write('layerThicknessTarget(kTop) = $r', realArgs=(/layerThicknessTarget(minLevelCell(iCell), iCell)/))
+         if (iCell == 3890) then
+            call mpas_log_write('totalThicknessTarget = $r', realArgs=(/totalThicknessTarget/))
+            call mpas_log_write('layerThicknessTarget(kTop) = $r', realArgs=(/layerThicknessTarget(minLevelCell(iCell), iCell)/))
+         end if
       end do
       !$omp end do
       !$omp end parallel
