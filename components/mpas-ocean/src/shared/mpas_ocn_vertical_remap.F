@@ -143,6 +143,7 @@ module ocn_vertical_remap
 
       ! Compute new layer thicknesses based on vertical coordinate choice
       ! Currently, zstar coordinate is hard-coded
+      call mpas_log_write('Call ocn_vert_regrid')
       if (associated(highFreqThickness)) then
          call ocn_vert_regrid(verticalMeshPool, layerThickness, &
                               layerThicknessNew, err, highFreqThickness)
@@ -154,6 +155,7 @@ module ocn_vertical_remap
       ! Compute the layer interface locations between bottomDepth and -ssh
       ! (rather than between -bottomDepth and ssh due to PPR limitations)
 
+      call mpas_log_write('Prep remap')
       !$omp parallel
       !$omp do schedule(runtime) private(k, predSSH)
       do iCell = 1, nCells
@@ -194,7 +196,7 @@ module ocn_vertical_remap
       !$omp parallel
       !$omp do schedule(runtime) private(k, kmin, kmax, cell1, cell2)
 #endif
-      do iEdge = 1, nEdgesAll
+      do iEdge = 1, nEdges
          kmin = minLevelEdgeBot(iEdge)
          kmax = maxLevelEdgeTop(iEdge)
          cell1 = cellsOnEdge(1,iEdge)
@@ -251,6 +253,7 @@ module ocn_vertical_remap
 
       !----------------------------------------------------------------------------
       ! ACTUAL REMAPPING FROM HERE
+      call mpas_log_write('Do remap')
 
       nDoFs = 1 ! always 1 for MPAS, it'd be >1 for DG methods (with more DoF per layer)
 
@@ -280,7 +283,7 @@ module ocn_vertical_remap
          !$omp parallel
          !$omp do schedule(runtime) &
          !$omp private(kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
-         do iEdge = 1, nEdges
+         do iEdge = 1, nEdgesHalo(1)
 
             kTop = minLevelEdgeBot(iEdge)
             kBot = maxLevelEdgeTop(iEdge)
@@ -310,7 +313,7 @@ module ocn_vertical_remap
          !$omp parallel
          !$omp do schedule(runtime) &
          !$omp private(k, totalMomentumNow, totalMomentumNew, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
-         do iEdge = 1, nEdges
+         do iEdge = 1, nEdgesHalo(1)
 
             kTop = minLevelEdgeBot(iEdge)
             kBot = maxLevelEdgeTop(iEdge)
@@ -322,6 +325,7 @@ module ocn_vertical_remap
 
             dataNow(1, 1, 1:nLayers) = normalVelocity(kTop:kBot, iEdge)
 
+            call mpas_log_write('iEdge $i, Call rmap1d for momentum', intArgs=(/iEdge/))
             call rmap1d(nLevels, nLevels, nVars, nDoFs, &
                heightEdgeNow(kTop:kBot+1, iEdge), &
                heightEdgeNew(kTop:kBot+1, iEdge), &
@@ -341,12 +345,14 @@ module ocn_vertical_remap
          !$omp end do
          !$omp end parallel
       end if
+      call mpas_log_write('Stop rmap1d momentum')
       deallocate(dataNow,dataNew)
       deallocate(bcUpper,bcLower)
       call work%free()
 
       ! Remap all cell-centred variables from heightCellNow to heightCellNew
 
+      call mpas_log_write('Start rmap1d tracers')
       call mpas_pool_begin_iteration(tracersPool)
       do while ( mpas_pool_get_next_member(tracersPool, groupItr) )
          if ( groupItr % memberType == MPAS_POOL_FIELD ) then
@@ -372,7 +378,7 @@ module ocn_vertical_remap
                !$omp parallel
                !$omp do schedule(runtime) &
                !$omp private(iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work, totalTracerNew, totalTracerNow)
-               do iCell = 1, nCells
+               do iCell = 1, nCellsHalo(1)
 
                   kTop = minLevelCell(iCell)
                   kBot = maxLevelCell(iCell)
