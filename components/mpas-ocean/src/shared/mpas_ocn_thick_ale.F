@@ -176,9 +176,9 @@ contains
          !xacc            vertCoordMovementWeights) &
          !xacc    private(k, kMin, kMax, thicknessSum)
 #else
-         !$omp parallel
-         !$omp do schedule(runtime) &
-         !$omp    private(k, kMin, kMax, thicknessSum, ALE_thickness_sum)
+         !!$omp parallel
+         !!$omp do schedule(runtime) &
+         !!$omp    private(k, kMin, kMax, thicknessSum, ALE_thickness_sum)
 #endif
          do iCell = 1, nCells
             kMax = maxLevelCell(iCell)
@@ -201,21 +201,17 @@ contains
                   + (SSH(iCell)*vertCoordMovementWeights(k)* &
                      restingThickness(k,iCell) )/thicknessSum
                ALE_thickness_sum = ALE_thickness_sum + ALE_thickness(k,iCell)
-               if (iCell == 3890) then
-                  call mpas_log_write('iCell $i, thicknessSum = $r', intArgs=(/iCell/), realArgs=(/thicknessSum/))
-                  call mpas_log_write('iCell $i, ALEThickness = $r', intArgs=(/iCell/), realArgs=(/ALE_thickness_sum/))
-               endif
             end do
-            if (abs(ALE_thickness_sum - thicknessSum) > 1.0_RKIND) then
-               !call mpas_log_write('iCell $i, SSH = $r', intArgs=(/iCell/), realArgs=(/SSH(iCell)/))
-               !call mpas_log_write('iCell $i, bottomDepth + SSH = $r', intArgs=(/iCell/), realArgs=(/bottomDepth(iCell) + SSH(iCell)/))
-               call mpas_log_write('iCell $i, thicknessSum = $r', intArgs=(/iCell/), realArgs=(/thicknessSum/))
-               call mpas_log_write('iCell $i, ALEThickness = $r', intArgs=(/iCell/), realArgs=(/ALE_thickness_sum/)) !, messageType=MPAS_LOG_CRIT)
+            if (abs(ALE_thickness_sum - (SSH(iCell) + bottomDepth(iCell))) > 0.1_RKIND) then
+               call mpas_log_write('iCell $i ALE thickness $r is inconsistent with ssh $r + bottomDepth $r = H $r', &
+                                   intArgs=(/iCell/), &
+                                   realArgs=(/ALE_thickness_sum, SSH(iCell), bottomDepth(iCell),SSH(iCell) + bottomDepth(iCell)/), &
+                                   messageType=MPAS_LOG_CRIT)
             endif
          enddo
 #ifndef MPAS_OPENACC
-         !$omp end do
-         !$omp end parallel
+         !!$omp end do
+         !!$omp end parallel
 #endif
          call mpas_log_write('Stop ALEthickProportionThickTimesWgts')
    
