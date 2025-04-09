@@ -155,7 +155,7 @@ module ocn_vertical_remap
       ! Compute the layer interface locations between bottomDepth and -ssh
       ! (rather than between -bottomDepth and ssh due to PPR limitations)
 
-      call mpas_log_write('Prep remap')
+      !call mpas_log_write('Prep remap')
       !$omp parallel
       !$omp do schedule(runtime) private(k, predSSH)
       do iCell = 1, nCells
@@ -253,7 +253,7 @@ module ocn_vertical_remap
 
       !----------------------------------------------------------------------------
       ! ACTUAL REMAPPING FROM HERE
-      call mpas_log_write('Do remap')
+      !call mpas_log_write('Do remap')
 
       nDoFs = 1 ! always 1 for MPAS, it'd be >1 for DG methods (with more DoF per layer)
 
@@ -325,14 +325,14 @@ module ocn_vertical_remap
 
             dataNow(1, 1, 1:nLayers) = normalVelocity(kTop:kBot, iEdge)
 
-            call mpas_log_write('iEdge $i, Call rmap1d for momentum', intArgs=(/iEdge/))
+            !call mpas_log_write('iEdge $i, Call rmap1d for momentum', intArgs=(/iEdge/))
             call rmap1d(nLevels, nLevels, nVars, nDoFs, &
                heightEdgeNow(kTop:kBot+1, iEdge), &
                heightEdgeNew(kTop:kBot+1, iEdge), &
                dataNow, dataNew, &
                bcUpper, bcLower, work, opts)
 
-            call mpas_log_write('iEdge $i, Assign rmap1d for momentum', intArgs=(/iEdge/))
+            !call mpas_log_write('iEdge $i, Assign rmap1d for momentum', intArgs=(/iEdge/))
             normalVelocity   (kTop:kBot, iEdge) = dataNew(1, 1, 1:nLayers)
             totalMomentumNow = 0.0_RKIND
             totalMomentumNew = 0.0_RKIND
@@ -340,14 +340,14 @@ module ocn_vertical_remap
                totalMomentumNow = totalMomentumNow + layerThickEdgeMean(k, iEdge) * dataNow(1, 1, k)
                totalMomentumNew = totalMomentumNew + layerThickEdgeNew(k, iEdge) * dataNew(1, 1, k)
             end do
-            call mpas_log_write('iEdge $i, Assess rmap1d for momentum', intArgs=(/iEdge/))
+            !call mpas_log_write('iEdge $i, Assess rmap1d for momentum', intArgs=(/iEdge/))
             if (abs((totalMomentumNew - totalMomentumNow) / totalMomentumNow) > 0.01_RKIND) &
                call mpas_log_write('totalMomentum diff exceeds 0.01 for iEdge $i', intArgs=(/iEdge/))
          end do
          !!$omp end do
          !!$omp end parallel
       end if
-      call mpas_log_write('Stop rmap1d momentum')
+      !call mpas_log_write('Stop rmap1d momentum')
       deallocate(dataNow,dataNew)
       deallocate(bcUpper,bcLower)
       call work%free()
@@ -362,15 +362,15 @@ module ocn_vertical_remap
             if ( associated(tracersGroup) ) then
 
                nTracers = size(tracersGroup, dim=1)
-               call mpas_log_write('Remap before init: nTracers $i for tracerGroup '//groupItr % memberName, &
-                                   intArgs=(/nTracers/))
+               !call mpas_log_write('Remap before init: nTracers $i for tracerGroup '//groupItr % memberName, &
+               !                    intArgs=(/nTracers/))
 
                allocate(dataNow(nDoFs, nTracers, nVertLevels))
                allocate(dataNew(nDoFs, nTracers, nVertLevels))
 
                call work%init(nVertLevels + 1, nTracers, opts)
-               call mpas_log_write('Remap after init: nTracers $i for tracerGroup '//groupItr % memberName, &
-                                   intArgs=(/nTracers/))
+               !call mpas_log_write('Remap after init: nTracers $i for tracerGroup '//groupItr % memberName, &
+               !                    intArgs=(/nTracers/))
 
                allocate(bcUpper(nTracers))
                allocate(bcLower(nTracers))
@@ -393,9 +393,9 @@ module ocn_vertical_remap
                   do iTrac = 1, nTracers
 
                      dataNow(1, iTrac, 1:nLayers) = tracersGroup(iTrac, kTop:kBot, iCell)
-                     if (iCell == 1) &
-                        call mpas_log_write('Remap before rmap1d: iCell $i, iTrac $i, nTracers $i for tracerGroup '//groupItr % memberName, &
-                                            intArgs=(/iCell, iTrac, nTracers/))
+                     !if (iCell == 1) &
+                     !   call mpas_log_write('Remap before rmap1d: iCell $i, iTrac $i, nTracers $i for tracerGroup '//groupItr % memberName, &
+                     !                       intArgs=(/iCell, iTrac, nTracers/))
 
                   end do
                   call rmap1d(nLevels, nLevels, nTracers,nDoFs, &
@@ -405,9 +405,9 @@ module ocn_vertical_remap
                      bcUpper, bcLower, work, opts)
 
                   do iTrac = 1, nTracers
-                     if (iCell == 1) &
-                        call mpas_log_write('Remap after rmap1d: iCell $i, iTrac $i, nTracers $i for tracerGroup '//groupItr % memberName, &
-                                            intArgs=(/iCell, iTrac, nTracers/))
+                     !if (iCell == 1) &
+                     !   call mpas_log_write('Remap after rmap1d: iCell $i, iTrac $i, nTracers $i for tracerGroup '//groupItr % memberName, &
+                     !                       intArgs=(/iCell, iTrac, nTracers/))
                      totalTracerNow = 0.0_RKIND
                      totalTracerNew = 0.0_RKIND
                      do k = kTop, kBot
