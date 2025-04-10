@@ -158,7 +158,8 @@ contains
                                                   restingThickness)
       !xacc enter data copyin(restingThickness) 
 
-      nCells = nCellsAll
+      nCells = nCellsHalo(1)
+      !nCells = nCellsAll
 
       !
       ! ALE thickness alteration due to SSH (z-star)
@@ -176,9 +177,9 @@ contains
          !xacc            vertCoordMovementWeights) &
          !xacc    private(k, kMin, kMax, thicknessSum)
 #else
-         !!$omp parallel
-         !!$omp do schedule(runtime) &
-         !!$omp    private(k, kMin, kMax, thicknessSum, ALE_thickness_sum)
+         !$omp parallel
+         !$omp do schedule(runtime) &
+         !$omp    private(k, kMin, kMax, thicknessSum, ALE_thickness_sum)
 #endif
          do iCell = 1, nCells
             kMax = maxLevelCell(iCell)
@@ -203,15 +204,15 @@ contains
                ALE_thickness_sum = ALE_thickness_sum + ALE_thickness(k,iCell)
             end do
             if (abs(ALE_thickness_sum - (SSH(iCell) + bottomDepth(iCell))) > 0.1_RKIND) then
-               call mpas_log_write('iCell $i ALE thickness $r is inconsistent with ssh $r + bottomDepth $r = H $r', &
+               call mpas_log_write('iCell $i, thicknessSum $r, ALE thickness $r is inconsistent with ssh $r + bottomDepth $r = H $r', &
                                    intArgs=(/iCell/), &
-                                   realArgs=(/ALE_thickness_sum, SSH(iCell), bottomDepth(iCell),SSH(iCell) + bottomDepth(iCell)/), &
+                                   realArgs=(/thicknessSum, ALE_thickness_sum, SSH(iCell), bottomDepth(iCell),SSH(iCell) + bottomDepth(iCell)/), &
                                    messageType=MPAS_LOG_CRIT)
             endif
          enddo
 #ifndef MPAS_OPENACC
-         !!$omp end do
-         !!$omp end parallel
+         !$omp end do
+         !$omp end parallel
 #endif
          call mpas_log_write('Stop ALEthickProportionThickTimesWgts')
    
