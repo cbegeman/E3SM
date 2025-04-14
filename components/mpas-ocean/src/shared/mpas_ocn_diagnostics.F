@@ -3165,15 +3165,15 @@ contains
                 vertAleTransportTop(k+1,iCell) - div_hu(k,iCell) &
                      - (ALE_Thickness(k,iCell) - &
                         oldLayerThickness(k,iCell))/dt
-            if (abs(vertAleTransportTop(k,iCell)) > 1.0E-10_RKIND) &
-               call mpas_log_write('vert_vel: iCell $i, k $i, w $r', &
-                                   intArgs=(/iCell, k/), realArgs=(/vertAleTransportTop(k,iCell)/))
-            if (abs(div_hu(k,iCell)) > 1.0E-10_RKIND) &
-               call mpas_log_write('vert_vel: iCell $i, k $i, div_hu $r', &
-                                   intArgs=(/iCell, k/), realArgs=(/div_hu(k,iCell)/))
-            if (abs(ALE_Thickness(k,iCell) - oldLayerThickness(k,iCell)) > 1.0E-10_RKIND) &
-               call mpas_log_write('vert_vel: iCell $i, k $i, layerThicknessCur $r /= ALE_Thickness $r', &
-                                   intArgs=(/iCell, k/), realArgs=(/oldLayerThickness(k,iCell), ALE_Thickness(k,iCell)/))
+            !if (abs(vertAleTransportTop(k,iCell)) > 1.0E-10_RKIND) &
+            !   call mpas_log_write('vert_vel: iCell $i, k $i, w $r', &
+            !                       intArgs=(/iCell, k/), realArgs=(/vertAleTransportTop(k,iCell)/))
+            !if (abs(div_hu(k,iCell)) > 1.0E-10_RKIND) &
+            !   call mpas_log_write('vert_vel: iCell $i, k $i, div_hu $r', &
+            !                       intArgs=(/iCell, k/), realArgs=(/div_hu(k,iCell)/))
+            !if (abs(ALE_Thickness(k,iCell) - oldLayerThickness(k,iCell)) > 1.0E-10_RKIND) &
+            !   call mpas_log_write('vert_vel: iCell $i, k $i, layerThicknessCur $r /= ALE_Thickness $r', &
+            !                       intArgs=(/iCell, k/), realArgs=(/oldLayerThickness(k,iCell), ALE_Thickness(k,iCell)/))
          end do
       end do
 #ifndef MPAS_OPENACC
@@ -4054,9 +4054,9 @@ contains
 
       logical :: fatalErrorDetected
 
-      logical :: thickNanFound, velNanFound, tracersNanFound
+      logical :: thickNanFound, velNanFound, tracersNanFound, thickOutBounds
 
-      real (kind=RKIND) :: minValue, maxValue
+      real (kind=RKIND) :: minValue, maxValue, minLayerThickness, maxLayerThickness
 
       integer :: debugUnit
       character (len=StrKIND) :: debugFilename, fieldName
@@ -4074,9 +4074,12 @@ contains
       block => domain % blocklist
       do while ( associated(block) )
          thickNanFound = .false.
+         thickOutBounds = .false.
          velNanFound = .false.
          tracersNanFound = .false.
 
+         minLayerThickness = 1.0E-2_RKIND
+         maxLayerThickness = 500.0_RKIND
          debugFilename = ocn_build_log_filename('mpas_ocean_block_stats_', block % blockID)
 
          ! Get standard fields, for checking errors
@@ -4101,6 +4104,9 @@ contains
          do iCell = 1, nCellsSolve
             do k = minLevelCell(iCell), maxLevelCell(iCell)
                thickNanFound = thickNanFound .or. ( .not. layerThickness(k, iCell) == layerThickness(k, iCell) )
+               if (layerThickness(k,iCell) < minLayerThickness .or. layerThickness(k,iCell) > maxLayerThickness) &
+                  thickOutBounds = .true.
+                  !call mpas_log_write('layerThickness($i, $i) = , out of bounds', intArgs=(/k, iCell/), realArgs=(/layerThickness(k,iCell)/))
                do iTracer = 1, size(activeTracers, dim=1)
                   tracersNanFound = tracersNanFound .or. &
                                   ( .not. activeTracers(iTracer, k, iCell) == activeTracers(iTracer, k, iCell) )
@@ -4115,7 +4121,7 @@ contains
          end do
 
          ! If an error was found, we need to open the file to write data out.
-         if ( thickNanFound .or. tracersNanFound .or. velNanFound ) then!{{{
+         if ( thickNanFound .or. tracersNanFound .or. velNanFound .or. thickOutBounds) then!{{{
             open(unit=debugUnit, file=debugFilename, form='formatted', status='unknown')
 
             write(debugUnit, *) 'ERROR: NaN Detected in state see below for which field contained a NaN.'
@@ -4196,10 +4202,10 @@ contains
          end if!}}}
 
          ! If there was a thickness NaN found, write out information about fields that affect thickness
-         if ( thickNanFound ) then!{{{
+         if ( thickNanFound .or. thickOutBounds) then!{{{
             write(debugUnit, *) ''
             write(debugUnit, *) ''
-            write(debugUnit, *) 'ERROR: NaN Detected in layerThickness.'
+            write(debugUnit, *) 'ERROR: NaN Detected in layerThickness or out of bounds.'
             write(debugUnit, *) '  -- Statistics information for layerThickness fields'
 
             ! Test seaIcePressure
