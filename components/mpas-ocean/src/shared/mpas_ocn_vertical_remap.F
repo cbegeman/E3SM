@@ -109,9 +109,13 @@ module ocn_vertical_remap
 
       err = 0
 
-      itimestepLastRemap = itimestepLastRemap + 1
-      if (itimestepLastRemap < config_vert_remap_interval) return
-      itimestepLastRemap = 0
+      if (itimestepLastRemap < config_vert_remap_interval) then
+         call mpas_log_write('Skip remap, timestep $i of $i', intArgs=(/itimestepLastRemap, config_vert_remap_interval/))
+         itimestepLastRemap = itimestepLastRemap + 1
+         return
+      else
+         call mpas_log_write('Do remap, timestep $i of $i', intArgs=(/itimestepLastRemap, config_vert_remap_interval/))
+      endif
 
       ! Remapping currently only supports one block for the whole domain rather
       ! than sub-blocks
