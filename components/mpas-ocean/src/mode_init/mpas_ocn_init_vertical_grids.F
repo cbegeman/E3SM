@@ -866,7 +866,7 @@ contains
 
      logical :: useZStar, useZLevel
 
-     real (kind=RKIND) :: depth, layerStretch
+     real (kind=RKIND) :: depth, layerStretch, layerThicknessSum, waterColumnThickness, restingThicknessSum
 
    !--------------------------------------------------------------------
 
@@ -1031,6 +1031,7 @@ contains
            restingThickness(:, iCell) = 0.0_RKIND
 
            if (maxLevelCell(iCell)  > 0) then
+             waterColumnThickness = ssh(iCell) + bottomDepth(iCell)
              layerStretch = (ssh(iCell) + bottomDepth(iCell))/bottomDepth(iCell)
              do k = minLevelCell(iCell), maxLevelCell(iCell)
                restingThickness(k, iCell) = layerThickness(k, iCell)/layerStretch
@@ -1101,14 +1102,14 @@ contains
       integer, dimension(:), pointer :: maxLevelCell, cullCell, nEdgesOnCell, smoothingMaskNew
       integer, dimension(:,:), pointer :: cellsOnEdge, cellsOnCell, edgesOnCell
 
-      integer :: iCell, iEdge, coc, c1, c2, k, maxLevelEdge, iSmooth, iterIndex, maxLevelNeighbors
+      integer :: iCell, iEdge, coc, c1, c2, k, maxLevelEdge, iSmooth, iterIndex, maxLevelNeighbors, maxLevelCellOld
 
       real (kind=RKIND) :: dzEdgeK, dzEdgeKp1, dzEdgeMean, dzVertGoal, &
                            zMean, weight, rx1Goal, dzVertMean, &
                            zMidNext, frac, stretch, localMaxRx1Edge, &
-                           localStretchMax, localStretchMin
+                           localStretchMax, localStretchMin, bottomDepthOld, restingThicknessSum
 
-      logical :: moveInterface
+      logical :: moveInterface, isAltered
 
       iErr = 0
 
@@ -1609,14 +1610,22 @@ contains
             cycle
           end if
 
-
           if(smoothingMask(iCell) == 0) then
             ! initialize with PBCs
+            maxLevelCellOld = maxLevelCell(iCell)
+            bottomDepthOld = bottomDepth(iCell)
             call ocn_alter_bottomDepth_for_pbcs(bottomDepth(iCell), refBottomDepth, maxLevelCell(iCell), iErr)
             if(iErr .ne. 0) then
               call mpas_log_write( 'ocn_alter_bottomDepth_for_pbcs failed.', MPAS_LOG_CRIT)
               return
             end if
+            if (maxLevelCellOld .ne. maxLevelCell(iCell)) then
+              call mpas_log_write('iCell $i: mlc from $i to $i', intArgs=(/iCell, maxLevelCellOld, maxLevelCell(iCell)/))
+              call mpas_log_write('iCell $i: bottomDepth from $r to $r', intArgs=(/iCell/), realArgs=(/bottomDepthOld, bottomDepth(iCell)/))
+              isAltered = .true.
+            else
+              isAltered = .false.
+            endif
           else
             ! we may not have been able to put the layer interface exactly at bottomDepth,
             ! either because bottomDepth was too shallow for the minimum number of layers
@@ -1635,6 +1644,13 @@ contains
           stretch = (ssh(iCell) + bottomDepth(iCell))/bottomDepth(iCell)
           zInterface(:,iCell) = (zInterface(:,iCell) + bottomDepth(iCell))/stretch - bottomDepth(iCell)
           restingThickness(:,iCell) = zInterface(1:nVertLevels,iCell) - zInterface(2:nVertLevels+1,iCell)
+          if (isAltered) then
+             restingThicknessSum = 0.0_RKIND
+             do k = 1, maxLevelCell(iCell)
+                restingThicknessSum = restingThicknessSum + restingThickness(k,iCell)
+             enddo
+             call mpas_log_write('iCell $i: restingThicknessSum', intArgs=(/iCell/), realArgs=(/restingThicknessSum/))
+          endif
         end do
 
         block_ptr => block_ptr % next
