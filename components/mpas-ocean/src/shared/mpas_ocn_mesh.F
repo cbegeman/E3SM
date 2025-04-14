@@ -171,7 +171,8 @@ module ocn_mesh
    public :: &
       ocn_meshCreate, &
       ocn_meshUpdateFields, &
-      ocn_meshDestroy
+      ocn_meshDestroy, &
+      ocn_mesh_correct_bottomDepth
    !}}}
 
 !***********************************************************************
@@ -1509,13 +1510,15 @@ contains
          landIceFlag,      &! flag if land ice mask exists
          checkSSH           ! flag for checking SSH in cell column
 
-      real (kind=RKIND) &
+      real (kind=RKIND) :: &
+         initH,            &! depth based on sum of layer thicknesses
          thickDepth         ! depth based on sum of layer thicknesses
 
       integer, dimension(:), pointer :: &
          landIceMask        ! land ice mask
 
       real (kind=RKIND), dimension(:), pointer :: &
+         landIceDraft,             &!
          refZMid,                  &! reference depth at mid-layer
          refLayerThickness          ! reference profile layer thickness
 
@@ -1542,6 +1545,7 @@ contains
                                                   refLayerThickness)
 
       call mpas_pool_get_array(forcingPool, 'landIceMask', landIceMask)
+      call mpas_pool_get_array(forcingPool, 'landIceDraft', landIceDraft)
       if (associated(landIceMask)) then
          landIceFlag = .true.  ! ice shelves
       else
@@ -1621,9 +1625,9 @@ contains
 
             ! Only check for open ocean when land ice is being used
             checkSSH = .true.
-            if (landIceFlag) then
-               if (landIceMask(iCell) /= 0) checkSSH = .false.
-            endif
+            !if (landIceFlag) then
+            !   if (landIceMask(iCell) /= 0) checkSSH = .false.
+            !endif
 
             ! Check whether thickness is consistent with bottom depth
             if (checkSSH) then
@@ -1631,17 +1635,14 @@ contains
                kmax = maxLevelCell(iCell)
 
                thickDepth = sum(layerThickness(kmin:kmax,iCell))
-
-               if (abs(thickDepth - bottomDepth(iCell)) > 20.0_RKIND) then
+               initH = bottomDepth(iCell)
+               if (associated(landIceDraft)) initH = initH + landIceDraft(iCell)
+               if (abs(thickDepth - initH) > 20.0_RKIND) then
                   consistentSSH = .false.
 
                   call mpas_log_write( &
                      ' Warning: Sea surface height outside of acceptable range (20m)', &
                      MPAS_LOG_ERR)
-                  call mpas_log_write( &
-                     ' iCell: $i, minLevelCell(iCell), maxLevelCell(iCell): $i, $i, bottomDepth(iCell): $r, sum(h): $r', &
-                     intArgs=(/iCell, minLevelCell(iCell), maxLevelCell(iCell) /), &
-                     realArgs=(/ bottomDepth(iCell), thickDepth /) )
                endif ! depth diff check
             endif ! checkSSH
          end do ! cell loop
@@ -1691,6 +1692,38 @@ contains
    !--------------------------------------------------------------------
 
    end subroutine ocn_meshVertCoordInit !}}}
+
+   subroutine ocn_mesh_correct_bottomDepth(restingThickness, ierr) !bottomDepth
+      ! We will just use the meshPool
+      !real, dimension(:), pointer, intent(inout) :: bottomDepth
+      real(KIND=RKIND), dimension(:, :), pointer, intent(in) :: restingThickness
+      integer, intent(out) :: ierr
+      integer :: iCell, kmin, kmax
+      real(KIND=RKIND) :: thickDepth, initH
+
+      ierr = 0
+      do iCell = 1, nCellsAll
+         kmin = minLevelCell(iCell)
+         kmax = maxLevelCell(iCell)
+
+         thickDepth = sum(restingThickness(kmin:kmax,iCell))
+         initH = bottomDepth(iCell) !+ landIceDraft(iCell)
+         if (abs(thickDepth - initH) > 1.0_RKIND) then
+            thickDepth = sum(restingThickness(kmin:kmax + 1,iCell))
+            if (abs(sum(restingThickness(kmin:kmax + 1,iCell)) - initH) < 1.0_RKIND .or. &
+                abs(sum(restingThickness(kmin:kmax - 1,iCell)) - initH) < 1.0_RKIND) then
+               bottomDepth(iCell) = sum(restingThickness(kmin:kmax,iCell))
+               call mpas_log_write('iCell $i: Update bottomDepth from $r to $r', intArgs=(/iCell/), realArgs=(/initH, bottomDepth(iCell)/))
+            else
+               call mpas_log_write('iCell $i: Resting thickness is inconsistent with bottomDepth '//&
+                                   'but is incompatible with adding or dropping layers from restingThickness', &
+                                   intArgs=(/iCell/))
+            endif
+         endif
+      enddo
+
+   end subroutine ocn_mesh_correct_bottomDepth
+
 
 !***********************************************************************
 !
