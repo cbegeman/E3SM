@@ -207,7 +207,7 @@ contains
                call mpas_log_write('iCell $i, thicknessSum $r, ALE thickness $r is inconsistent with ssh $r + bottomDepth $r = H $r', &
                                    intArgs=(/iCell/), &
                                    realArgs=(/thicknessSum, ALE_thickness_sum, SSH(iCell), bottomDepth(iCell),SSH(iCell) + bottomDepth(iCell)/), &
-                                   messageType=MPAS_LOG_CRIT)
+                                   messageType=MPAS_LOG_WARN)
             endif
          enddo
 #ifndef MPAS_OPENACC
@@ -395,8 +395,14 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_thick_ale_init(err)!{{{
+   subroutine ocn_thick_ale_init(domain, err)!{{{
 
+      !-----------------------------------------------------------------
+      ! Input/output variables
+      !-----------------------------------------------------------------
+
+      type (domain_type), intent(inout) :: &
+         domain  !< [inout] model state to advance forward
       !-----------------------------------------------------------------
       ! output variables
       !-----------------------------------------------------------------
@@ -404,6 +410,14 @@ contains
       integer, intent(out) :: err !< Output: Error flag
 
       !-----------------------------------------------------------------
+      type (block_type), pointer :: &
+         block ! structure with subdomain data
+
+      type (mpas_pool_type), pointer :: verticalMeshPool
+
+      real (kind=RKIND), dimension(:,:), pointer :: &
+         restingThickness   ! Layer thickness when the ocean is at rest
+                            ! i.e. without SSH or internal perturbations.
 
       err = 0 ! default error flag
 
@@ -429,6 +443,14 @@ contains
          minThick     = 0.0_RKIND
          maxThickFact = 0.0_RKIND
       endif
+
+      block => domain%blocklist
+      call mpas_pool_get_subpool(block%structs, 'verticalMesh', &
+                                                 verticalMeshPool)
+      call mpas_pool_get_array(verticalMeshPool, 'restingThickness', &
+                                                  restingThickness)
+      call mpas_log_write('call ocn_mesh_correct_bottomDepth')
+      call ocn_mesh_correct_bottomDepth(restingThickness, err)
 
    !--------------------------------------------------------------------
 
