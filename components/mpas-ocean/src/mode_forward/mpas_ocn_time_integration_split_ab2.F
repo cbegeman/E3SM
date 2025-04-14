@@ -604,11 +604,15 @@ module ocn_time_integration_split_ab2
       endif
       if ( configVertAdvMethod == vertAdvRemap ) then
          call mpas_timer_start("vertical remap")
-         call mpas_log_write('Validate ocean state before remap')
+         call mpas_log_write('Validate ocean state timeLevel=1 before remap')
+         call ocn_validate_state(domain, timeLevel=1)
+         call mpas_log_write('Validate ocean state timeLevel=2 before remap')
          call ocn_validate_state(domain, timeLevel=2)
          ! Perform the remapping
          call ocn_remap_vert_state(block, err, 2)
-         call mpas_log_write('Validate ocean state after remap')
+         call mpas_log_write('Validate ocean state timeLevel=1 after remap')
+         call ocn_validate_state(domain, timeLevel=1)
+         call mpas_log_write('Validate ocean state timeLevel=2 after remap')
          call ocn_validate_state(domain, timeLevel=2)
 
          call mpas_timer_stop("vertical remap")
@@ -2685,7 +2689,9 @@ module ocn_time_integration_split_ab2
       call mpas_log_write('Diagnostics ocean state before vmix')
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
-      call mpas_log_write('Validate ocean state before vmix')
+      call mpas_log_write('Validate ocean state timeLevel=1 before vmix')
+      call ocn_validate_state(domain, timeLevel=1)
+      call mpas_log_write('Validate ocean state timeLevel=2 before vmix')
       call ocn_validate_state(domain, timeLevel=2)
 
       call mpas_dmpar_field_halo_exch(domain, 'surfaceFrictionVelocity')
@@ -2737,6 +2743,8 @@ module ocn_time_integration_split_ab2
 
       call ocn_vmix_implicit(dt, meshPool, statePool, forcingPool, &
                              scratchPool, err, 2)
+      call mpas_log_write('Validate ocean state after vmix')
+      call ocn_validate_state(domain, timeLevel=2)
 
       ! Update halo on u and tracers, which were just updated for
       ! implicit vertical mixing.  If not done, this leads to lack of
@@ -2852,10 +2860,10 @@ module ocn_time_integration_split_ab2
 #endif
       end if
 
-      call mpas_log_write('Diagnostics ocean state after vmix')
+      call mpas_log_write('Diagnostics ocean state after update')
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
-      call mpas_log_write('Validate ocean state after vmix')
+      call mpas_log_write('Validate ocean state after update')
       call ocn_validate_state(domain, timeLevel=2)
 
       ! Update the effective desnity in land ice if we're coupling to
