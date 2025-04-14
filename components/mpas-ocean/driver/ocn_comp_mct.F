@@ -398,12 +398,7 @@ contains
        call mpas_dmpar_abort(domain % dminfo)
     end if
 
-    ! Set core specific options here
-    ! Disable output from all but the master task for E3SM!
-    ! (This overrides the default set by mpas_log_init based on MPAS_DEBUG setting.)
-    if (iam /= 0) then
-       domain % logInfo % outputLog % isActive = .false.
-    endif
+    domain % logInfo % outputLog % isActive = .true.
 
     ! After core has had a chance to modify log defaults, open the output log
     call mpas_log_open(err=ierr)
