@@ -286,7 +286,6 @@ module ocn_forward_mode
 
       ! fill the ocean mesh structure
       call ocn_meshCreate(domain)
-
       !-----------------------------------------------------------------
       ! Initialize submodules and fields that are required by others
       ! or that have dependencies that require specific ordering.
@@ -413,7 +412,7 @@ module ocn_forward_mode
       ierr = ior(ierr, err_tmp)
       call ocn_thick_surface_flux_init(err_tmp)
       ierr = ior(ierr, err_tmp)
-      call ocn_thick_ale_init(err_tmp)
+      call ocn_thick_ale_init(domain, err_tmp)
       ierr = ior(ierr,err_tmp)
       if (ierr /= 0) then
          call mpas_log_write( &
