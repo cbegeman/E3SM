@@ -739,18 +739,21 @@ module ocn_forward_mode
 #endif
          call ocn_timestep(domain, dt, timeStamp)
 
+         call mpas_log_write("Stop time integration")
          call mpas_timer_stop("time integration")
 
          ! Move time level 2 fields back into time level 1 for next time step
 #ifdef MPAS_DEBUG
          call mpas_log_write( '   Shifting time levels')
 #endif
+         call mpas_log_write( '   Shifting time levels')
          call mpas_pool_get_subpool(domain % blocklist % structs, 'state', statePool)
          call mpas_pool_shift_time_levels(statePool)
 
 #ifdef MPAS_DEBUG
          call mpas_log_write( '   Handling analysis members')
 #endif
+         call mpas_log_write( '   Handling analysis members')
          call ocn_analysis_compute(domain, err)
          call ocn_analysis_restart(domain, err)
          call ocn_analysis_write(domain, err)
@@ -758,6 +761,7 @@ module ocn_forward_mode
 #ifdef MPAS_DEBUG
          call mpas_log_write( '   Performing I/O')
 #endif
+         call mpas_log_write( '   Performing I/O')
          call mpas_timer_start('io_write')
          call mpas_stream_mgr_write(domain % streamManager, streamID='output', ierr=ierr)
          call mpas_timer_stop('io_write')
@@ -770,6 +774,7 @@ module ocn_forward_mode
 #ifdef MPAS_DEBUG
             call mpas_log_write( '   Writing restart timestamp file')
 #endif
+            call mpas_log_write( '   Writing restart timestamp file')
             if ( domain % dminfo % my_proc_id == 0 ) then
                open(22, file=config_restart_timestamp_name, form='formatted', status='replace')
                write(22, *) trim(timeStamp)
@@ -796,6 +801,7 @@ module ocn_forward_mode
          call mpas_stream_mgr_reset_alarms(domain % streamManager, streamID='restart', ierr=ierr)
          call mpas_timer_stop('reset_io_alarms')
 
+         call mpas_log_write( '   writing remaining streams')
          call mpas_timer_start('io_write')
          call mpas_stream_mgr_write(domain % streamManager, ierr=ierr)
          call mpas_timer_stop('io_write')
@@ -836,6 +842,7 @@ module ocn_forward_mode
          call ocn_time_varying_forcing_get(domain % streamManager, domain, domain % clock)
 
          ! Validate that the state is OK to run with for the next timestep.
+         call mpas_log_write('Validate state timeLevel=1 at end of time step')
          call ocn_validate_state(domain, timeLevel=1)
 
       end do
