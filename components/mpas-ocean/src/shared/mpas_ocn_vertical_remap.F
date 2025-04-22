@@ -322,7 +322,7 @@ module ocn_vertical_remap
          !$omp parallel
          !$omp do schedule(runtime) &
          !$omp private(k, totalMomentumNow, totalMomentumNew, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
-         do iEdge = 1, nEdgesAll
+         do iEdge = 1, nEdgesHalo(1)
 
             kTop = minLevelEdgeBot(iEdge)
             kBot = maxLevelEdgeTop(iEdge)
@@ -382,7 +382,7 @@ module ocn_vertical_remap
                !$omp parallel
                !$omp do schedule(runtime) &
                !$omp private(iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work, totalTracerNew, totalTracerNow)
-               do iCell = 1, nCellsAll
+               do iCell = 1, nCells
 
                   kTop = minLevelCell(iCell)
                   kBot = maxLevelCell(iCell)
@@ -425,6 +425,7 @@ module ocn_vertical_remap
                                                intArgs=(/iCell, k/), &
                                                realArgs=(/layerThicknessNew(k, iCell), dataNew(1, iTrac, k)/))
                         end do
+                        call mpas_log_write('iCell $i, bottomDepth $r', messageType=MPAS_LOG_CRIT, intArgs=(/iCell/), realArgs=(bottomDepth(iCell)))
                         call mpas_log_write('totalTracer diff exceeds 0.01 for iTrac $i, iCell $i', messageType=MPAS_LOG_CRIT, intArgs=(/iTrac, iCell/))
                      endif
                      tracersGroup(iTrac, kTop:kBot, iCell) = dataNew(1, iTrac, 1:nLayers)
