@@ -265,6 +265,7 @@ module ocn_time_integration_split_ab2
          sshTend                ! sea-surface height tendency
 
       real (kind=RKIND), dimension(:,:), pointer :: &
+         layerThicknessTarget,  &! layerThickness for ALE, vert velocity
          normalVelocityTend,    &! normal velocity tendency
          highFreqThicknessTend, &! thickness tendency for high-freq iter
          lowFreqDivergenceTend, &! thickness tendency for low freq
@@ -316,6 +317,7 @@ module ocn_time_integration_split_ab2
 
       !*** Start main time step timer
       call mpas_timer_start("se timestep")
+      call mpas_log_write("start: se timestep")
 
       ! Specify numTS and numClinic if not initial time
       if ( nowTimeStamp /= initialTimeStamp .or. config_do_restart ) then
@@ -328,6 +330,7 @@ module ocn_time_integration_split_ab2
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       call mpas_timer_start("se prep")
+      call mpas_log_write("se prep")
 
       !*** Retrieve model state, pools
       !*** No longer support sub-blocks so this retrieves the only block
@@ -385,7 +388,11 @@ module ocn_time_integration_split_ab2
       call mpas_pool_get_array(statePool, 'lowFreqDivergence', &
                                            lowFreqDivergenceNew, 2)
 
+      call mpas_log_write("get layerThicknessLag")
+      call mpas_pool_get_array(statePool, 'layerThicknessTarget', &
+                                           layerThicknessTarget, 1)
       call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
+      call mpas_log_write("got layerThicknessLag")
 
       call mpas_pool_get_dimension_scalar(tracersPool, 'index_salinity', &
                                                         indexSalinity)
@@ -408,6 +415,7 @@ module ocn_time_integration_split_ab2
                                           lowFreqDivergenceTend)
 
       call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracersNew, 2)
+      call mpas_log_write("got all pointers")
 
       allocate(bottomDepthEdge(nEdgesAll+1))
 
@@ -498,6 +506,7 @@ module ocn_time_integration_split_ab2
 #endif
 
       if ( associated(layerThicknessLagNew) ) then
+        call mpas_log_write("Update layerThicknessLagNew")
 #ifdef MPAS_OPENACC
       !$acc loop collapse(2)
 #else
@@ -513,6 +522,8 @@ module ocn_time_integration_split_ab2
 #ifndef MPAS_OPENACC
          !$omp end do
 #endif
+      else
+        call mpas_log_write("layerThicknessLagNew not associated")
       endif
 
       call mpas_pool_begin_iteration(tracersPool)
@@ -666,7 +677,7 @@ module ocn_time_integration_split_ab2
                            normalVelocityCur, stage1_tend_time)
 
 #ifdef MPAS_OPENACC
-         !$acc enter data copyin(layerThicknessCur, normalVelocityCur, sshCur)
+         !$acc enter data copyin(layerThicknessCur, normalVelocityCur, sshCur, layerThicknessTarget)
          !$acc update device(layerThickEdgeFlux)
          if (config_use_freq_filtered_thickness .or. associated(highFreqThicknessNew) ) then
             !$acc enter data create(highFreqThicknessNew)
@@ -750,12 +761,12 @@ module ocn_time_integration_split_ab2
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalVelocityCur, sshCur, dt, &
-                 vertAleTransportTop, err, highFreqThicknessNew)
+                 layerThicknessTarget, vertAleTransportTop, err, highFreqThicknessNew)
          else
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalVelocityCur, sshCur, dt, &
-                 vertAleTransportTop, err)
+                 layerThicknessTarget, vertAleTransportTop, err)
          endif
 
 #ifdef MPAS_OPENACC
@@ -1793,7 +1804,7 @@ module ocn_time_integration_split_ab2
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalTransportVelocity, sshCur, &
-                 dt, vertAleTransportTop, err, highFreqThicknessNew)
+                 dt, layerThicknessTarget, vertAleTransportTop, err, highFreqThicknessNew)
 #ifdef MPAS_OPENACC
             !$acc exit data delete(highFreqThicknessNew)
 #endif
@@ -1801,7 +1812,7 @@ module ocn_time_integration_split_ab2
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalTransportVelocity, sshCur, &
-                 dt, vertAleTransportTop, err)
+                 dt, layerThicknessTarget, vertAleTransportTop, err)
          endif
 #ifdef MPAS_OPENACC
          !$acc exit data delete(layerThicknessCur, sshCur)
@@ -2219,7 +2230,7 @@ module ocn_time_integration_split_ab2
                call ocn_vert_transport_velocity_top( &
                     verticalMeshPool, layerThicknessCur, &
                     layerThickEdgeFlux, normalTransportVelocity,sshCur, dt, &
-                    vertAleTransportTop, err)
+                    layerThicknessTarget, vertAleTransportTop, err)
 
                call ocn_tend_thick(tendPool, forcingPool)
 
@@ -2865,6 +2876,7 @@ module ocn_time_integration_split_ab2
                                 scratchPool, tracersPool, 2)
       call mpas_log_write('Validate ocean state after update')
       call ocn_validate_state(domain, timeLevel=2)
+      call mpas_log_write('Validated ocean state after update')
 
       ! Update the effective desnity in land ice if we're coupling to
       ! land ice
@@ -2993,6 +3005,7 @@ module ocn_time_integration_split_ab2
 
       call mpas_timer_stop('se fini')
       call mpas_timer_stop("se timestep")
+      call mpas_log_write("stop: se timestep")
 
    end subroutine ocn_time_integrator_split_ab2!}}}
 

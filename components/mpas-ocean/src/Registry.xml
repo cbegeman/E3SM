@@ -2465,6 +2465,10 @@
 			 description="The layerThickness after the Lagrangian step, prior to remapping."
 			 packages="verticalRemapPKG"
 		/>
+		<var name="layerThicknessTarget" type="real" dimensions="nVertLevels nCells Time" units="m"
+			 description="The layerThickness from ALE routine, prior to remapping."
+			 packages="verticalRemapPKG"
+		/>
 	</var_struct>
 	<var_struct name="mesh" time_levs="1">
 		<var name="latCell" type="real" dimensions="nCells" units="radians"
