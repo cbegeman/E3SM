@@ -1704,7 +1704,7 @@ contains
       real(KIND=RKIND) :: thickDepth, initH
 
       ierr = 0
-      do iCell = 1, nCellsHalo(1)
+      do iCell = 1, nCellsAll
          kmin = minLevelCell(iCell)
          kmax = maxLevelCell(iCell)
 
