@@ -319,10 +319,10 @@ module ocn_vertical_remap
          !$omp end do
          !$omp end parallel
       else
-         !!$omp parallel
-         !!$omp do schedule(runtime) &
-         !!$omp private(k, totalMomentumNow, totalMomentumNew, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
-         do iEdge = 1, nEdgesHalo(1)
+         !$omp parallel
+         !$omp do schedule(runtime) &
+         !$omp private(k, totalMomentumNow, totalMomentumNew, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
+         do iEdge = 1, nEdgesAll
 
             kTop = minLevelEdgeBot(iEdge)
             kBot = maxLevelEdgeTop(iEdge)
@@ -341,7 +341,6 @@ module ocn_vertical_remap
                dataNow, dataNew, &
                bcUpper, bcLower, work, opts)
 
-            !call mpas_log_write('iEdge $i, Assign rmap1d for momentum', intArgs=(/iEdge/))
             normalVelocity   (kTop:kBot, iEdge) = dataNew(1, 1, 1:nLayers)
             totalMomentumNow = 0.0_RKIND
             totalMomentumNew = 0.0_RKIND
@@ -349,14 +348,12 @@ module ocn_vertical_remap
                totalMomentumNow = totalMomentumNow + layerThickEdgeMean(k, iEdge) * dataNow(1, 1, k)
                totalMomentumNew = totalMomentumNew + layerThickEdgeNew(k, iEdge) * dataNew(1, 1, k)
             end do
-            !call mpas_log_write('iEdge $i, Assess rmap1d for momentum', intArgs=(/iEdge/))
             if (abs((totalMomentumNew - totalMomentumNow) / totalMomentumNow) > 0.01_RKIND) &
                call mpas_log_write('totalMomentum diff exceeds 0.01 for iEdge $i', intArgs=(/iEdge/))
          end do
-         !!$omp end do
-         !!$omp end parallel
+         !$omp end do
+         !$omp end parallel
       end if
-      !call mpas_log_write('Stop rmap1d momentum')
       deallocate(dataNow,dataNew)
       deallocate(bcUpper,bcLower)
       call work%free()
@@ -367,19 +364,15 @@ module ocn_vertical_remap
       call mpas_pool_begin_iteration(tracersPool)
       do while ( mpas_pool_get_next_member(tracersPool, groupItr) )
          if ( groupItr % memberType == MPAS_POOL_FIELD ) then
-            call mpas_pool_get_array(tracersPool, groupItr % memberName, tracersGroup, 2)
+            call mpas_pool_get_array(tracersPool, groupItr % memberName, tracersGroup, timeLevel)
             if ( associated(tracersGroup) ) then
 
                nTracers = size(tracersGroup, dim=1)
-               !call mpas_log_write('Remap before init: nTracers $i for tracerGroup '//groupItr % memberName, &
-               !                    intArgs=(/nTracers/))
 
                allocate(dataNow(nDoFs, nTracers, nVertLevels))
                allocate(dataNew(nDoFs, nTracers, nVertLevels))
 
                call work%init(nVertLevels + 1, nTracers, opts)
-               !call mpas_log_write('Remap after init: nTracers $i for tracerGroup '//groupItr % memberName, &
-               !                    intArgs=(/nTracers/))
 
                allocate(bcUpper(nTracers))
                allocate(bcLower(nTracers))
@@ -389,7 +382,7 @@ module ocn_vertical_remap
                !$omp parallel
                !$omp do schedule(runtime) &
                !$omp private(iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work, totalTracerNew, totalTracerNow)
-               do iCell = 1, nCellsHalo(1)
+               do iCell = 1, nCellsAll
 
                   kTop = minLevelCell(iCell)
                   kBot = maxLevelCell(iCell)
