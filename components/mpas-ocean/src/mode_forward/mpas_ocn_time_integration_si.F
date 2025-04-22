@@ -821,17 +821,17 @@ module ocn_time_integration_si
          ! compute vertAleTransportTop.  Use u (rather than &
          ! normalTransportVelocity) for momentum advection.
          ! Use the most recent time level available.
-
+         ! The diagnostic variable layerThicknessTarget is updated
          if (associated(highFreqThicknessNew)) then
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalVelocityCur, sshCur, dt, &
-                 vertAleTransportTop, err, highFreqThicknessNew)
+                 layerThicknessTarget, vertAleTransportTop, err, highFreqThicknessNew)
          else
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalVelocityCur, sshCur, dt, &
-                 vertAleTransportTop, err)
+                 layerThicknessTarget, vertAleTransportTop, err)
          endif
 
 #ifdef MPAS_OPENACC
@@ -2127,7 +2127,7 @@ module ocn_time_integration_si
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalTransportVelocity, sshCur, &
-                 dt, vertAleTransportTop, err, highFreqThicknessNew)
+                 dt, layerThicknessTarget, vertAleTransportTop, err, highFreqThicknessNew)
 #ifdef MPAS_OPENACC
             !$acc exit data delete(highFreqThicknessNew)
 #endif
@@ -2135,7 +2135,7 @@ module ocn_time_integration_si
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalTransportVelocity, sshCur, &
-                 dt, vertAleTransportTop, err)
+                 dt, layerThicknessTarget, vertAleTransportTop, err)
          endif
 #ifdef MPAS_OPENACC
          !$acc exit data delete(layerThicknessCur, sshCur)

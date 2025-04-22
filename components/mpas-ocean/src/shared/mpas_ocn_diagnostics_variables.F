@@ -56,6 +56,7 @@ module ocn_diagnostics_variables
    real (kind=RKIND), dimension(:,:), pointer :: salineContractCoeff
    real (kind=RKIND), dimension(:,:), pointer :: BruntVaisalaFreqTop
    real (kind=RKIND), dimension(:,:), pointer :: tangentialVelocity
+   real (kind=RKIND), dimension(:,:), pointer :: layerThicknessTarget
    real (kind=RKIND), dimension(:,:), pointer :: layerThickEdgeDrag
    real (kind=RKIND), dimension(:,:), pointer :: layerThickEdgeFlux
    real (kind=RKIND), dimension(:,:), pointer :: layerThickEdgeMean
@@ -289,6 +290,8 @@ contains
                    layerThicknessCellWetDry)
          call mpas_pool_get_array(diagnosticsPool, 'sshCellWetDry', &
                    sshCellWetDry)
+         call mpas_pool_get_array(diagnosticsPool, 'layerThicknessTarget', &
+                   layerThicknessTarget)
       end if
 
       if (config_use_GM.or.config_use_Redi) then

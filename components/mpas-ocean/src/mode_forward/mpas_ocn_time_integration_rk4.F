@@ -888,15 +888,16 @@ module ocn_time_integration_rk4
       call mpas_pool_get_array(provisStatePool, 'highFreqThickness', highFreqThicknessProvis, 1)
 
       ! advection of u uses u, while advection of layerThickness and tracers use normalTransportVelocity.
+      ! The diagnostic variable layerThicknessTarget is updated
       if (associated(highFreqThicknessProvis)) then
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur,layerThickEdgeFlux, normalVelocityProvis, &
-            sshCur, rkSubstepWeight, &
+            sshCur, rkSubstepWeight, layerThicknessTarget, &
             vertAleTransportTop, err, highFreqThicknessProvis)
       else
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur,layerThickEdgeFlux, normalVelocityProvis, &
-            sshCur, rkSubstepWeight, &
+            sshCur, rkSubstepWeight, layerThicknessTarget, &
             vertAleTransportTop, err)
       endif
 
@@ -961,15 +962,16 @@ module ocn_time_integration_rk4
       call ocn_MLE_add_to_transport_vel(normalTransportVelocity, nEdges)
 
       ! advection of u uses u, while advection of layerThickness and tracers use normalTransportVelocity.
+      ! The diagnostic variable layerThicknessTarget is updated
       if (associated(highFreqThicknessProvis)) then
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur, layerThickEdgeFlux, normalTransportVelocity, &
-            sshCur, rkSubstepWeight, &
+            sshCur, rkSubstepWeight, layerThicknessTarget, &
             vertAleTransportTop, err, highFreqThicknessProvis)
       else
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur, layerThickEdgeFlux, normalTransportVelocity, &
-            sshCur, rkSubstepWeight, &
+            sshCur, rkSubstepWeight, layerThicknessTarget, &
             vertAleTransportTop, err)
       endif
 
@@ -1037,15 +1039,16 @@ module ocn_time_integration_rk4
       call ocn_MLE_add_to_transport_vel(normalTransportVelocity, nEdges)
 
       ! advection of u uses u, while advection of layerThickness and tracers use normalTransportVelocity.
+      ! The diagnostic variable layerThicknessTarget is updated
       if (associated(highFreqThicknessProvis)) then
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur, layerThickEdgeFlux, normalTransportVelocity, &
-            sshCur, rkSubstepWeight, &
+            sshCur, rkSubstepWeight, layerThicknessTarget, &
             vertAleTransportTop, err, highFreqThicknessProvis)
       else
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur, layerThickEdgeFlux, normalTransportVelocity, &
-            sshCur, rkSubstepWeight, &
+            sshCur, rkSubstepWeight, layerThicknessTarget, &
             vertAleTransportTop, err)
       endif
 
@@ -1100,15 +1103,16 @@ module ocn_time_integration_rk4
       call mpas_pool_get_array(provisStatePool, 'highFreqThickness', highFreqThicknessProvis, 1)
 
       ! advection of u uses u, while advection of layerThickness and tracers use normalTransportVelocity.
+      ! The diagnostic variable layerThicknessTarget is updated
       if (associated(highFreqThicknessProvis)) then
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur,layerThickEdgeFlux, normalVelocityProvis, &
-            sshCur, rkWeight, &
+            sshCur, rkWeight, layerThicknessTarget, &
             vertAleTransportTop, err, highFreqThicknessProvis)
       else
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur,layerThickEdgeFlux, normalVelocityProvis, &
-            sshCur, rkWeight, &
+            sshCur, rkWeight, layerThicknessTarget, &
             vertAleTransportTop, err)
       endif
 
@@ -1117,12 +1121,12 @@ module ocn_time_integration_rk4
       if (associated(highFreqThicknessProvis)) then
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur, layerThickEdgeFlux, normalTransportVelocity, &
-            sshCur, rkWeight, &
+            sshCur, rkWeight, layerThicknessTarget, &
             vertAleTransportTop, err, highFreqThicknessProvis)
       else
          call ocn_vert_transport_velocity_top(verticalMeshPool, &
             layerThicknessCur, layerThickEdgeFlux, normalTransportVelocity, &
-            sshCur, rkWeight, &
+            sshCur, rkWeight, layerThicknessTarget, &
             vertAleTransportTop, err)
       endif
 
