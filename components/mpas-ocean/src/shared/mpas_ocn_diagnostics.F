@@ -3045,8 +3045,8 @@ contains
 
    subroutine ocn_vert_transport_velocity_top(verticalMeshPool, &
                      oldLayerThickness, layerThicknessEdgeFlux, &
-                     normalVelocity, oldSSH, dt, vertAleTransportTop, &
-                     err, newHighFreqThickness)!{{{
+                     normalVelocity, oldSSH, dt, ALE_Thickness, &
+                     vertAleTransportTop, err, newHighFreqThickness)!{{{
 
       !-----------------------------------------------------------------
       ! input variables
@@ -3074,6 +3074,9 @@ contains
       ! output variables
       !-----------------------------------------------------------------
 
+      real (kind=RKIND), dimension(:,:), intent(inout) :: &
+         ALE_Thickness
+
       real (kind=RKIND), dimension(:,:), intent(out) :: &
          vertAleTransportTop     !< [out] vertical transport top of cell
 
@@ -3094,11 +3097,11 @@ contains
          div_hu_btr     ! divergence of h*u for barotropic u
 
       real (kind=RKIND), dimension(:), allocatable :: &
+         ALE_thickness, &
          projectedSSH ! projectedSSH: projected SSH at a new time
 
       real (kind=RKIND), dimension(:,:), allocatable :: &
-         div_hu,       &! divergence of (thickness*velocity)
-         ALE_Thickness  ! ALE thickness at new time
+         div_hu       ! divergence of (thickness*velocity)
 
       ! End preamble
       !-----------------------------------------------------------------
@@ -3114,8 +3117,8 @@ contains
       end if
 
       allocate(div_hu(nVertLevels, nCellsAll), &
-               projectedSSH(nCellsAll), &
-               ALE_Thickness(nVertLevels, nCellsAll))
+               ALE_thickness(nCellsAll),       &
+               projectedSSH(nCellsAll))
       !$acc enter data create(projectedSSH, ALE_Thickness, div_hu)
 
       ! Only need to compute over 0 and 1 halos
@@ -3208,8 +3211,8 @@ contains
 
       !$acc exit data delete(projectedSSH, ALE_Thickness, div_hu)
       deallocate(div_hu, &
-                 projectedSSH, &
-                 ALE_Thickness)
+                 ALE_thickness, &
+                 projectedSSH)
 
    !--------------------------------------------------------------------
 
