@@ -101,7 +101,7 @@ module ocn_vertical_remap
          heightCellNow, heightEdgeNow, & ! depth at layer interfaces (lagrangian grid)
          heightCellNew, heightEdgeNew    ! depth at layer interfaces (new target grid)
 
-      real (kind=RKIND), dimension(:, :), pointer :: layerThickness, restingThickness, layerThicknessNew
+      real (kind=RKIND), dimension(:, :), pointer :: layerThicknessLag, restingThickness, layerThickness, layerThicknessTarget
       real (kind=RKIND), dimension(:, :), pointer :: normalVelocity
       real (kind=RKIND), dimension(:, :), pointer :: highFreqThickness,lowFreqDivergence
       real (kind=RKIND), dimension(:, :, :), pointer :: tracersGroup
@@ -125,8 +125,9 @@ module ocn_vertical_remap
 
       call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
 
-      call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThickness, timeLevel)
-      call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessNew, timeLevel)
+      call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLag, timeLevel)
+      call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, timeLevel)
+      call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel)
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
       if (config_use_freq_filtered_thickness) then
          call mpas_pool_get_array(statePool, 'highFreqThickness', highFreqThickness, timeLevel)
@@ -148,10 +149,10 @@ module ocn_vertical_remap
       ! Currently, zstar coordinate is hard-coded
       if (associated(highFreqThickness)) then
          call ocn_vert_regrid(verticalMeshPool, layerThickness, &
-                              layerThicknessNew, err, highFreqThickness)
+                              layerThicknessTarget, err, highFreqThickness)
       else
          call ocn_vert_regrid(verticalMeshPool, layerThickness, &
-                              layerThicknessNew, err)
+                              layerThicknessTarget, err)
       endif
       ! Compute the depth of the top of each layer between bottomDepth and -ssh
       ! (rather than between -bottomDepth and ssh due to PPR limitations)
@@ -166,13 +167,13 @@ module ocn_vertical_remap
          ! reconstruct "now" heights
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
             heightCellNow(k, iCell) = &
-               heightCellNow(k + 1, iCell) - layerThickness(k, iCell)
+               heightCellNow(k + 1, iCell) - layerThicknessLag(k, iCell)
          end do
 
          ! reconstruct "new" heights
          do k = maxLevelCell(iCell), minLevelCell(iCell) + 1, -1
             heightCellNew(k, iCell) = &
-               heightCellNew(k + 1, iCell) - layerThicknessNew(k, iCell)
+               heightCellNew(k + 1, iCell) - layerThicknessTarget(k, iCell)
          end do
 
          ! We force the reconstruction to agree on the total baroclinic depth so we don't have propagagtion of floating point errors
@@ -182,16 +183,16 @@ module ocn_vertical_remap
             call mpas_log_write('remap negative: cell $i, zNew(2) = $r, hNew(1) = $r, zNew(1) = zNow(1) = $r', &
                                 intArgs=(/iCell/), &
                                 realArgs=(/heightCellNew(minLevelCell(iCell) + 1, iCell), &
-                                           layerThicknessNew(minLevelCell(iCell),iCell), &
+                                           layerThicknessTarget(minLevelCell(iCell),iCell), &
                                            heightCellNew(minLevelCell(iCell), iCell)/))
          endif
-         predSSH = heightCellNew(minLevelCell(iCell)+1, iCell) - layerThicknessNew(minLevelCell(iCell), iCell)
+         predSSH = heightCellNew(minLevelCell(iCell)+1, iCell) - layerThicknessTarget(minLevelCell(iCell), iCell)
          if (abs(predSSH - heightCellNew(minLevelCell(iCell), iCell)) > 0.1_RKIND .or. iCell == err) then
             do k = minLevelCell(iCell), maxLevelCell(iCell)
                call mpas_log_write('remap cell $i, k $i, zNow = $r, zNew = $r', &
                                    intArgs=(/iCell, k/), realArgs=(/heightCellNow(k, iCell), heightCellNew(k, iCell)/))
                call mpas_log_write('remap cell $i, k $i, hNow = $r, hNew = $r', &
-                                   intArgs=(/iCell, k/), realArgs=(/layerThickness(k, iCell), layerThicknessNew(k, iCell)/))
+                                   intArgs=(/iCell, k/), realArgs=(/layerThicknessLag(k, iCell), layerThicknessTarget(k, iCell)/))
             end do
             call mpas_log_write('remap cell $i, zNew(2) - hNew(1) = $r, zNew(1) = zNow(1) = $r', &
                                 intArgs=(/iCell/), realArgs=(/predSSH, heightCellNew(minLevelCell(iCell), iCell)/))
@@ -200,6 +201,10 @@ module ocn_vertical_remap
       end do
       !$omp end do
       !$omp end parallel
+
+      ! Assign new layerThicknesses
+
+      layerThickness = layerThicknessTarget
 
 #ifdef MPAS_OPENACC
       !$acc parallel loop &
@@ -223,8 +228,8 @@ module ocn_vertical_remap
          do k = kmin, kmax
             ! central differenced
             layerThickEdgeNew(k,iEdge) = 0.5_RKIND * &
-                                         (layerThicknessNew(k,cell1) + &
-                                          layerThicknessNew(k,cell2))
+                                         (layerThickness(k,cell1) + &
+                                          layerThickness(k,cell2))
          end do
       end do
 #ifndef MPAS_OPENACC
@@ -419,20 +424,20 @@ module ocn_vertical_remap
                      totalTracerNow = 0.0_RKIND
                      totalTracerNew = 0.0_RKIND
                      do k = kTop, kBot
-                        totalTracerNow = totalTracerNow + layerThickness(k, iCell) * dataNow(1, iTrac, k)
-                        totalTracerNew = totalTracerNew + layerThicknessNew(k, iCell) * dataNew(1, iTrac, k)
+                        totalTracerNow = totalTracerNow + layerThicknessLag(k, iCell) * dataNow(1, iTrac, k)
+                        totalTracerNew = totalTracerNew + layerThickness(k, iCell) * dataNew(1, iTrac, k)
                      end do
                      if (abs((totalTracerNew - totalTracerNow) / totalTracerNow) > 0.01_RKIND) then
                         do k = kTop, kBot
-                           if (layerThicknessNew(k, iCell) < 1.0E-3_RKIND) &
+                           if (layerThickness(k, iCell) < 1.0E-3_RKIND) &
                                call mpas_log_write('layerThicknessNew($i, $i) = $r', intArgs=(/k, iCell/), &
-                                                   realArgs=(/layerThicknessNew(k,iCell)/), messageType=MPAS_LOG_CRIT)
+                                                   realArgs=(/layerThickness(k,iCell)/), messageType=MPAS_LOG_CRIT)
                            call mpas_log_write('iCell $i, k $i, zNow $r, hNow $r, trNow $r', &
                                                intArgs=(/iCell, k/), &
-                                               realArgs=(/heightCellNow(k,iCell), layerThickness(k, iCell), dataNow(1, iTrac, k)/))
+                                               realArgs=(/heightCellNow(k,iCell), layerThicknessLag(k, iCell), dataNow(1, iTrac, k)/))
                            call mpas_log_write('iCell $i, k $i, zNew $r, hNew $r, trNew $r', &
                                                intArgs=(/iCell, k/), &
-                                               realArgs=(/heightCellNew(k, iCell), layerThicknessNew(k, iCell), dataNew(1, iTrac, k)/))
+                                               realArgs=(/heightCellNew(k, iCell), layerThickness(k, iCell), dataNew(1, iTrac, k)/))
                         end do
                         k = kBot + 1
                         call mpas_log_write('iCell $i, k $i, zNow $r, zNew $r', &
@@ -455,9 +460,6 @@ module ocn_vertical_remap
             end if
          end if
       end do
-
-      ! Assign new layerThicknesses
-      layerThickness = layerThicknessNew
 
       deallocate(heightCellNow)
       deallocate(heightEdgeNow)
