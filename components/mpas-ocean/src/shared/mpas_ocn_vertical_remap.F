@@ -298,6 +298,10 @@ module ocn_vertical_remap
          end do
          !$omp end do
          !$omp end parallel
+         call mpas_dmpar_field_halo_exch(domain, 'highFreqThickness', &
+                                         timeLevel=timeLevel)
+         call mpas_dmpar_field_halo_exch(domain, 'lowFreqDivergence', &
+                                         timeLevel=timeLevel)
       else
          !$omp parallel
          !$omp do schedule(runtime) &
@@ -326,6 +330,8 @@ module ocn_vertical_remap
          !$omp end do
          !$omp end parallel
       end if
+      call mpas_dmpar_field_halo_exch(domain, 'normalVelocity', &
+                                      timeLevel=timeLevel)
       deallocate(dataNow,dataNew)
       deallocate(bcUpper,bcLower)
       call work%free()
@@ -335,7 +341,7 @@ module ocn_vertical_remap
       call mpas_pool_begin_iteration(tracersPool)
       do while ( mpas_pool_get_next_member(tracersPool, groupItr) )
          if ( groupItr % memberType == MPAS_POOL_FIELD ) then
-            call mpas_pool_get_array(tracersPool, groupItr % memberName, tracersGroup, 2)
+            call mpas_pool_get_array(tracersPool, groupItr % memberName, tracersGroup, timeLevel)
             if ( associated(tracersGroup) ) then
 
                nTracers = size(tracersGroup, dim=1)
@@ -381,6 +387,9 @@ module ocn_vertical_remap
                end do
                !$omp end do
                !$omp end parallel
+
+               ! Halo update on all tracer groups
+               call mpas_dmpar_field_halo_exch(domain, groupItr%memberName, timeLevel=timeLevel)
 
                deallocate(dataNow,dataNew)
                deallocate(bcUpper,bcLower)
