@@ -146,7 +146,6 @@ module ocn_vertical_remap
 
       ! Compute new layer thicknesses based on vertical coordinate choice
       ! Currently, zstar coordinate is hard-coded
-      call mpas_log_write('Call ocn_vert_regrid')
       if (associated(highFreqThickness)) then
          call ocn_vert_regrid(verticalMeshPool, layerThickness, &
                               layerThicknessNew, err, highFreqThickness)
@@ -157,22 +156,21 @@ module ocn_vertical_remap
       ! Compute the depth of the top of each layer between bottomDepth and -ssh
       ! (rather than between -bottomDepth and ssh due to PPR limitations)
 
-      !call mpas_log_write('Prep remap')
       !$omp parallel
       !$omp do schedule(runtime) private(k, predSSH)
       do iCell = 1, nCells
          if (maxLevelCell(iCell) < 1) cycle
-         heightCellNow(maxLevelCell(iCell), iCell) = bottomDepth(iCell) - layerThickness(maxLevelCell(iCell), iCell)
-         heightCellNew(maxLevelCell(iCell), iCell) = bottomDepth(iCell) - layerThicknessNew(maxLevelCell(iCell), iCell)
+         heightCellNow(maxLevelCell(iCell) + 1:, iCell) = bottomDepth(iCell)
+         heightCellNew(maxLevelCell(iCell) + 1:, iCell) = bottomDepth(iCell)
 
          ! reconstruct "now" heights
-         do k = maxLevelCell(iCell) - 1, minLevelCell(iCell), -1
+         do k = maxLevelCell(iCell), minLevelCell(iCell), -1
             heightCellNow(k, iCell) = &
                heightCellNow(k + 1, iCell) - layerThickness(k, iCell)
          end do
 
          ! reconstruct "new" heights
-         do k = maxLevelCell(iCell) - 1, minLevelCell(iCell)+1, -1
+         do k = maxLevelCell(iCell), minLevelCell(iCell) + 1, -1
             heightCellNew(k, iCell) = &
                heightCellNew(k + 1, iCell) - layerThicknessNew(k, iCell)
          end do
@@ -180,6 +178,13 @@ module ocn_vertical_remap
          ! We force the reconstruction to agree on the total baroclinic depth so we don't have propagagtion of floating point errors
          heightCellNew(minLevelCell(iCell), iCell) = heightCellNow(minLevelCell(iCell), iCell)
 
+         if (heightCellNew(minLevelCell(iCell) + 1, iCell) - heightCellNew(minLevelCell(iCell), iCell) < 1.0E-3_RKIND) then
+            call mpas_log_write('remap negative: cell $i, zNew(2) = $r, hNew(1) = $r, zNew(1) = zNow(1) = $r', &
+                                intArgs=(/iCell/), &
+                                realArgs=(/heightCellNew(minLevelCell(iCell) + 1, iCell), &
+                                           layerThicknessNew(minLevelCell(iCell),iCell), &
+                                           heightCellNew(minLevelCell(iCell), iCell)/))
+         endif
          predSSH = heightCellNew(minLevelCell(iCell)+1, iCell) - layerThicknessNew(minLevelCell(iCell), iCell)
          if (abs(predSSH - heightCellNew(minLevelCell(iCell), iCell)) > 0.1_RKIND .or. iCell == err) then
             do k = minLevelCell(iCell), maxLevelCell(iCell)
@@ -262,7 +267,6 @@ module ocn_vertical_remap
 
       !----------------------------------------------------------------------------
       ! ACTUAL REMAPPING FROM HERE
-      !call mpas_log_write('Do remap')
 
       nDoFs = 1 ! always 1 for MPAS, it'd be >1 for DG methods (with more DoF per layer)
 
@@ -334,7 +338,6 @@ module ocn_vertical_remap
 
             dataNow(1, 1, 1:nLayers) = normalVelocity(kTop:kBot, iEdge)
 
-            !call mpas_log_write('iEdge $i, Call rmap1d for momentum', intArgs=(/iEdge/))
             call rmap1d(nLevels, nLevels, nVars, nDoFs, &
                heightEdgeNow(kTop:kBot+1, iEdge), &
                heightEdgeNew(kTop:kBot+1, iEdge), &
@@ -345,6 +348,9 @@ module ocn_vertical_remap
             totalMomentumNow = 0.0_RKIND
             totalMomentumNew = 0.0_RKIND
             do k = kTop, kBot
+               if (layerThickEdgeMean(k, iEdge) < 1.0E-3_RKIND) &
+                   call mpas_log_write('layerThickEdgeMean($i, $i) = $r', intArgs=(/k, iEdge/), &
+                                       realArgs=(/layerThickEdgeMean(k,iEdge)/), messageType=MPAS_LOG_CRIT)
                totalMomentumNow = totalMomentumNow + layerThickEdgeMean(k, iEdge) * dataNow(1, 1, k)
                totalMomentumNew = totalMomentumNew + layerThickEdgeNew(k, iEdge) * dataNew(1, 1, k)
             end do
@@ -379,9 +385,9 @@ module ocn_vertical_remap
                bcUpper%bcopt = bc_upper
                bcLower%bcopt = bc_lower
 
-               !$omp parallel
-               !$omp do schedule(runtime) &
-               !$omp private(iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work, totalTracerNew, totalTracerNow)
+               !!$omp parallel
+               !!$omp do schedule(runtime) &
+               !!$omp private(iTrac, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work, totalTracerNew, totalTracerNow)
                do iCell = 1, nCells
 
                   kTop = minLevelCell(iCell)
@@ -418,22 +424,29 @@ module ocn_vertical_remap
                      end do
                      if (abs((totalTracerNew - totalTracerNow) / totalTracerNow) > 0.01_RKIND) then
                         do k = kTop, kBot
-                           call mpas_log_write('iCell $i, k $i, hNow $r, trNow $r', &
+                           if (layerThicknessNew(k, iCell) < 1.0E-3_RKIND) &
+                               call mpas_log_write('layerThicknessNew($i, $i) = $r', intArgs=(/k, iCell/), &
+                                                   realArgs=(/layerThicknessNew(k,iCell)/), messageType=MPAS_LOG_CRIT)
+                           call mpas_log_write('iCell $i, k $i, zNow $r, hNow $r, trNow $r', &
                                                intArgs=(/iCell, k/), &
-                                               realArgs=(/layerThickness(k, iCell), dataNow(1, iTrac, k)/))
-                           call mpas_log_write('iCell $i, k $i, hNew $r, trNew $r', &
+                                               realArgs=(/heightCellNow(k,iCell), layerThickness(k, iCell), dataNow(1, iTrac, k)/))
+                           call mpas_log_write('iCell $i, k $i, zNew $r, hNew $r, trNew $r', &
                                                intArgs=(/iCell, k/), &
-                                               realArgs=(/layerThicknessNew(k, iCell), dataNew(1, iTrac, k)/))
+                                               realArgs=(/heightCellNew(k, iCell), layerThicknessNew(k, iCell), dataNew(1, iTrac, k)/))
                         end do
-                        call mpas_log_write('iCell $i, bottomDepth $r', messageType=MPAS_LOG_CRIT, intArgs=(/iCell/), realArgs=(bottomDepth(iCell)))
+                        k = kBot + 1
+                        call mpas_log_write('iCell $i, k $i, zNow $r, zNew $r', &
+                                            intArgs=(/iCell, k/), &
+                                            realArgs=(/heightCellNow(k, iCell), heightCellNew(k, iCell)/))
+                        call mpas_log_write('iCell $i, bottomDepth $r', messageType=MPAS_LOG_CRIT, intArgs=(/iCell/), realArgs=(/bottomDepth(iCell)/))
                         call mpas_log_write('totalTracer diff exceeds 0.01 for iTrac $i, iCell $i', messageType=MPAS_LOG_CRIT, intArgs=(/iTrac, iCell/))
                      endif
                      tracersGroup(iTrac, kTop:kBot, iCell) = dataNew(1, iTrac, 1:nLayers)
                   end do
 
                end do
-               !$omp end do
-               !$omp end parallel
+               !!$omp end do
+               !!$omp end parallel
 
                deallocate(dataNow,dataNew)
                deallocate(bcUpper,bcLower)
