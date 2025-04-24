@@ -102,7 +102,7 @@ module ocn_vertical_remap
          heightCellNow, heightEdgeNow, & ! depth at layer interfaces (lagrangian grid)
          heightCellNew, heightEdgeNew    ! depth at layer interfaces (new target grid)
 
-      real (kind=RKIND), dimension(:, :), pointer :: layerThickness, restingThickness
+      real (kind=RKIND), dimension(:, :), pointer :: layerThicknessLag, restingThickness, layerThickness, layerThicknessTarget
       real (kind=RKIND), dimension(:, :), pointer :: normalVelocity
       real (kind=RKIND), dimension(:, :), pointer :: highFreqThickness,lowFreqDivergence
       real (kind=RKIND), dimension(:, :, :), pointer :: tracersGroup
@@ -122,7 +122,9 @@ module ocn_vertical_remap
 
       call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
 
-      call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThickness, timeLevel)
+      call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLag, timeLevel)
+      call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, timeLevel)
+      call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel)
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
       if (config_use_freq_filtered_thickness) then
          call mpas_pool_get_array(statePool, 'highFreqThickness', highFreqThickness, timeLevel)
@@ -144,11 +146,11 @@ module ocn_vertical_remap
       ! Compute new layer thicknesses based on vertical coordinate choice
       ! Currently, zstar coordinate is hard-coded
       if (associated(highFreqThickness)) then
-         call ocn_vert_regrid(verticalMeshPool, layerThickness, &
-                              layerThicknessNew, err, highFreqThickness)
+         call ocn_vert_regrid(verticalMeshPool, layerThicknessLag, &
+                              layerThicknessTarget, err, highFreqThickness)
       else
-         call ocn_vert_regrid(verticalMeshPool, layerThickness, &
-                              layerThicknessNew, err)
+         call ocn_vert_regrid(verticalMeshPool, layerThicknessLag, &
+                              layerThicknessTarget, err)
       endif
 
       ! Compute the layer interface locations between bottomDepth and -ssh
@@ -163,19 +165,27 @@ module ocn_vertical_remap
          ! reconstruct "now" heights
          do k = maxLevelCell(iCell), minLevelCell(iCell), -1
             heightCellNow(k, iCell) = &
-               heightCellNow(k + 1, iCell) - layerThickness(k, iCell)
+               heightCellNow(k + 1, iCell) - layerThicknessLag(k, iCell)
          end do
 
          ! reconstruct "new" heights
          heightCellNew(minLevelCell(iCell), iCell) = heightCellNow(minLevelCell(iCell), iCell)
          do k = maxLevelCell(iCell), minLevelCell(iCell)+1, -1
             heightCellNew(k, iCell) = &
-               heightCellNew(k + 1, iCell) - layerThicknessNew(k, iCell)
+               heightCellNew(k + 1, iCell) - layerThicknessTarget(k, iCell)
          end do
-         predSSH = heightCellNew(minLevelCell(iCell)+1, iCell) - layerThicknessNew(minLevelCell(iCell), iCell)
+
+         ! We force the reconstruction to agree on the total baroclinic depth so we don't have propagagtion of floating point errors
+         heightCellNew(minLevelCell(iCell), iCell) = heightCellNow(minLevelCell(iCell), iCell)
+
+         predSSH = heightCellNew(minLevelCell(iCell)+1, iCell) - layerThicknessTarget(minLevelCell(iCell), iCell)
       end do
       !$omp end do
       !$omp end parallel
+
+      ! Assign new layerThicknesses
+
+      layerThickness = layerThicknessTarget
 
 #ifdef MPAS_OPENACC
       !$acc parallel loop &
@@ -199,8 +209,8 @@ module ocn_vertical_remap
          do k = kmin, kmax
             ! central differenced
             layerThickEdgeNew(k,iEdge) = 0.5_RKIND * &
-                                         (layerThicknessNew(k,cell1) + &
-                                          layerThicknessNew(k,cell2))
+                                         (layerThickness(k,cell1) + &
+                                          layerThickness(k,cell2))
          end do
       end do
 #ifndef MPAS_OPENACC
