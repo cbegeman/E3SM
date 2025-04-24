@@ -4043,14 +4043,16 @@ contains
       type (mpas_pool_type), pointer :: meshPool, statePool, tracersPool
       type (mpas_pool_type), pointer :: forcingPool
 
-      real (kind=RKIND), dimension(:, :), pointer :: layerThickness, normalVelocity
+      real (kind=RKIND), dimension(:, :), pointer :: layerThickness, normalVelocity, layerThicknessLag, layerThicknessTarget, layerThicknessCur
       real (kind=RKIND), dimension(:, :, :), pointer :: activeTracers
 
+      integer, dimension(:), pointer :: minLevelCell, minLevelEdgeTop, minLevelVertexTop
       integer, dimension(:), pointer :: maxLevelCell, maxLevelEdgeBot, maxLevelVertexBot
+      integer, dimension(:,:), pointer :: edgesOnCell
 
       real (kind=RKIND), dimension(:), pointer :: real1DArr
 
-      integer :: iCell, iEdge, iTracer, k
+      integer :: i, iCell, iEdge, iTracer, k
 
       logical :: fatalErrorDetected
 
@@ -4078,7 +4080,7 @@ contains
          velNanFound = .false.
          tracersNanFound = .false.
 
-         minLayerThickness = 1.0E-2_RKIND
+         minLayerThickness = 5.0E-1_RKIND
          maxLayerThickness = 500.0_RKIND
          debugFilename = ocn_build_log_filename('mpas_ocean_block_stats_', block % blockID)
 
@@ -4092,11 +4094,18 @@ contains
          call mpas_pool_get_dimension(meshPool, 'nEdgesSolve', nEdgesSolve)
          call mpas_pool_get_dimension(meshPool, 'nVerticesSolve', nVerticesSolve)
 
+         call mpas_pool_get_array(meshPool, 'minLevelCell', minLevelCell)
          call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
+         call mpas_pool_get_array(meshPool, 'edgesOnCell', edgesOnCell)
+         call mpas_pool_get_array(meshPool, 'minLevelEdgeTop', minLevelEdgeTop)
+         call mpas_pool_get_array(meshPool, 'minLevelVertexTop', minLevelVertexTop)
          call mpas_pool_get_array(meshPool, 'maxLevelEdgeBot', maxLevelEdgeBot)
          call mpas_pool_get_array(meshPool, 'maxLevelVertexBot', maxLevelVertexBot)
 
          call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel=timeLevelLocal)
+         call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessCur, timeLevel=1)
+         call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLag, timeLevel=timeLevelLocal)
+         call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, timeLevel=timeLevelLocal)
          call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel=timeLevelLocal)
          call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracers, timeLevel=timeLevelLocal)
 
@@ -4104,14 +4113,29 @@ contains
          do iCell = 1, nCellsSolve
             do k = minLevelCell(iCell), maxLevelCell(iCell)
                thickNanFound = thickNanFound .or. ( .not. layerThickness(k, iCell) == layerThickness(k, iCell) )
-               if (layerThickness(k,iCell) < minLayerThickness .or. layerThickness(k,iCell) > maxLayerThickness) &
+               if (layerThickness(k,iCell) < minLayerThickness .or. layerThickness(k,iCell) > maxLayerThickness) then
                   thickOutBounds = .true.
-                  !call mpas_log_write('layerThickness($i, $i) = , out of bounds', intArgs=(/k, iCell/), realArgs=(/layerThickness(k,iCell)/))
+               endif
                do iTracer = 1, size(activeTracers, dim=1)
                   tracersNanFound = tracersNanFound .or. &
                                   ( .not. activeTracers(iTracer, k, iCell) == activeTracers(iTracer, k, iCell) )
                end do
             end do
+            if (thickOutBounds) then
+               do k = minLevelCell(iCell), maxLevelCell(iCell)
+                  call mpas_log_write('layerThickness($i, $i) = $r', intArgs=(/k, iCell/), realArgs=(/layerThickness(k,iCell)/))
+                  call mpas_log_write('layerThicknessCur($i, $i) = $r', intArgs=(/k, iCell/), realArgs=(/layerThicknessCur(k,iCell)/))
+                  call mpas_log_write('layerThicknessLag($i, $i) = $r', intArgs=(/k, iCell/), realArgs=(/layerThicknessLag(k,iCell)/))
+                  call mpas_log_write('layerThicknessTarget($i, $i) = $r', intArgs=(/k, iCell/), realArgs=(/layerThicknessTarget(k,iCell)/))
+                  !do i = 1, nEdgesOnCell(iCell)
+                  !   iEdge = edgesOnCell(i, iCell)
+                  !   call mpas_log_write('iCell $i: kBot $i, normalVelocity($i, $i) = $r', intArgs=(/iCell, maxLevelEdgeBot(iEdge), k, iEdge/), &
+                  !                       realArgs=(/normalVelocity(k,iEdge)/))
+                  !end do
+               end do
+               call mpas_log_write('iCell $i: zBed = $r, out of bounds', intArgs=(/iCell/), &
+                                   realArgs=(/bottomDepth(iCell)/), messageType=MPAS_LOG_CRIT)
+            end if
          end do
 
          do iEdge = 1, nEdgesSolve
