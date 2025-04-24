@@ -288,7 +288,7 @@ module ocn_time_integration_split_ab2
 
       ! Remap variables
       real (kind=RKIND), dimension(:,:), pointer :: &
-         layerThicknessLagNew
+         layerThicknessLagCur, layerThicknessLagNew
 
       ! These are public variables used from the diagnostics module
       ! indexSurfaceVelocityZonal, indexSurfaceVelocityMeridional
@@ -388,11 +388,10 @@ module ocn_time_integration_split_ab2
       call mpas_pool_get_array(statePool, 'lowFreqDivergence', &
                                            lowFreqDivergenceNew, 2)
 
-      call mpas_log_write("get layerThicknessLag")
       call mpas_pool_get_array(statePool, 'layerThicknessTarget', &
                                            layerThicknessTarget, 1)
+      call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagCur, 1)
       call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
-      call mpas_log_write("got layerThicknessLag")
 
       call mpas_pool_get_dimension_scalar(tracersPool, 'index_salinity', &
                                                         indexSalinity)
@@ -442,19 +441,35 @@ module ocn_time_integration_split_ab2
 #endif
 
       if ( configVertAdvMethod == vertAdvRemap ) then
-         call mpas_timer_start("vertical remap")
-         call mpas_log_write('Validate ocean state timeLevel=1 before remap')
-         call ocn_validate_state(domain, timeLevel=1)
-         call mpas_log_write('Validate ocean state timeLevel=2 before remap')
-         call ocn_validate_state(domain, timeLevel=2)
-         ! Perform the remapping
-         call ocn_remap_vert_state(block, err, 1)
-         call mpas_log_write('Validate ocean state timeLevel=1 after remap')
-         call ocn_validate_state(domain, timeLevel=1)
-         call mpas_log_write('Validate ocean state timeLevel=2 after remap')
-         call ocn_validate_state(domain, timeLevel=2)
-
-         call mpas_timer_stop("vertical remap")
+        if ( associated(layerThicknessLagCur) ) then
+          call mpas_log_write("Update layerThicknessLagCur")
+#ifdef MPAS_OPENACC
+          !$acc loop collapse(2)
+#else
+          !$omp do schedule(runtime) private(k)
+#endif
+          do iCell= 1,nCellsAll
+          do k = 1,nVertLevels
+             ! Store the current, Lagrangian location for computation of the
+             ! Eulerian vertical velocity induced by remapping
+             layerThicknessLagCur(k,iCell) = layerThicknessCur(k,iCell)
+          end do
+          end do
+#ifndef MPAS_OPENACC
+           !$omp end do
+#endif
+        else
+          call mpas_log_write("layerThicknessLagNew not associated")
+        endif
+        call mpas_timer_start("vertical remap")
+        call mpas_log_write('Validate ocean state timeLevel=1 before remap')
+        call ocn_validate_state(domain, timeLevel=1)
+        ! Perform the remapping
+        ! The updated layerThickness goes in layerThicknessCur which is assigned to layerThicknessNew below
+        call ocn_remap_vert_state(block, err, 1)
+        call mpas_log_write('Validate ocean state timeLevel=1 after remap')
+        call ocn_validate_state(domain, timeLevel=1)
+        call mpas_timer_stop("vertical remap")
       end if
 
       ! Initialize * variables that are used to compute baroclinic
@@ -520,27 +535,6 @@ module ocn_time_integration_split_ab2
       !$omp end do
       !$omp end parallel
 #endif
-
-      if ( associated(layerThicknessLagNew) ) then
-        call mpas_log_write("Update layerThicknessLagNew")
-#ifdef MPAS_OPENACC
-      !$acc loop collapse(2)
-#else
-      !$omp do schedule(runtime) private(k)
-#endif
-         do iCell= 1,nCellsAll
-         do k = 1,nVertLevels
-            ! Store the current, Lagrangian location for computation of the
-            ! Eulerian vertical velocity induced by remapping
-            layerThicknessLagNew(k,iCell) = layerThicknessNew(k,iCell)
-         end do
-         end do
-#ifndef MPAS_OPENACC
-         !$omp end do
-#endif
-      else
-        call mpas_log_write("layerThicknessLagNew not associated")
-      endif
 
       call mpas_pool_begin_iteration(tracersPool)
       do while ( mpas_pool_get_next_member(tracersPool, groupItr))
@@ -2261,6 +2255,27 @@ module ocn_time_integration_split_ab2
                !$omp end do
                !$omp end parallel
 #endif
+               if ( associated(layerThicknessLagNew) ) then
+                 call mpas_log_write("Update layerThicknessLagNew")
+#ifdef MPAS_OPENACC
+                 !$acc loop collapse(2)
+#else
+                 !$omp do schedule(runtime) private(k)
+#endif           
+                 do iCell= 1,nCellsAll
+                 do k = 1,nVertLevels
+                    ! Store the current, Lagrangian location for computation of the
+                    ! Eulerian vertical velocity induced by remapping
+                    layerThicknessLagNew(k,iCell) = layerThicknessLagCur(k,iCell)
+                 end do
+                 end do
+#ifndef MPAS_OPENACC
+                !$omp end do
+#endif
+               else
+                 call mpas_log_write("layerThicknessLagNew not associated")
+               endif
+
 
             endif ! nowTimeStamp
 
