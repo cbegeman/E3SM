@@ -505,6 +505,7 @@ contains
       integer, intent(in) :: minLevelCell, maxLevelCell, nVertLevels
       integer, intent(out) :: iErr
 
+      real(kind=RKIND) :: minLayerThickness = 0.1
       integer :: k
 
       iErr = 0
@@ -526,7 +527,9 @@ contains
 
          k = maxLevelCell
          layerThickness(k) = bottomDepth - refBottomDepth(k-1)
-
+         if (layerThickness(k) < minLayerThickness) &
+            call mpas_log_write('layerThickness(kbot) $r = bottomDepth $r - refBottomDepth(kbot-1) $r', &
+                                realArgs=(/layerThickness(k), bottomDepth, refBottomDepth(k-1)/))
       endif
 
     end subroutine ocn_compute_z_level_layerThickness  !}}}
