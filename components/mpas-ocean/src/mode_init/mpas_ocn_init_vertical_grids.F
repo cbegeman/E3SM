@@ -640,9 +640,13 @@ contains
                if (bottomDepth .lt. minBottomDepthMid) then
                   ! Round up to cell above
                   maxLevelCell = maxLevelCell - 1
+                  call mpas_log_write(' Reduce maxLevelCell: bottomDepth $r < minBottomDepthMid $r; new bottomDepth $r', &
+                                      realArgs=(/bottomDepth, minBottomDepthMid, refBottomDepth(maxLevelCell)/))
                   bottomDepth = refBottomDepth(maxLevelCell)
                else if (bottomDepth .lt. minBottomDepth) then
                   ! Round down cell to the min_pbc_fraction.
+                  call mpas_log_write(' Change bottomDepth: bottomDepth $r < minBottomDepth $r; new bottomDepth $r', &
+                                      realArgs=(/bottomDepth, minBottomDepth, minBottomDepth/))
                   bottomDepth = minBottomDepth
                end if
             elseif (config_pc_alteration_type .eq. 'full_cell') then
