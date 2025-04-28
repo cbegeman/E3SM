@@ -384,7 +384,7 @@ module ocn_time_integration_si
 
       ! Remap variables
       real (kind=RKIND), dimension(:,:), pointer :: &
-         layerThicknessLagNew
+         layerThicknessLagCur, layerThicknessLagNew
 
       integer ::     &
          siLargeIter  ! Index of the large btr system iteration
