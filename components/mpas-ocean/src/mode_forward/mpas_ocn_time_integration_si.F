@@ -382,7 +382,7 @@ module ocn_time_integration_si
 
       ! Remap variables
       real (kind=RKIND), dimension(:,:), pointer :: &
-         layerThicknessLagNew
+         layerThicknessLagCur, layerThicknessLagNew
 
       integer ::     &
          siLargeIter  ! Index of the large btr system iteration
@@ -475,6 +475,9 @@ module ocn_time_integration_si
       call mpas_pool_get_array(statePool, 'layerThickness', &
                                            layerThicknessNew, 2)
 
+      call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagCur, 1)
+      call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
+
       call mpas_pool_get_array(statePool, 'highFreqThickness', &
                                            highFreqThicknessCur, 1)
       call mpas_pool_get_array(statePool, 'highFreqThickness', &
@@ -532,6 +535,35 @@ module ocn_time_integration_si
       endif
 
 #endif
+
+      if ( configVertAdvMethod == vertAdvRemap ) then
+        if ( associated(layerThicknessLagCur) ) then
+#ifdef MPAS_OPENACC
+          !$acc loop collapse(2)
+#else
+          !$omp do schedule(runtime) private(k)
+#endif
+          do iCell= 1,nCellsAll
+          do k = 1,nVertLevels
+             ! Store the current, Lagrangian location for computation of the
+             ! Eulerian vertical velocity induced by remapping
+             layerThicknessLagCur(k,iCell) = layerThicknessCur(k,iCell)
+          end do
+          end do
+#ifndef MPAS_OPENACC
+           !$omp end do
+#endif
+        endif
+        call mpas_timer_start("vertical remap")
+        call mpas_log_write('Validate ocean state timeLevel=1 before remap')
+        call ocn_validate_state(domain, timeLevel=1)
+        ! Perform the remapping
+        ! The updated layerThickness goes in layerThicknessCur which is assigned to layerThicknessNew below
+        call ocn_remap_vert_state(block, err, 1)
+        call mpas_log_write('Validate ocean state timeLevel=1 after remap')
+        call ocn_validate_state(domain, timeLevel=1)
+        call mpas_timer_stop("vertical remap")
+      end if
 
       ! Initialize * variables that are used to compute baroclinic
       ! tendencies below.
@@ -2413,6 +2445,24 @@ module ocn_time_integration_si
             !$omp end parallel
 #endif
 
+            if ( associated(layerThicknessLagNew) ) then
+#ifdef MPAS_OPENACC
+              !$acc loop collapse(2)
+#else
+              !$omp do schedule(runtime) private(k)
+#endif
+              do iCell= 1,nCellsAll
+              do k = 1,nVertLevels
+                 ! Store the current, Lagrangian location for computation of the
+                 ! Eulerian vertical velocity induced by remapping
+                 layerThicknessLagNew(k,iCell) = layerThicknessLagCur(k,iCell)
+              end do
+              end do
+#ifndef MPAS_OPENACC
+              !$omp end do
+#endif
+            endif
+
             if (config_compute_active_tracer_budgets) then
 
 #ifdef MPAS_OPENACC
@@ -2938,23 +2988,6 @@ module ocn_time_integration_si
       call mpas_timer_stop('si vmix halos')
 
       call mpas_timer_stop("si implicit vert mix")
-
-      if ( configVertAdvMethod == vertAdvRemap ) then
-
-         call mpas_timer_start("vertical remap")
-
-         call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
-
-         ! Store the current, Lagrangian location for computation of the
-         ! Eulerian vertical velocity induced by remapping
-         layerThicknessLagNew = layerThicknessNew
-
-         ! Perform the remapping
-         call ocn_remap_vert_state(block, err, 2)
-
-         call mpas_timer_stop("vertical remap")
-
-      end if
 
       call mpas_timer_start('si fini')
 
