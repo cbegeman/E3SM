@@ -28,6 +28,10 @@
 	<!-- Namelists for init run mode only -->
 	<!--**********************************-->
 	<nml_record name="partial_cells" mode="init">
+		<nml_option name="config_alter_ICs_for_minLayerThickness" type="logical" default_value=".false." units="unitless"
+					description="If true, initial conditions are altered according to the config_pc_alteration_type flag."
+					possible_values=".true. or .false."
+		/>
 		<nml_option name="config_alter_ICs_for_pcs" type="logical" default_value=".false." units="unitless"
 					description="If true, initial conditions are altered according to the config_pc_alteration_type flag."
 					possible_values=".true. or .false."
@@ -35,6 +39,10 @@
 		<nml_option name="config_pc_alteration_type" type="character" default_value="full_cell" units="unitless"
 					description="Determines the method of initial condition alteration for partial bottom (and possibly top) cells. 'partial_cell' alters layerThickness, interpolates all tracers in the bottom (and top) cell based on the bottomDepth (or ssh) variable, and alters bottomDepth (or ssh) to enforce the minimum pc fraction. 'full_cell' alters bottomDepth (or ssh) to have full cells everywhere, based on the refBottomDepth variable."
 					possible_values="'full_cell' or 'partial_cell'"
+		/>
+		<nml_option name="config_min_layer_thickness" type="real" default_value="1.0" units="unitless"
+					description="Determines the minimum layer thickness altering the initial conditions can create."
+					possible_values="Any non-negative real."
 		/>
 		<nml_option name="config_min_pc_fraction" type="real" default_value="0.10" units="unitless"
 					description="Determines the minimum fraction of a cell altering the initial conditions can create."

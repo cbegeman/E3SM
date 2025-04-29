@@ -532,6 +532,13 @@ contains
                                 realArgs=(/layerThickness(k), bottomDepth, refBottomDepth(k-1)/))
       endif
 
+      do k = minLevelCell, maxLevelCell
+         layerThickness(k) = refBottomDepth(k) - refBottomDepth(k-1)
+         if (layerThickness(k) < config_min_layer_thickness) then
+            call mpas_log_write('layerThickness is $r at level $i', realArgs=(/layerThickness(k)/), intArgs=(/k/))
+            call mpas_log_write('bottomDepth $r, ssh $r, maxLevelCell $i', messageType=MPAS_LOG_CRIT, realArgs=(/bottomDepth, ssh/), intArgs=(/k/))
+         end if
+      end do
     end subroutine ocn_compute_z_level_layerThickness  !}}}
 
 !***********************************************************************
@@ -609,6 +616,40 @@ contains
 
     end subroutine ocn_compute_z_star_layerThickness  !}}}
 
+
+!***********************************************************************
+!
+!  routine ocn_alter_maxLevelCell_for_minLayerThickness
+!
+!> \brief   Alter bottom depth for partial bottom cells
+!> \author  Mark Petersen
+!> \date    10/19/2015
+!> \details
+!>  This routine alters the bottom depth in a single column based on partial cell settings
+!
+!-----------------------------------------------------------------------
+    subroutine ocn_maxLevelCell_for_minLayerThickness(bottomDepth, minLevelCell, maxLevelCell, iErr)
+
+      real (kind=RKIND), intent(in) :: bottomDepth
+      integer, intent(inout) :: minLevelCell, maxLevelCell
+      integer, intent(out) :: iErr
+      real (kind=RKIND) :: meanLayerThickness, minLayerThickness
+
+      iErr = 0
+
+      minLayerThickness = config_min_layer_thickness
+      if (maxLevelCell > 1) then
+         if (config_alter_ICs_for_minLayerThickness) then
+
+            meanLayerThickness = bottomDepth / (maxLevelCell - minLevelCell + 1)
+            do while (meanLayerThickness < minLayerThickness)
+               maxLevelCell = maxLevelCell - 1
+               meanLayerThickness = bottomDepth / (maxLevelCell - minLevelCell + 1)
+            enddo
+         endif
+      endif
+
+    end subroutine ocn_maxLevelCell_for_minLayerThickness
 
 !***********************************************************************
 !
@@ -923,6 +964,7 @@ contains
 
          do iCell = 1, nCells
            ! alter pbcs
+           call ocn_maxLevelCell_for_minLayerThickness(bottomDepth(iCell), minLevelCell(iCell), maxLevelCell(iCell), iErr)
            call ocn_alter_bottomDepth_for_pbcs(bottomDepth(iCell), refBottomDepth, maxLevelCell(iCell), iErr)
            if(iErr .ne. 0) then
              call mpas_log_write( 'ocn_alter_bottomDepth_for_pbcs failed.', MPAS_LOG_CRIT)
