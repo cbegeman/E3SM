@@ -114,6 +114,7 @@ module ocn_vertical_remap
          return
       else
          call mpas_log_write('Do remap, timestep $i of $i', intArgs=(/itimestepLastRemap, config_vert_remap_interval/))
+         itimestepLastRemap = 0
       endif
 
       ! Remapping currently only supports one block for the whole domain rather
@@ -126,7 +127,7 @@ module ocn_vertical_remap
       call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
 
       call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLag, timeLevel)
-      call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, timeLevel)
+      call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, 1)
       call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel)
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
       if (config_use_freq_filtered_thickness) then
@@ -148,10 +149,10 @@ module ocn_vertical_remap
       ! Compute new layer thicknesses based on vertical coordinate choice
       ! Currently, zstar coordinate is hard-coded
       if (associated(highFreqThickness)) then
-         call ocn_vert_regrid(verticalMeshPool, layerThickness, &
+         call ocn_vert_regrid(verticalMeshPool, layerThicknessLag, &
                               layerThicknessTarget, err, highFreqThickness)
       else
-         call ocn_vert_regrid(verticalMeshPool, layerThickness, &
+         call ocn_vert_regrid(verticalMeshPool, layerThicknessLag, &
                               layerThicknessTarget, err)
       endif
       ! Compute the depth of the top of each layer between bottomDepth and -ssh
