@@ -4105,7 +4105,7 @@ contains
          call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel=timeLevelLocal)
          call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessCur, timeLevel=1)
          call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLag, timeLevel=timeLevelLocal)
-         call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, timeLevel=timeLevelLocal)
+         call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, timeLevel=1)
          call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel=timeLevelLocal)
          call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracers, timeLevel=timeLevelLocal)
 
