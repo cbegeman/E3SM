@@ -4080,7 +4080,7 @@ contains
          velNanFound = .false.
          tracersNanFound = .false.
 
-         minLayerThickness = 5.0E-1_RKIND
+         minLayerThickness = 0.0_RKIND
          maxLayerThickness = 500.0_RKIND
          debugFilename = ocn_build_log_filename('mpas_ocean_block_stats_', block % blockID)
 
@@ -4105,7 +4105,7 @@ contains
          call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel=timeLevelLocal)
          call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessCur, timeLevel=1)
          call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLag, timeLevel=timeLevelLocal)
-         call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, timeLevel=1)
+         call mpas_pool_get_array(statePool, 'layerThicknessTarget', layerThicknessTarget, timeLevel=timeLevelLocal)
          call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel=timeLevelLocal)
          call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracers, timeLevel=timeLevelLocal)
 
@@ -4123,7 +4123,7 @@ contains
             end do
             if (thickOutBounds) then
                do k = minLevelCell(iCell), maxLevelCell(iCell)
-                  call mpas_log_write('layerThickness($i, $i) = $r', intArgs=(/k, iCell/), realArgs=(/layerThickness(k,iCell)/))
+                  call mpas_log_write('time $i, layerThickness($i, $i) = $r', intArgs=(/timeLevelLocal, k, iCell/), realArgs=(/layerThickness(k,iCell)/))
                   call mpas_log_write('layerThicknessCur($i, $i) = $r', intArgs=(/k, iCell/), realArgs=(/layerThicknessCur(k,iCell)/))
                   call mpas_log_write('layerThicknessLag($i, $i) = $r', intArgs=(/k, iCell/), realArgs=(/layerThicknessLag(k,iCell)/))
                   call mpas_log_write('layerThicknessTarget($i, $i) = $r', intArgs=(/k, iCell/), realArgs=(/layerThicknessTarget(k,iCell)/))
