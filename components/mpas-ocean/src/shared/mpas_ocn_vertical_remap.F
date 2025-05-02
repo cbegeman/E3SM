@@ -302,7 +302,7 @@ module ocn_vertical_remap
          !$omp parallel
          !$omp do schedule(runtime) &
          !$omp private(kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
-         do iEdge = 1, nEdgesHalo(1)
+         do iEdge = 1, nEdges
 
             kTop = minLevelEdgeBot(iEdge)
             kBot = maxLevelEdgeTop(iEdge)
@@ -332,7 +332,7 @@ module ocn_vertical_remap
          !$omp parallel
          !$omp do schedule(runtime) &
          !$omp private(k, totalMomentumNow, totalMomentumNew, kTop, kBot, nLayers, nLevels, dataNow, dataNew, work)
-         do iEdge = 1, nEdgesHalo(1)
+         do iEdge = 1, nEdges
 
             kTop = minLevelEdgeBot(iEdge)
             kBot = maxLevelEdgeTop(iEdge)
