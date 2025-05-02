@@ -265,7 +265,8 @@ module ocn_time_integration_split_ab2
          sshTend                ! sea-surface height tendency
 
       real (kind=RKIND), dimension(:,:), pointer :: &
-         layerThicknessTarget,  &! layerThickness for ALE, vert velocity
+         layerThicknessTargetCur,  &! layerThickness for ALE, vert velocity
+         layerThicknessTargetNew,  &! layerThickness for ALE, vert velocity
          normalVelocityTend,    &! normal velocity tendency
          highFreqThicknessTend, &! thickness tendency for high-freq iter
          lowFreqDivergenceTend, &! thickness tendency for low freq
@@ -389,7 +390,9 @@ module ocn_time_integration_split_ab2
                                            lowFreqDivergenceNew, 2)
 
       call mpas_pool_get_array(statePool, 'layerThicknessTarget', &
-                                           layerThicknessTarget, 1)
+                                           layerThicknessTargetCur, 1)
+      call mpas_pool_get_array(statePool, 'layerThicknessTarget', &
+                                           layerThicknessTargetNew, 2)
       call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagCur, 1)
       call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
 
@@ -671,7 +674,7 @@ module ocn_time_integration_split_ab2
                            normalVelocityCur, stage1_tend_time)
 
 #ifdef MPAS_OPENACC
-         !$acc enter data copyin(layerThicknessCur, normalVelocityCur, sshCur, layerThicknessTarget)
+         !$acc enter data copyin(layerThicknessCur, normalVelocityCur, sshCur, layerThicknessTargetCur)
          !$acc update device(layerThickEdgeFlux)
          if (config_use_freq_filtered_thickness .or. associated(highFreqThicknessNew) ) then
             !$acc enter data create(highFreqThicknessNew)
@@ -755,12 +758,12 @@ module ocn_time_integration_split_ab2
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalVelocityCur, sshCur, dt, &
-                 layerThicknessTarget, vertAleTransportTop, err, highFreqThicknessNew)
+                 layerThicknessTargetCur, vertAleTransportTop, err, highFreqThicknessNew)
          else
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalVelocityCur, sshCur, dt, &
-                 layerThicknessTarget, vertAleTransportTop, err)
+                 layerThicknessTargetCur, vertAleTransportTop, err)
          endif
 
 #ifdef MPAS_OPENACC
@@ -1798,7 +1801,7 @@ module ocn_time_integration_split_ab2
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalTransportVelocity, sshCur, &
-                 dt, layerThicknessTarget, vertAleTransportTop, err, highFreqThicknessNew)
+                 dt, layerThicknessTargetCur, vertAleTransportTop, err, highFreqThicknessNew)
 #ifdef MPAS_OPENACC
             !$acc exit data delete(highFreqThicknessNew)
 #endif
@@ -1806,7 +1809,7 @@ module ocn_time_integration_split_ab2
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
                  layerThickEdgeFlux, normalTransportVelocity, sshCur, &
-                 dt, layerThicknessTarget, vertAleTransportTop, err)
+                 dt, layerThicknessTargetCur, vertAleTransportTop, err)
          endif
 #ifdef MPAS_OPENACC
          !$acc exit data delete(layerThicknessCur, sshCur)
@@ -2224,7 +2227,7 @@ module ocn_time_integration_split_ab2
                call ocn_vert_transport_velocity_top( &
                     verticalMeshPool, layerThicknessCur, &
                     layerThickEdgeFlux, normalTransportVelocity,sshCur, dt, &
-                    layerThicknessTarget, vertAleTransportTop, err)
+                    layerThicknessTargetCur, vertAleTransportTop, err)
 
                call ocn_tend_thick(tendPool, forcingPool)
 
@@ -2267,6 +2270,7 @@ module ocn_time_integration_split_ab2
                     ! Store the current, Lagrangian location for computation of the
                     ! Eulerian vertical velocity induced by remapping
                     layerThicknessLagNew(k,iCell) = layerThicknessLagCur(k,iCell)
+                    layerThicknessTargetNew(k,iCell) = layerThicknessTargetCur(k,iCell)
                  end do
                  end do
 #ifndef MPAS_OPENACC
