@@ -1634,7 +1634,8 @@ contains
                kmax = maxLevelCell(iCell)
 
                thickDepth = sum(layerThickness(kmin:kmax,iCell))
-               initH = bottomDepth(iCell) + landIceDraft(iCell)
+               initH = bottomDepth(iCell)
+               if (associated(landIceDraft)) initH = initH + landIceDraft(iCell)
                if (abs(thickDepth - initH) > 20.0_RKIND) then
                   consistentSSH = .false.
 
