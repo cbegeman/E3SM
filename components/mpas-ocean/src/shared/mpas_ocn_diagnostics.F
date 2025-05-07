@@ -3097,7 +3097,6 @@ contains
          div_hu_btr     ! divergence of h*u for barotropic u
 
       real (kind=RKIND), dimension(:), allocatable :: &
-         ALE_thickness, &
          projectedSSH ! projectedSSH: projected SSH at a new time
 
       real (kind=RKIND), dimension(:,:), allocatable :: &
@@ -3117,7 +3116,6 @@ contains
       end if
 
       allocate(div_hu(nVertLevels, nCellsAll), &
-               ALE_thickness(nCellsAll),       &
                projectedSSH(nCellsAll))
       !$acc enter data create(projectedSSH, ALE_Thickness, div_hu)
 
@@ -3171,10 +3169,10 @@ contains
       !
       if (present(newHighFreqThickness)) then
         call ocn_ALE_thickness(verticalMeshPool, projectedSSH, &
-                               ALE_thickness, err, newHighFreqThickness)
+                               layerThicknessTarget, err, newHighFreqThickness)
       else
         call ocn_ALE_thickness(verticalMeshPool, projectedSSH, &
-                               ALE_thickness, err)
+                               layerThicknessTarget, err)
       endif
 
       !
@@ -3200,7 +3198,7 @@ contains
          do k = maxLevelCell(iCell), minLevelCell(iCell)+1, -1
             vertAleTransportTop(k,iCell) = &
                 vertAleTransportTop(k+1,iCell) - div_hu(k,iCell) &
-                     - (ALE_Thickness(k,iCell) - &
+                     - (layerThicknessTarget(k,iCell) - &
                         oldLayerThickness(k,iCell))/dt
          end do
       end do
@@ -3211,7 +3209,6 @@ contains
 
       !$acc exit data delete(projectedSSH, ALE_Thickness, div_hu)
       deallocate(div_hu, &
-                 ALE_thickness, &
                  projectedSSH)
 
    !--------------------------------------------------------------------
