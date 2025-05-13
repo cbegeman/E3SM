@@ -934,58 +934,7 @@ contains
 
       case (thickEdgeFluxUpwind)
          ! Use upwind thickness as the edge flux value
-
-         if (config_use_subgrid_wetting_drying) then
-#ifdef MPAS_OPENACC
-         !$acc update host(ssh, normalVelocity, layerThickness)
-#endif
-
-            call ocn_subgrid_layerThickEdgeFlux_upwind(ssh, normalVelocity, layerThickness, layerThickEdgeFlux)
-
-#ifdef MPAS_OPENACC
-         !$acc update device(layerThickEdgeFlux)
-#endif
-
-         else
-#ifdef MPAS_OPENACC
-            !$acc parallel loop &
-            !$acc    present(normalVelocity, layerThickness, &
-            !$acc            minLevelEdgeBot, maxLevelEdgeTop, &
-            !$acc            layerThickEdgeFlux, cellsOnEdge) &
-            !$acc    private(k, kmin, kmax, cell1, cell2)
-#else
-            !$omp parallel
-            !$omp do schedule(runtime) private(k, kmin, kmax, cell1, cell2)
-#endif
-            do iEdge = 1, nEdgesAll
-               kmin = minLevelEdgeBot(iEdge)
-               kmax = maxLevelEdgeTop(iEdge)
-               cell1 = cellsOnEdge(1,iEdge)
-               cell2 = cellsOnEdge(2,iEdge)
-               do k=1,nVertLevels
-                  ! initialize layerThicknessEdgeFlux to avoid divide by
-                  ! zero and NaN problems.
-                  layerThickEdgeFlux(k,iEdge) = -1.0e34_RKIND
-               end do
-               do k = kmin,kmax
-                  if (normalVelocity(k,iEdge) > 0.0_RKIND) then
-                     layerThickEdgeFlux(k,iEdge) = layerThickness(k,cell1)
-                  elseif (normalVelocity(k,iEdge) < 0.0_RKIND) then
-                     layerThickEdgeFlux(k,iEdge) = layerThickness(k,cell2)
-                  else
-                     layerThickEdgeFlux(k,iEdge) = &
-                                         max(layerThickness(k,cell1), &
-                                             layerThickness(k,cell2))
-                  end if
-               end do
-            end do
-#ifndef MPAS_OPENACC
-            !$omp end do
-            !$omp end parallel
-#endif
-
-        end if
-        if (config_use_spatially_variable_upwind) then
+         if (config_use_spatially_variable_upwind) then
 #ifdef MPAS_OPENACC
             !$acc parallel loop &
             !$acc    present(layerThickEdgeMean, layerThickEdgeFlux, &
@@ -1010,18 +959,70 @@ contains
                                       (columnThickness - config_spatially_variable_upwind_hmin) / &
                                       (config_spatially_variable_upwind_hmax - config_spatially_variable_upwind_hmin)
               end if
-              kmin = minLevelEdgeBot(iEdge)
-              kmax = maxLevelEdgeTop(iEdge)
-              do k = kmin,kmax
-                 layerThickEdgeFlux(k,iEdge) = (1.0_RKIND - upwindFactor(iEdge)) * layerThickEdgeMean(k,iEdge) &
-                                             + upwindFactor(iEdge)* layerThickEdgeFlux(k,iEdge)
-              end do
             end do
 #ifndef MPAS_OPENACC
             !$omp end do
             !$omp end parallel
 #endif
-        endif
+         else
+            upwindFactor(:) = 1.0_RKIND
+         endif
+         if (config_use_subgrid_wetting_drying) then
+#ifdef MPAS_OPENACC
+            !$acc update host(ssh, normalVelocity, layerThickness)
+#endif
+
+            call ocn_subgrid_layerThickEdgeFlux_upwind(ssh, normalVelocity, layerThickness, layerThickEdgeFlux)
+
+#ifdef MPAS_OPENACC
+            !$acc update device(layerThickEdgeFlux)
+#endif
+
+         else
+#ifdef MPAS_OPENACC
+            !$acc parallel loop &
+            !$acc    present(normalVelocity, layerThickness, &
+            !$acc            minLevelEdgeBot, maxLevelEdgeTop, &
+            !$acc            layerThickEdgeFlux, cellsOnEdge) &
+            !$acc    private(k, kmin, kmax, cell1, cell2)
+#else
+            !$omp parallel
+            !$omp do schedule(runtime) private(k, kmin, kmax, cell1, cell2)
+#endif
+            do iEdge = 1, nEdgesAll
+               if (upwindFactor(iEdge) == 0.0_RKIND) then
+                  layerThickEdgeFlux(:, iEdge) = layerThickEdgeMean(:, iEdge)
+                  continue
+               endif
+               kmin = minLevelEdgeBot(iEdge)
+               kmax = maxLevelEdgeTop(iEdge)
+               cell1 = cellsOnEdge(1,iEdge)
+               cell2 = cellsOnEdge(2,iEdge)
+               do k=1,nVertLevels
+                  ! initialize layerThicknessEdgeFlux to avoid divide by
+                  ! zero and NaN problems.
+                  layerThickEdgeFlux(k,iEdge) = -1.0e34_RKIND
+               end do
+               do k = kmin,kmax
+                  if (normalVelocity(k,iEdge) > 0.0_RKIND) then
+                     layerThickEdgeFlux(k,iEdge) = layerThickness(k,cell1)
+                  elseif (normalVelocity(k,iEdge) < 0.0_RKIND) then
+                     layerThickEdgeFlux(k,iEdge) = layerThickness(k,cell2)
+                  else
+                     layerThickEdgeFlux(k,iEdge) = &
+                                         max(layerThickness(k,cell1), &
+                                             layerThickness(k,cell2))
+                  end if
+                  layerThickEdgeFlux(k,iEdge) = (1.0_RKIND - upwindFactor(iEdge)) * layerThickEdgeMean(k,iEdge) &
+                                              + upwindFactor(iEdge)* layerThickEdgeFlux(k,iEdge)
+               end do
+            end do
+#ifndef MPAS_OPENACC
+            !$omp end do
+            !$omp end parallel
+#endif
+
+        end if
       case (thickEdgeFluxConstant)
          ! Use linearized version H*u where H is constant in time
 
