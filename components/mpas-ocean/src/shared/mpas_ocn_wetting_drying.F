@@ -480,12 +480,12 @@ contains
 
       err = 0
 
-      call mpas_log_write('Barotropic wetdry start')
+      call mpas_log_write('Barotropic wetdry outflux update')
       wettingVelocityBarotropic(:) = 1.0_RKIND
 
       if (.not. config_use_wetting_drying .or. &
           .not. config_zero_drying_velocity) then
-         call mpas_log_write('Barotropic wetdry return')
+         call mpas_log_write('Barotropic wetdry outflux return')
          return
       endif
 
@@ -579,7 +579,6 @@ contains
       end do
       !$omp end do
       !$omp end parallel
-      call mpas_log_write('Barotropic wetdry finish')
 
    end subroutine ocn_wetting_drying_outflux_barotropic_factor !}}}
 
@@ -592,7 +591,8 @@ contains
 !> \date    03/19/2018
 !> \details
 !>  This routine adds wetting velocity opposed to drying motion
-!>  to prevent cells from drying.
+!>  to prevent cells from drying. It differs from ocn_wetting_drying_outflux_barotropic_factor in that it uses sshNew and does
+!>  not compute a predicted SSH itself based on the outgoing flux
 !
 !-----------------------------------------------------------------------
    subroutine ocn_wetting_drying_barotropic_factor(sshNew, btrVelocity, &
@@ -641,12 +641,11 @@ contains
 
       err = 0
 
-      call mpas_log_write('Barotropic wetdry start')
       wettingVelocityBarotropic(:) = 1.0_RKIND
+      call mpas_log_write('Barotropic wetdry update')
 
       if (.not. config_use_wetting_drying .or. &
           .not. config_zero_drying_velocity) then
-         call mpas_log_write('Barotropic wetdry return')
          return
       endif
 
@@ -727,7 +726,6 @@ contains
       end do
       !$omp end do
       !$omp end parallel
-      call mpas_log_write('Barotropic wetdry finish')
 
    end subroutine ocn_wetting_drying_barotropic_factor !}}}
 
