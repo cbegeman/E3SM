@@ -62,6 +62,7 @@ module ocn_wetting_drying
    ! Private module variables
    !
    !--------------------------------------------------------------------
+   integer, parameter :: logEdge = 10
    real(kind=RKIND), parameter :: eps = 1.0e-12_RKIND
 
 
@@ -506,7 +507,7 @@ contains
       ! need predicted transport velocity to limit drying flux
       hRampFactor = config_zero_drying_velocity_ramp_factor
       !$omp parallel
-      !$omp do schedule(runtime) private(i, iEdge, wct)
+      !$omp do schedule(runtime) private(i, iEdge, wct, hCrit, hRampMin, hRampMax, cellNei, sshNei, wctNei)
       do iCell = 1, nCellsAll
         ! Note that this is in contrast to how the baroclinic factor is determined, via only the outgoing flux
         ! Instead this uses the predicted ssh as usual
@@ -522,6 +523,8 @@ contains
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
+              if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic = 0, wct $r < hCrit $r', &
+                                                        realArgs=(/wct, hCrit/))
               wettingVelocityBarotropic(iEdge) = 0.0_RKIND
             end if
           end do
@@ -553,7 +556,13 @@ contains
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
               wettingVelocityBarotropic(iEdge) = &
-                tanh(hRampFactor * (wct - hRampMin)/hRampMin)
+                1.0_RKIND - tanh(hRampFactor * (hRampMax - wct)/(hRampMax - hRampMin))
+              if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic ramped = $r, wctCur = $r, wctNew = $r, hRampMin = $r, hCrit = $r', &
+                                                        realArgs=(/wettingVelocityBarotropic(iEdge), sshCur(iCell) + bottomDepth(iCell), &
+                                                                   wct, hRampMin, hCrit/))
+            else
+              if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic not updated in ramp from 1 = $r', &
+                                                        realArgs=(/wettingVelocityBarotropic(iEdge)/))
             end if
           end do
           if (config_zero_drying_velocity_gradSSH) then
@@ -573,7 +582,12 @@ contains
               end if
             end do
           end if
-
+        else
+          do i = 1, nEdgesOnCell(iCell)
+            iEdge = edgesOnCell(i, iCell)
+            if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic not updated from 1 = $r, wct = $r, hCrit = $r', &
+                                                      realArgs=(/wettingVelocityBarotropic(iEdge), wct, hCrit/))
+          end do
         end if
 
       end do
@@ -700,7 +714,7 @@ contains
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
               wettingVelocityBarotropic(iEdge) = &
-                tanh(hRampFactor * (wct - hRampMin)/hRampMin)
+                1.0_RKIND - tanh(hRampFactor * (hRampMax - wct)/(hRampMax - hRampMin))
             end if
           end do
           if (config_zero_drying_velocity_gradSSH) then
@@ -883,7 +897,7 @@ contains
                 if (k <= maxLevelEdgeBot(iEdge) .and. k >= minLevelEdgeTop(iEdge)) then
                   if ( normalVelocity(k, iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
                     wettingVelocityFactor(k, iEdge) = 1.0_RKIND - &
-                      tanh(hRampFactor * (columnThickness(iCell) - hRampMin)/hRampMin)
+                      tanh(hRampFactor * (columnThickness(iCell) - hRampMin)/(hRampMax - hRampMin))
                   end if
                 end if
               end do
