@@ -2129,6 +2129,29 @@ module ocn_time_integration_split
             !$omp end do
             !$omp end parallel
 #endif
+
+            ! Efficiency note: We really only need this to compute
+            ! layerThickEdgeFlux, density, pressure, and SSH
+            ! in this diagnostics solve.
+            call ocn_diagnostic_solve(dt, statePool, forcingPool, &
+                                      meshPool, verticalMeshPool, scratchPool, &
+                                      tracersPool, 2, full=.false.)
+            baroclinicThickness(:) = 0.0_RKIND
+            !$omp parallel
+            !$omp do schedule(runtime) &
+            !$omp private(cell1, cell2, k)
+            do iEdge = 1, nEdgesHalo(config_num_halos+1)
+               cell1 = cellsOnEdge(1,iEdge)
+               cell2 = cellsOnEdge(2,iEdge)
+               baroclinicThickness(iEdge) = layerThickEdgeFlux(minLevelEdgeBot(iEdge),iEdge)
+               do k = minLevelEdgeBot(iEdge)+1, maxLevelEdgeTop(iEdge)
+                  baroclinicThickness(iEdge) = baroclinicThickness(iEdge) + &
+                                 layerThickEdgeFlux(k,iEdge)
+               enddo
+            enddo ! iEdge
+            !$omp end do
+            !$omp end parallel
+
             allocate(wettingVelocityBaroclinicTemp(nEdgesAll + 1))
             call ocn_wetting_drying_outflux_barotropic_factor(baroclinicThickness, &
                       normalBarotropicVelocityNew, wctEdgeBaroclinic, dt, &
@@ -2147,13 +2170,6 @@ module ocn_time_integration_split
             call mpas_log_write('wettingVelocityBaroclinicNew, baroclinicThickness at small TS iter = $r, $r', &
                                 realArgs=(/wettingVelocityBaroclinicTemp(logEdge), baroclinicThickness(logEdge)/))
             deallocate(wettingVelocityBaroclinicTemp)
-
-            ! Efficiency note: We really only need this to compute
-            ! layerThickEdgeFlux, density, pressure, and SSH
-            ! in this diagnostics solve.
-            call ocn_diagnostic_solve(dt, statePool, forcingPool, &
-                                      meshPool, verticalMeshPool, scratchPool, &
-                                      tracersPool, 2, full=.false.)
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          ! If large iteration complete, compute all variables at
@@ -2571,25 +2587,6 @@ module ocn_time_integration_split
             endif
          endif
 #endif
-         allocate(wettingVelocityBaroclinicTemp(nEdgesAll + 1))
-         call ocn_wetting_drying_outflux_barotropic_factor(baroclinicThickness, &
-                   normalBarotropicVelocityNew, wctEdgeBaroclinic, dt, &
-                   wettingVelocityBaroclinicTemp, err)
-#ifndef MPAS_OPENACC
-         !$omp parallel
-         !$omp do schedule(runtime)
-#endif
-         do iEdge = 1, nEdgesAll
-            wettingVelocityBaroclinicCur(:,iEdge) = wettingVelocityBaroclinicTemp(iEdge)
-            wettingVelocityBaroclinicNew(:,iEdge) = wettingVelocityBaroclinicCur(:,iEdge)
-         end do ! iEdge
-#ifndef MPAS_OPENACC
-         !$omp end do
-         !$omp end parallel
-#endif
-         call mpas_log_write('wettingVelocityBaroclinicCur, baroclinicThickness at last TS iter = $r, $r', &
-                             realArgs=(/wettingVelocityBaroclinicTemp(logEdge), baroclinicThickness(logEdge)/))
-         deallocate(wettingVelocityBaroclinicTemp)
 
          call mpas_timer_stop('se loop fini')
          call mpas_timer_stop('se loop')
@@ -2841,6 +2838,40 @@ module ocn_time_integration_split
 
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
+      baroclinicThickness(:) = 0.0_RKIND
+      !$omp parallel
+      !$omp do schedule(runtime) &
+      !$omp private(cell1, cell2, k)
+      do iEdge = 1, nEdgesHalo(config_num_halos+1)
+         cell1 = cellsOnEdge(1,iEdge)
+         cell2 = cellsOnEdge(2,iEdge)
+         baroclinicThickness(iEdge) = layerThickEdgeFlux(minLevelEdgeBot(iEdge),iEdge)
+         do k = minLevelEdgeBot(iEdge)+1, maxLevelEdgeTop(iEdge)
+            baroclinicThickness(iEdge) = baroclinicThickness(iEdge) + &
+                           layerThickEdgeFlux(k,iEdge)
+         enddo
+      enddo ! iEdge
+      !$omp end do
+      !$omp end parallel
+      allocate(wettingVelocityBaroclinicTemp(nEdgesAll + 1))
+      call ocn_wetting_drying_outflux_barotropic_factor(baroclinicThickness, &
+                normalBarotropicVelocityNew, wctEdgeBaroclinic, dt, &
+                wettingVelocityBaroclinicTemp, err)
+#ifndef MPAS_OPENACC
+      !$omp parallel
+      !$omp do schedule(runtime)
+#endif
+      do iEdge = 1, nEdgesAll
+         wettingVelocityBaroclinicCur(:,iEdge) = wettingVelocityBaroclinicTemp(iEdge)
+         wettingVelocityBaroclinicNew(:,iEdge) = wettingVelocityBaroclinicCur(:,iEdge)
+      end do ! iEdge
+#ifndef MPAS_OPENACC
+      !$omp end do
+      !$omp end parallel
+#endif
+         call mpas_log_write('wettingVelocityBaroclinicCur, baroclinicThickness at last TS iter = $r, $r', &
+                             realArgs=(/wettingVelocityBaroclinicTemp(logEdge), baroclinicThickness(logEdge)/))
+         deallocate(wettingVelocityBaroclinicTemp)
 
       ! Update the effective desnity in land ice if we're coupling to
       ! land ice
