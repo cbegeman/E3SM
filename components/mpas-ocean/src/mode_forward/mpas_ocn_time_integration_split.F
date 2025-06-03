@@ -1697,16 +1697,13 @@ module ocn_time_integration_split
                                    intArgs=(/j/), realArgs=(/wctEdgeBaroclinic(iEdge), &
                                                              wctEdge(iEdge)/))
                !$omp parallel
-               !$omp do schedule(runtime) &
-               !$omp private(k)
+               !$omp do schedule(runtime)
                do iEdge = 1, nEdgesOwned
                   normalBarotropicVelocityNew(iEdge) = &
                      normalBarotropicVelocityNew(iEdge) + &
                      normalBarotropicVelocitySubcycleNew(iEdge)
-                  do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
-                     wctEdgeBaroclinic(iEdge) = &
-                        wctEdgeBaroclinic(iEdge) + wctEdge(iEdge)
-                  end do  ! k
+                  wctEdgeBaroclinic(iEdge) = &
+                     wctEdgeBaroclinic(iEdge) + wctEdge(iEdge)
                end do  ! iEdge
                !$omp end do
                !$omp end parallel
