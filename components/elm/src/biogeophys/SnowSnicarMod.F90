@@ -1482,6 +1482,10 @@ contains
                snw_rds(c_idx,i) = snw_rds_max
             end if
 
+            if (snw_rds(c_idx,i) > 250._r8) then
+               snw_rds(c_idx,i) = 250._r8
+            end if
+
             ! set top layer variables for history files
             if (i == snl_top) then
                snot_top(c_idx)    = t_soisno(c_idx,i)
