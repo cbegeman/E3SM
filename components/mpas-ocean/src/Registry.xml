@@ -4045,6 +4045,12 @@
 	    <var name="ekeCorrection" type="real" dimensions="nEdges Time" units="m s^-2"
 			 description="Correction for high res FOSI runs"
 		/>
+		<var name="iceVelocityZonal" type="real" dimensions="nCells Time" units="m s^-1"
+			 description="Zonal component of sea ice velocity."
+		/>
+		<var name="iceVelocityMeridional" type="real" dimensions="nCells Time" units="m s^-1"
+			 description="Meridional component of sea ice velocity."
+		/>
 
         <!-- Waves coupling fields -->
 		<var name="stokesDriftZonal" type="real" dimensions="nVertLevels nCells Time" units="m s^-1"
