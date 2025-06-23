@@ -51,6 +51,7 @@ module ocn_surface_bulk_forcing
              ocn_surface_bulk_forcing_vel, &
              ocn_surface_bulk_forcing_thick, &
              ocn_surface_bulk_forcing_init, &
+             ocn_surface_bulk_forcing_split, &
              ocn_surface_bulk_forcing_tracers_subglacial_runoff, &
              ocn_surface_bulk_forcing_thick_subglacial_runoff
 
@@ -672,6 +673,65 @@ contains
       !-----------------------------------------------------------------
 
    end subroutine ocn_surface_bulk_forcing_init!}}}
+
+!***********************************************************************
+!
+!  routine ocn_surface_bulk_forcing_split
+!
+!> \brief   Initializes bulk forcing module
+!> \author  Doug Jacobsen
+!> \date    04/25/12
+!> \details
+!>  This routine initializes the bulk forcing module.
+!
+!-----------------------------------------------------------------------
+
+   subroutine ocn_surface_bulk_forcing_split( &
+                  totalStressZonal, totalStressMeridional, iceFraction, &
+                  iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional,  &
+                  airOcnStressZonal, airOcnStressMeridional,            &
+                  iceOcnStressZonal, iceOcnStressMeridional, err)!{{{
+
+      !-----------------------------------------------------------------
+      ! input variables
+      !-----------------------------------------------------------------
+
+      real(kind=RKIND), dimension(:), intent(in) :: &
+                  totalStressZonal, totalStressMeridional
+
+      real(kind=RKIND), dimension(:), intent(in) :: iceFraction
+
+      !-----------------------------------------------------------------
+      ! output variables
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< [out] error flag
+
+      ! End preamble
+      !-----------------------------------------------------------------
+      ! Begin code
+
+      !*** Initialize error flag and module defaults
+
+      err = 0
+      !*** Set on/off flags based in user input configuration
+
+      if (.not. config_use_bulk_wind_stress) return
+      !$omp parallel
+      !$omp do schedule(runtime) private(iceOcnRelVelocityAbs)
+      do i = 1, nCells
+        iceOcnRelVelocityAbs = sqrt(iceOcnRelVelocityZonal(iCell)**2 + &
+                                    iceOcnRelVelocityMeridional(iCell)**2)
+        iceOcnStressZonal(iCell) = dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal(iCell)
+        iceOcnStressMeridional(iCell) = dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional(iCell)
+        airOcnStressZonal(iCell) = totalStressZonal(iCell) - iceOcnStressZonal(iCell)
+        airOcnStressMeridional(iCell) = totalStressMeridional(iCell) - iceOcnStressMeridional(iCell)
+      enddo
+      !$omp end do
+      !$omp end parallel
+      !-----------------------------------------------------------------
+
+   end subroutine ocn_surface_bulk_forcing_split!}}}
 
 !***********************************************************************
 !
