@@ -490,6 +490,7 @@ contains
          return
       endif
 
+      ! need predicted transport velocity to limit drying flux
       allocate(sshNew(nCellsAll))
       do iCell = 1, nCellsAll
         divOutFlux = 0.0_RKIND
@@ -504,21 +505,24 @@ contains
         end do
         sshNew(iCell) = sshCur(iCell) + dt * divOutFlux
       enddo
-      ! need predicted transport velocity to limit drying flux
+
       hRampFactor = config_zero_drying_velocity_ramp_factor
       !$omp parallel
       !$omp do schedule(runtime) private(i, iEdge, wct, hCrit, hRampMin, hRampMax, cellNei, sshNei, wctNei)
       do iCell = 1, nCellsAll
-        ! Note that this is in contrast to how the baroclinic factor is determined, via only the outgoing flux
-        ! Instead this uses the predicted ssh as usual
+
+        if (maxLevelCell(iCell) == 0) cycle
+
         wct = sshNew(iCell) + bottomDepth(iCell)
-        ! if layer thickness is too small, limit divergence flux outwards with
-        ! opposite velocity
+
         hCrit = (config_drying_min_cell_height + config_drying_safety_height) * &
                 (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                 
         hRampMax = config_zero_drying_velocity_ramp_hmax * &
                    (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+
+        ! if layer thickness is too small, limit divergence flux outwards with
+        ! opposite velocity
         if (wct <= hCrit) then
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
@@ -528,6 +532,7 @@ contains
               wettingVelocityBarotropic(iEdge) = 0.0_RKIND
             end if
           end do
+
           if (config_zero_drying_velocity_gradSSH) then
             do i = 1, nEdgesOnCell(iCell)
               iEdge = edgesOnCell(i, iCell)
@@ -545,26 +550,31 @@ contains
               end if
             end do
           end if     
+
         elseif (config_zero_drying_velocity_ramp .and. &
                (wct > hCrit) .and. &
                (wct <= hRampMax)) then
 
           hRampMin = config_zero_drying_velocity_ramp_hmin * (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
+
           ! Following O'Dea et al. (2021), if total upwinded wct is less than
           ! 2*critical thickness, apply damping at each edge
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
               wettingVelocityBarotropic(iEdge) = &
-                1.0_RKIND - tanh(hRampFactor * (hRampMax - wct)/(hRampMax - hRampMin))
+                tanh(hRampFactor * (wct - hRampMin)/hRampMin)
+
               if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic ramped = $r, wctCur = $r, wctNew = $r, hRampMin = $r, hCrit = $r', &
                                                         realArgs=(/wettingVelocityBarotropic(iEdge), sshCur(iCell) + bottomDepth(iCell), &
                                                                    wct, hRampMin, hCrit/))
             else
+
               if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic not updated in ramp from 1 = $r', &
                                                         realArgs=(/wettingVelocityBarotropic(iEdge)/))
             end if
           end do
+
           if (config_zero_drying_velocity_gradSSH) then
             do i = 1, nEdgesOnCell(iCell)
               iEdge = edgesOnCell(i, iCell)
@@ -582,11 +592,18 @@ contains
               end if
             end do
           end if
+
         else
+
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
-            if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic not updated from 1 = $r, wct = $r, hCrit = $r', &
-                                                      realArgs=(/wettingVelocityBarotropic(iEdge), wct, hCrit/))
+            if (wctEdge(iEdge) < hRampMax) then 
+              call mpas_log_write('wettingVelocityBarotropic not updated from 1 even though wctEdge started out thin')
+              call mpas_log_write(' btrFactor = $r, wct = $r, wctEdge = $r, u = $r', &
+                                  realArgs=(/wettingVelocityBarotropic(iEdge), wct, wctEdge(iEdge), btrVelocity(iEdge) * edgeSignOnCell(i, iCell)/))
+              call mpas_log_write(' hMin = $r, hCrit = $r, hRampMax = $r', &
+                                  realArgs=(/config_drying_min_cell_height, hCrit, hRampMax/))
+            end if
           end do
         end if
 
@@ -1025,14 +1042,21 @@ contains
 
       allocate(columnThickness(nCellsAll))
       allocate(layerThickness(nVertLevels, nCellsAll))
-      ! need predicted transport velocity to limit drying flux
+
+      wettingVelocityFactor(:,:) = 0.0_RKIND
+
       !$omp parallel
       !$omp do schedule(runtime) private(i, iEdge, k, divOutFlux)
       do iCell = 1, nCellsAll
+
+        if (maxLevelCell(iCell) == 0) cycle
+
         columnThickness(iCell) = 0.0_RKIND
         layerThickness(:, iCell) = 0.0_RKIND
+
         do k = minLevelCell(iCell), maxLevelCell(iCell)
-          divOutFlux = 0.0_RKIND
+          ! need predicted transport velocity to limit drying flux
+`          divOutFlux = 0.0_RKIND
           layerThickness(k, iCell) = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
@@ -1080,27 +1104,14 @@ contains
               end if
             end do
           endif
-          layerThicknessCell(k, iCell) = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell)) + dt * divOutFlux
-        end do
-      end do
-      !$omp end do
-      !$omp end parallel
+          ! I think this calculation is repetitive with the one above
 
-      allocate(sshLandIceAdjustment(nCellsAll))
-      sshLandIceAdjustment(:) = 0.0_RKIND
-      call ocn_compute_land_ice_ssh_adjustment(landIcePressure, landIceMask, sshLandIceAdjustment, err)
+          ! layerThicknessCell(k, iCell) = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell)) + dt * divOutFlux
+          ! if ( .not. config_use_ssh_gradient_wetting_drying ) then
+          !    call ocn_wetting_velocity_factor_on_cell_edges( &
+          !             wettingVelocityFactor, layerThicknessCell(k, iCell), normalVelocity, iCell, k)
+          ! end if
 
-      !$omp parallel
-      !$omp do schedule(runtime) private(k, nVertLevelsCell)
-      do iCell = 1, nCellsAll
-        nVertLevelsCell = maxLevelCell(iCell) - minLevelCell(iCell) + 1
-        do k = minLevelCell(iCell), maxLevelCell(iCell)
-          layerThicknessCell(k, iCell) = layerThicknessCell(k, iCell) + &
-                                         sshLandIceAdjustment(iCell) / nVertLevelsCell
-          if ( .not. config_use_ssh_gradient_wetting_drying ) then
-             call ocn_wetting_velocity_factor_on_cell_edges( &
-                      wettingVelocityFactor, layerThicknessCell(k, iCell), normalVelocity, iCell, k)
-          end if
         end do ! k
       end do
       !$omp end do
