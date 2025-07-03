@@ -563,7 +563,7 @@ contains
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) <= 0.0_RKIND ) then
               wettingVelocityBarotropic(iEdge) = &
-                tanh(hRampFactor * (wct - hRampMin)/hRampMin)
+                tanh(hRampFactor * (wct - hRampMin)/(hRampMax - hRampMin))
 
               if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic ramped = $r, wctCur = $r, wctNew = $r, hRampMin = $r, hCrit = $r', &
                                                         realArgs=(/wettingVelocityBarotropic(iEdge), sshCur(iCell) + bottomDepth(iCell), &
