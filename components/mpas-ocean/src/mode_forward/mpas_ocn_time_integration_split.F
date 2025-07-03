@@ -202,10 +202,14 @@ module ocn_time_integration_split
          btrvel_temp,      &
          sshTemp,          &
          deltaSSH,         &
-         wctEdge,          &! flux water column thickness at edge
+         wctEdge,          &! The flux water column thickness at edges:
+                            ! The baroclinic contribution is centered or upwinded based on normalVelocity
+                            ! The barotropic contribution (deltaSSH on the subcycle) is centered or upwinded based on
+                            ! btrVelocity
+
          wctEdgeBarotropicMean,&! flux water column thickness accumulator
          wettingVelocityBaroclinicTemp, &! Store 1-d version before making it 2-d
-         baroclinicThickness
+         baroclinicThickness    ! The sum of layerThicknessEdgeFlux over vertical levels
 
       ! State Array Pointers
       real (kind=RKIND), dimension(:), pointer :: &
