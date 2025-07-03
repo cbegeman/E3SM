@@ -203,7 +203,7 @@ module ocn_time_integration_split
          sshTemp,          &
          deltaSSH,         &
          wctEdge,          &! flux water column thickness at edge
-         wctEdgeBaroclinic,&! flux water column thickness accumulator
+         wctEdgeBarotropicMean,&! flux water column thickness accumulator
          wettingVelocityBaroclinicTemp, &! Store 1-d version before making it 2-d
          baroclinicThickness
 
@@ -412,7 +412,7 @@ module ocn_time_integration_split
       call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracersNew, 2)
 
       allocate(baroclinicThickness(nEdgesAll+1))
-      allocate(wctEdgeBaroclinic(nEdgesAll+1))
+      allocate(wctEdgeBarotropicMean(nEdgesAll+1))
 
       call mpas_pool_get_array(forcingPool, 'forcingTimeIncrement', &
                                              forcingTimeIncrement)
@@ -743,6 +743,10 @@ module ocn_time_integration_split
          endif
 #endif
 
+         ! wetting factor here is determined by the average velocity over btr subcycles and the average wctEdge over all btr subcycles
+         ! normalVelocity is limited in velocity tendency with 1 minus the factors used here
+         ! Here, factor = 1 allows flow
+         ! In vel tend, factor = 0 allows flow
          !$omp parallel
          !$omp do schedule(runtime)
          do iCell = 1, nCellsAll
@@ -800,6 +804,7 @@ module ocn_time_integration_split
                   !                    + T(u*,w*,p*) + g*grad(SSH*) )
                   ! Here uNew is a work variable containing
                   !  -fEdge(iEdge)*normalBaroclinicVelocityPerp(k,iEdge)
+                  ! wettingVelocity here is determined by TODO
                   uTemp(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge) &
                            + dt * (normalVelocityTend(k,iEdge) &
                            + wettingVelocityBaroclinicCur(k,iEdge) * &
@@ -835,6 +840,7 @@ module ocn_time_integration_split
                   !{\bf u}'_{k,n+1/2} = \frac{1}{2}\left(
                   !        {\bf u}^{'}_{k,n} +{\bf u}'_{k,n+1}\right)
                   ! so that normalBaroclinicVelocityNew is at time n+1/2
+                  ! wettingVelocity here is determined by TODO
                   normalBaroclinicVelocityNew(k,iEdge) = 0.5_RKIND*( &
                      normalBaroclinicVelocityCur(k,iEdge) + &
                      (uTemp(k,iEdge) - &
@@ -1015,8 +1021,8 @@ module ocn_time_integration_split
                !$omp parallel
                !$omp do schedule(runtime)
                do iEdge = 1, nEdgesAll
-                  ! wctEdgeBaroclinic will accumulate the sum of wctEdge
-                  wctEdgeBaroclinic(iEdge) = 0.0_RKIND
+                  ! wctEdgeBarotropicMean will accumulate the sum of wctEdge
+                  wctEdgeBarotropicMean(iEdge) = 0.0_RKIND
                end do
                !$omp end do
                !$omp end parallel
@@ -1147,6 +1153,7 @@ module ocn_time_integration_split
                                        fEdge(eoe)
                      end do
 
+                     ! wettingVelocity here is determined by TODO
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                            wettingVelocityBarotropicSubcycleCur(iEdge) * &
                            temp_mask * &
@@ -1255,6 +1262,7 @@ module ocn_time_integration_split
                      iEdge = edgesOnCell(i, iCell)
                      if (maxLevelEdgeTop(iEdge).eq.0) cycle
 
+                     ! wettingVelocity here is determined by the predicted velocity and the current SSH (previous btr subcycle)
                      flux = wettingVelocityBarotropicSubcycleNew(iEdge) * &
                             btrvel_temp(iEdge) * wctEdge(iEdge)
 
@@ -1292,6 +1300,8 @@ module ocn_time_integration_split
                   do iEdge = 1, nEdges
                      if (maxLevelEdgeTop(iEdge).eq.0) cycle
 
+                     ! wettingVelocity here is determined in the same way as the last SSH predictor iteration
+                     ! (by the predicted velocity and the current SSH (previous btr subcycle))
                      flux = wettingVelocityBarotropicSubcycleNew(iEdge) * &
                             btrvel_temp(iEdge) * wctEdge(iEdge)
 
@@ -1305,6 +1315,7 @@ module ocn_time_integration_split
 
                ! a cell halo layer is now corrupted - decrement counter
                cellHaloComputeCounter = cellHaloComputeCounter - 1
+               ! TODO Here, we could update wetting factor based on the predicted SSH and the predicted velocity
                !call ocn_wetting_drying_outflux_barotropic_factor(sshSubcycleNew, &
                !          btrvel_temp, wctEdge, dt/nBtrSubcycles, &
                !          wettingVelocityBarotropicSubcycleNew, err)
@@ -1473,6 +1484,8 @@ module ocn_time_integration_split
                      ! normalBarotropicVelocityOld + dt/J*
                      !     (-f*normalBarotropicVelocityoldPerp
                      !      - g*grad(SSH) + G)
+                     ! wettingVelocity here is determined by the predicted velocity and the current SSH (previous btr subcycle)
+                     ! TODO We could instead use the predicted velocity and the linear combination of current SSH and predicted SSH
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                           temp_mask * &
                           wettingVelocityBarotropicSubcycleNew(iEdge) * &
@@ -1580,6 +1593,7 @@ module ocn_time_integration_split
 
                         if (maxLevelEdgeTop(iEdge).eq.0) cycle
 
+                        ! wettingVelocity here is determined by the predicted velocity and the current SSH (previous btr subcycle)
                         flux = wettingVelocityBarotropicSubcycleNew(iEdge) * &
                                btrvel_temp(iEdge) * wctEdge(iEdge)
 
@@ -1619,6 +1633,7 @@ module ocn_time_integration_split
                   !$omp private(flux)
                   do iEdge = 1, nEdges
 
+                     ! wettingVelocity here is determined by the predicted velocity and the current SSH (previous btr subcycle)
                      flux = wettingVelocityBarotropicSubcycleNew(iEdge) * &
                             btrvel_temp(iEdge) * wctEdge(iEdge)
 
@@ -1628,6 +1643,8 @@ module ocn_time_integration_split
                   end do ! edge barotropic thickness flux
                   !$omp end do
                   !$omp end parallel
+                  ! wetting factor here is determined by the predicted velocity and the linear combination of current SSH and
+                  ! corrected SSH
                   call ocn_wetting_drying_outflux_barotropic_factor(sshTemp, &
                             btrvel_temp, wctEdge, dt/nBtrSubcycles, &
                             wettingVelocityBarotropicSubcycleNew, err)
@@ -1661,19 +1678,16 @@ module ocn_time_integration_split
                ! iteration is limited to one, this could
                ! be merged with the above code.
 
-               iEdge = logEdge
-               k = minLevelEdgeBot(iEdge)
-               call mpas_log_write('wctEdgeBaroclinic, wctEdge at accum $i = $r, $r', &
-                                   intArgs=(/j/), realArgs=(/wctEdgeBaroclinic(iEdge), &
-                                                             wctEdge(iEdge)/))
+               call mpas_log_write('wctEdge at accum $i = $r', &
+                                   intArgs=(/j/), realArgs=(/wctEdge(logEdge)/))
                !$omp parallel
                !$omp do schedule(runtime)
                do iEdge = 1, nEdgesOwned
                   normalBarotropicVelocityNew(iEdge) = &
                      normalBarotropicVelocityNew(iEdge) + &
                      normalBarotropicVelocitySubcycleNew(iEdge)
-                  wctEdgeBaroclinic(iEdge) = &
-                     wctEdgeBaroclinic(iEdge) + wctEdge(iEdge)
+                  wctEdgeBarotropicMean(iEdge) = &
+                     wctEdgeBarotropicMean(iEdge) + wctEdge(iEdge)
                end do  ! iEdge
                !$omp end do
                !$omp end parallel
@@ -1709,15 +1723,15 @@ module ocn_time_integration_split
                normalBarotropicVelocityNew(iEdge) &
                      / (nBtrSubcycles*config_btr_subcycle_loop_factor + 1)
 
-               wctEdgeBaroclinic(iEdge) = &
-               wctEdgeBaroclinic(iEdge) &
+               wctEdgeBarotropicMean(iEdge) = &
+               wctEdgeBarotropicMean(iEdge) &
                      / (nBtrSubcycles*config_btr_subcycle_loop_factor)
             end do
             !$omp end do
             !$omp end parallel
             iEdge = logEdge
-            call mpas_log_write('wctEdge after norm = $r', &
-                                realArgs=(/wctEdgeBaroclinic(iEdge)/))
+            call mpas_log_write('wctEdgeBarotropicMean after norm = $r', &
+                                realArgs=(/wctEdgeBarotropicMean(logEdge)/))
 
             call mpas_timer_stop('btr se norm')
 
@@ -2150,9 +2164,14 @@ module ocn_time_integration_split
             !$omp end parallel
 
             allocate(wettingVelocityBaroclinicTemp(nEdgesAll + 1))
-            call ocn_wetting_drying_outflux_barotropic_factor(baroclinicThickness, &
-                      normalBarotropicVelocityNew, wctEdgeBaroclinic, dt, &
+            ! wetting factor here is determined by the average velocity over btr subcycles and the average wctEdge over all btr subcycles
+            ! The O'Dea paper uses the average wetting factor over btr subcycles
+            ! sshNew holds the SSH from the previous baroclinic cycle
+            call ocn_wetting_drying_outflux_barotropic_factor(sshNew, &
+                      normalBarotropicVelocityNew, wctEdgeBarotropicMean, dt, &
                       wettingVelocityBaroclinicTemp, err)
+            call mpas_log_write('wettingVelocityBaroclinicNew, baroclinicThickness at small TS iter = $r, $r', &
+                                realArgs=(/wettingVelocityBaroclinicTemp(logEdge), baroclinicThickness(logEdge)/))
 #ifndef MPAS_OPENACC
             !$omp parallel
             !$omp do schedule(runtime)
@@ -2164,8 +2183,6 @@ module ocn_time_integration_split
             !$omp end do
             !$omp end parallel
 #endif
-            call mpas_log_write('wettingVelocityBaroclinicNew, baroclinicThickness at small TS iter = $r, $r', &
-                                realArgs=(/wettingVelocityBaroclinicTemp(logEdge), baroclinicThickness(logEdge)/))
             deallocate(wettingVelocityBaroclinicTemp)
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2857,8 +2874,9 @@ module ocn_time_integration_split
       !$omp end do
       !$omp end parallel
       allocate(wettingVelocityBaroclinicTemp(nEdgesAll + 1))
-      call ocn_wetting_drying_outflux_barotropic_factor(baroclinicThickness, &
-                normalBarotropicVelocityNew, wctEdgeBaroclinic, dt, &
+      ! TODO Wetting factor is determined by 
+      call ocn_wetting_drying_outflux_barotropic_factor(sshNew, &
+                normalBarotropicVelocityNew, wctEdgeBarotropicMean, dt, &
                 wettingVelocityBaroclinicTemp, err)
 #ifndef MPAS_OPENACC
       !$omp parallel
@@ -2872,8 +2890,8 @@ module ocn_time_integration_split
       !$omp end do
       !$omp end parallel
 #endif
-         call mpas_log_write('wettingVelocityBaroclinicCur, baroclinicThickness at last TS iter = $r, $r', &
-                             realArgs=(/wettingVelocityBaroclinicTemp(logEdge), baroclinicThickness(logEdge)/))
+         call mpas_log_write('wettingVelocityBaroclinicCur, baroclinicThickness, wctEdgeBarotropicMean at last TS iter = $r, $r, $r', &
+                             realArgs=(/wettingVelocityBaroclinicTemp(logEdge), baroclinicThickness(logEdge), wctEdgeBarotropicMean(logEdge)/))
          deallocate(wettingVelocityBaroclinicTemp)
 
       ! Update the effective desnity in land ice if we're coupling to
@@ -2995,7 +3013,7 @@ module ocn_time_integration_split
          call mpas_dmpar_exch_halo_field(effectiveDensityField)
          call mpas_timer_stop("se effective density halo")
       end if
-      deallocate(baroclinicThickness, wctEdgeBaroclinic)
+      deallocate(baroclinicThickness, wctEdgeBarotropicMean)
 
       call mpas_timer_stop('se fini')
       call mpas_timer_stop("se timestep")
