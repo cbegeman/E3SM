@@ -442,8 +442,8 @@ contains
 
       real (kind=RKIND), dimension(:), intent(in) :: &
          sshCur, &      !< current SSH
-         btrVelocity, & !< barotropic velocity on edges
-         wctEdge        !< column thickness on edges
+         btrVelocity, & !< barotropic velocity on edges used to predict sshNew from only outflux
+         wctEdge        !< column thickness on edges used to predict the outflux
 
       real (kind=RKIND), intent(in) :: dt !< time step in s
 
@@ -514,7 +514,13 @@ contains
         if (maxLevelCell(iCell) == 0) cycle
 
         wct = sshNew(iCell) + bottomDepth(iCell)
-
+        if (abs(wct) > 10.) then
+          do i = 1, nEdgesOnCell(iCell)
+            call mpas_log_write('Instability occurred')
+            call mpas_log_write(' btrFactor = $r, wct = $r, wctEdge = $r, u = $r', &
+                                realArgs=(/wct, wctEdge(iEdge), btrVelocity(iEdge) * edgeSignOnCell(i, iCell)/))
+          enddo
+        endif
         hCrit = (config_drying_min_cell_height + config_drying_safety_height) * &
                 (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                 
@@ -527,8 +533,8 @@ contains
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
             if ( btrVelocity(iEdge) * edgeSignOnCell(i, iCell) < 0.0_RKIND ) then
-              if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic = 0, wct $r < hCrit $r', &
-                                                        realArgs=(/wct, hCrit/))
+              !if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic is set to 0, wct $r < hCrit $r', &
+              !                                          realArgs=(/wct, hCrit/))
               wettingVelocityBarotropic(iEdge) = 0.0_RKIND
             end if
           end do
@@ -1056,7 +1062,7 @@ contains
 
         do k = minLevelCell(iCell), maxLevelCell(iCell)
           ! need predicted transport velocity to limit drying flux
-`          divOutFlux = 0.0_RKIND
+          divOutFlux = 0.0_RKIND
           layerThickness(k, iCell) = min(layerThicknessProvis(k, iCell), layerThicknessCur(k, iCell))
           do i = 1, nEdgesOnCell(iCell)
             iEdge = edgesOnCell(i, iCell)
