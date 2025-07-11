@@ -3241,7 +3241,7 @@ contains
       integer, intent(in), optional :: timeLevelIn !< Input: Input time level for state pool
 
       integer :: iEdge, cell1, cell2, eoe, j, k
-      real (kind=RKIND), dimension(:,:), pointer :: normalVelocity, normalBaroclinicVelocity, wettingVelocityBaroclinic
+      real (kind=RKIND), dimension(:,:), pointer :: normalVelocity, normalBaroclinicVelocity
 
       integer :: timeLevel
 
@@ -3255,7 +3255,6 @@ contains
 
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
       call mpas_pool_get_array(statePool, 'normalBaroclinicVelocity', normalBaroclinicVelocity, timeLevel)
-      call mpas_pool_get_array(statePool, 'wettingVelocityBaroclinic', wettingVelocityBaroclinic, timeLevel)
 
       !DWJ: ADD OMP (Only needed for split explicit)
 
@@ -3283,11 +3282,8 @@ contains
             normalVelocity(k,iEdge) = 0.0_RKIND
             do j = 1,nEdgesOnEdge(iEdge)
                eoe = edgesOnEdge(j,iEdge)
-               normalVelocity(k,iEdge) = normalVelocity(k,iEdge) + &
-                              ( wettingVelocityBaroclinic(k,iEdge) * &
-                                weightsOnEdge(j,iEdge) * &
-                                normalBaroclinicVelocity(k,eoe) * &
-                                fEdge(eoe) )
+               normalVelocity(k,iEdge) = normalVelocity(k,iEdge) + weightsOnEdge(j,iEdge) * normalBaroclinicVelocity(k,eoe) &
+                                       * fEdge(eoe)
             end do
          end do
       end do
