@@ -3070,7 +3070,8 @@ module ocn_time_integration_split
 
       real (kind=RKIND), dimension(:), pointer :: &
          refBottomDepth,         &! reference bottom depth
-         wettingVelocityBarotropicSubcycle,&! wetting factor at current time
+         wettingVelocityBarotropicSubcycleCur,&! wetting factor at current time
+         wettingVelocityBarotropicSubcycleNew,&! wetting factor at current time
          normalBarotropicVelocity ! normal barotropic velocity
 
       real (kind=RKIND), dimension(:,:), pointer :: &
@@ -3191,7 +3192,9 @@ module ocn_time_integration_split
          call mpas_pool_get_array(statePool, 'normalBaroclinicVelocity', &
                                               normalBaroclinicVelocity, 1)
          call mpas_pool_get_array(statePool, 'wettingVelocityBarotropicSubcycle', &
-                                              wettingVelocityBarotropicSubcycle, 1)
+                                              wettingVelocityBarotropicSubcycleCur, 1)
+         call mpas_pool_get_array(statePool, 'wettingVelocityBarotropicSubcycle', &
+                                              wettingVelocityBarotropicSubcycleNew, 2)
          call mpas_pool_get_array(statePool, 'wettingVelocityBaroclinic', &
                                               wettingVelocityBaroclinic, 1)
 
@@ -3282,7 +3285,8 @@ module ocn_time_integration_split
 
          endif ! split explicit
 
-         wettingVelocityBarotropicSubcycle(:) = 1.0_RKIND
+         wettingVelocityBarotropicSubcycleCur(:) = 1.0_RKIND
+         wettingVelocityBarotropicSubcycleNew(:) = 1.0_RKIND
          wettingVelocityBaroclinic(:,:) = 1.0_RKIND
       end if ! not restart
 
