@@ -948,6 +948,7 @@ if ($iceberg_mode eq 'data') {
 }
 add_default($nl, 'config_salt_flux_coupling_type');
 add_default($nl, 'config_ice_ocean_drag_coefficient');
+add_default($nl, 'config_improved_seaice_ocean_coupling');
 
 ###############################
 # Namelist group: diagnostics #
