@@ -487,8 +487,11 @@ module ocn_time_integration_split
          normalVelocityNew(k,iEdge) = normalVelocityCur(k,iEdge)
 
          ! eq:init-bcl-vel
+         ! This is what will be used as the velocity field for fuperp at the
+         ! first coriolis iteration
          normalBaroclinicVelocityNew(k,iEdge) = &
-         normalBaroclinicVelocityCur(k,iEdge)
+                                 wettingVelocityBaroclinicCur(k,iEdge) * &
+                                 normalBaroclinicVelocityCur(k,iEdge)
 
          ! We only need wettingVelocityBaroclinicCur
          ! eq:init-bcl-factor
