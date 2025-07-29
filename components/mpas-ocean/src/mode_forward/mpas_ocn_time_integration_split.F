@@ -1213,6 +1213,7 @@ module ocn_time_integration_split
                              'normalBarotropicVelocitySubcycle', &
                               normalBarotropicVelocitySubcycleNew, &
                               newBtrSubcycleTime)
+               ! Swap barotropic factor time levels
                call mpas_pool_get_array(statePool, &
                                'wettingVelocityBarotropicSubcycle', &
                                wettingVelocityBarotropicSubcycle, &
