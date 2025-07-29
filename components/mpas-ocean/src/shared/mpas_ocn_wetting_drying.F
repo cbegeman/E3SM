@@ -481,12 +481,10 @@ contains
 
       err = 0
 
-      call mpas_log_write('Barotropic wetdry outflux update')
       wettingVelocityBarotropic(:) = 1.0_RKIND
 
       if (.not. config_use_wetting_drying .or. &
           .not. config_zero_drying_velocity) then
-         call mpas_log_write('Barotropic wetdry outflux return')
          return
       endif
 
@@ -514,13 +512,6 @@ contains
         if (maxLevelCell(iCell) == 0) cycle
 
         wct = sshNew(iCell) + bottomDepth(iCell)
-        if (abs(wct) > 10.) then
-          do i = 1, nEdgesOnCell(iCell)
-            call mpas_log_write('Instability occurred')
-            call mpas_log_write(' btrFactor = $r, wct = $r, wctEdge = $r, u = $r', &
-                                realArgs=(/wct, wctEdge(iEdge), btrVelocity(iEdge) * edgeSignOnCell(i, iCell)/))
-          enddo
-        endif
         hCrit = (config_drying_min_cell_height + config_drying_safety_height) * &
                 (maxLevelCell(iCell) - minLevelCell(iCell) + 1)
                 
@@ -571,13 +562,13 @@ contains
               wettingVelocityBarotropic(iEdge) = &
                 tanh(hRampFactor * (wct - hRampMin)/(hRampMax - hRampMin))
 
-              if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic ramped = $r, wctCur = $r, wctNew = $r, hRampMin = $r, hCrit = $r', &
-                                                        realArgs=(/wettingVelocityBarotropic(iEdge), sshCur(iCell) + bottomDepth(iCell), &
-                                                                   wct, hRampMin, hCrit/))
-            else
+              !if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic ramped = $r, wctCur = $r, wctNew = $r, hRampMin = $r, hCrit = $r', &
+              !                                          realArgs=(/wettingVelocityBarotropic(iEdge), sshCur(iCell) + bottomDepth(iCell), &
+              !                                                     wct, hRampMin, hCrit/))
+            !else
 
-              if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic not updated in ramp from 1 = $r', &
-                                                        realArgs=(/wettingVelocityBarotropic(iEdge)/))
+            !  if (iEdge == logEdge) call mpas_log_write('wettingVelocityBarotropic not updated in ramp from 1 = $r', &
+            !                                            realArgs=(/wettingVelocityBarotropic(iEdge)/))
             end if
           end do
 
@@ -599,18 +590,18 @@ contains
             end do
           end if
 
-        else
+        !else
 
-          do i = 1, nEdgesOnCell(iCell)
-            iEdge = edgesOnCell(i, iCell)
-            if (wctEdge(iEdge) < hRampMax) then 
-              call mpas_log_write('wettingVelocityBarotropic not updated from 1 even though wctEdge started out thin')
-              call mpas_log_write(' btrFactor = $r, wct = $r, wctEdge = $r, u = $r', &
-                                  realArgs=(/wettingVelocityBarotropic(iEdge), wct, wctEdge(iEdge), btrVelocity(iEdge) * edgeSignOnCell(i, iCell)/))
-              call mpas_log_write(' hMin = $r, hCrit = $r, hRampMax = $r', &
-                                  realArgs=(/config_drying_min_cell_height, hCrit, hRampMax/))
-            end if
-          end do
+        !  do i = 1, nEdgesOnCell(iCell)
+        !    iEdge = edgesOnCell(i, iCell)
+        !    if (wctEdge(iEdge) < hRampMax) then 
+        !      call mpas_log_write('wettingVelocityBarotropic not updated from 1 even though wctEdge started out thin')
+        !      call mpas_log_write(' btrFactor = $r, wct = $r, wctEdge = $r, u = $r', &
+        !                          realArgs=(/wettingVelocityBarotropic(iEdge), wct, wctEdge(iEdge), btrVelocity(iEdge) * edgeSignOnCell(i, iCell)/))
+        !      call mpas_log_write(' hMin = $r, hCrit = $r, hRampMax = $r', &
+        !                          realArgs=(/config_drying_min_cell_height, hCrit, hRampMax/))
+        !    end if
+        !  end do
         end if
 
       end do
@@ -679,7 +670,7 @@ contains
       err = 0
 
       wettingVelocityBarotropic(:) = 1.0_RKIND
-      call mpas_log_write('Barotropic wetdry update')
+      !call mpas_log_write('Barotropic wetdry update')
 
       if (.not. config_use_wetting_drying .or. &
           .not. config_zero_drying_velocity) then
