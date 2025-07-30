@@ -2497,6 +2497,8 @@ contains
       tauya,           &
       tauxo,           &
       tauyo,           &
+      uVel,            &
+      vVel,            &
       basalPressure
 
    type (block_type), pointer :: &
@@ -2735,6 +2737,22 @@ contains
               sphere_radius,        &
               config_rotate_cartesian_grid)
 
+         ! sea ice cell velocity
+         if (config_improved_seaice_ocean_coupling) then
+            call seaice_latlon_vector_rotation_backward(&
+              uVel,                 &
+              vVel,                 &
+              uVelocityCell(i),     &
+              vVelocityCell(i),     &
+              latCell(i),           &
+              lonCell(i),           &
+              xCell(i),             &
+              yCell(i),             &
+              zCell(i),             &
+              sphere_radius,        &
+              config_rotate_cartesian_grid)
+         endif ! config_improved_seaice_ocean_coupling
+
          !-------states--------------------
          i2x_i % rAttr(index_i2x_Si_ifrac ,n)    = ailohi
 
@@ -2754,6 +2772,10 @@ contains
             i2x_i % rAttr(index_i2x_Si_qref  ,n)  = atmosReferenceHumidity2m(i)
             i2x_i % rAttr(index_i2x_Si_snowh ,n)  = snowVolumeCell(i) / ailohi
             i2x_i % rAttr(index_i2x_Si_ithick,n)  = iceVolumeCell(i) / ailohi
+            if (config_improved_seaice_ocean_coupling) then
+               i2x_i % rAttr(index_i2x_Si_uSeaIceVelocity ,n) = uVel
+               i2x_i % rAttr(index_i2x_Si_vSeaIceVelocity ,n) = vVel
+            endif ! config_improved_seaice_ocean_coupling
 
             !--- a/i fluxes computed by ice
             i2x_i % rAttr(index_i2x_Faii_taux ,n) = tauxa
@@ -3087,6 +3109,11 @@ contains
 
    end subroutine datetime!}}}
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 #ifdef HAVE_MOAB
    subroutine ice_export_moab(EClock)
 !BOP
@@ -3114,6 +3141,11 @@ contains
          tauya,           &
          tauxo,           &
          tauyo,           &
+<<<<<<< HEAD
+=======
+         uVel,            &
+         vVel,            &
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
          basalPressure
 
       type (block_type), pointer :: &
@@ -3142,7 +3174,12 @@ contains
          config_use_zaerosols,              &
          config_use_column_shortwave,       &
          config_use_data_icebergs,          &
+<<<<<<< HEAD
          config_couple_biogeochemistry_fields
+=======
+         config_couple_biogeochemistry_fields, &
+         config_improved_seaice_ocean_coupling
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 
       real(kind=RKIND), pointer :: &
          sphere_radius
@@ -3160,6 +3197,11 @@ contains
          pondLidThicknessCell,        &
          pondAreaCell,                &
          surfaceTemperatureCell,      &
+<<<<<<< HEAD
+=======
+         uVelocityCell,               &
+         vVelocityCell,               &
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
          airStressCellU,              &
          airStressCellV,              &
          oceanStressCellU,            &
@@ -3222,6 +3264,10 @@ contains
          call mpas_pool_get_config(configs, "config_couple_biogeochemistry_fields", config_couple_biogeochemistry_fields)
          call MPAS_pool_get_config(configs, "config_use_column_shortwave", config_use_column_shortwave)
          call MPAS_pool_get_config(configs, "config_use_data_icebergs", config_use_data_icebergs)
+<<<<<<< HEAD
+=======
+         call MPAS_pool_get_config(configs, "config_improved_seaice_ocean_coupling", config_improved_seaice_ocean_coupling)
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 
          call MPAS_pool_get_subpool(block_ptr % structs, 'mesh', meshPool)
          call MPAS_pool_get_subpool(block_ptr % structs, "tracers_aggregate", tracersAggregate)
@@ -3252,6 +3298,13 @@ contains
          call MPAS_pool_get_array(velocitySolver, 'airStressCellV', airStressCellV)
          call MPAS_pool_get_array(velocitySolver, 'oceanStressCellU', oceanStressCellU)
          call MPAS_pool_get_array(velocitySolver, 'oceanStressCellV', oceanStressCellV)
+<<<<<<< HEAD
+=======
+         if (config_improved_seaice_ocean_coupling) then
+            call MPAS_pool_get_array(velocitySolver, 'uVelocityCell', uVelocityCell)
+            call MPAS_pool_get_array(velocitySolver, 'vVelocityCell', vVelocityCell)
+         endif ! config_improved_seaice_ocean_coupling
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 
          call MPAS_pool_get_array(shortwave, 'albedoVisibleDirectCell', albedoVisibleDirectCell)
          call MPAS_pool_get_array(shortwave, 'albedoIRDirectCell', albedoIRDirectCell)
@@ -3355,6 +3408,25 @@ contains
                   sphere_radius,        &
                   config_rotate_cartesian_grid)
 
+<<<<<<< HEAD
+=======
+         ! sea ice cell velocity
+         if (config_improved_seaice_ocean_coupling) then
+            call seaice_latlon_vector_rotation_backward(&
+              uVel,                 &
+              vVel,                 &
+              uVelocityCell(i),     &
+              vVelocityCell(i),	    &
+              latCell(i),           &
+              lonCell(i),           &
+              xCell(i),             &
+              yCell(i),             &
+              zCell(i),             &
+              sphere_radius,        &
+              config_rotate_cartesian_grid)
+         endif ! config_improved_seaice_ocean_coupling
+
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
             !-------states--------------------
             i2x_im(n, index_i2x_Si_ifrac)    = ailohi
 
@@ -3372,6 +3444,13 @@ contains
                i2x_im(n, index_i2x_Si_tref)  = atmosReferenceTemperature2m(i)
                i2x_im(n, index_i2x_Si_qref)  = atmosReferenceHumidity2m(i)
                i2x_im(n, index_i2x_Si_snowh)  = snowVolumeCell(i) / ailohi
+<<<<<<< HEAD
+=======
+               if (config_improved_seaice_ocean_coupling) then
+                  i2x_im(n, index_i2x_Si_uSeaIceVelocity ) = uVel
+                  i2x_im(n, index_i2x_Si_vSeaIceVelocity ) = vVel
+               endif ! config_improved_seaice_ocean_coupling
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 
                !--- a/i fluxes computed by ice
                i2x_im(n, index_i2x_Faii_taux) = tauxa
@@ -3479,15 +3558,24 @@ contains
 !    o  dhdx     -- ocn surface slope, zonal
 !    o  dhdy     -- ocn surface slope, meridional
 !    o  lwdn     -- downward lw heat flux
+<<<<<<< HEAD
 !    o  rain     -- prec: liquid 
 !    o  snow     -- prec: frozen 
+=======
+!    o  rain     -- prec: liquid
+!    o  snow     -- prec: frozen
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 !    o  swndr    -- sw: nir direct  downward
 !    o  swvdr    -- sw: vis direct  downward
 !    o  swndf    -- sw: nir diffuse downward
 !    o  swvdf    -- sw: vis diffuse downward
 !    o  swnet    -- sw: net
 !    o  q        -- ocn frazil heat flux(+) / melt potential(-)
+<<<<<<< HEAD
 !    o  frazil   -- ocn frazil mass flux 
+=======
+!    o  frazil   -- ocn frazil mass flux
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 !    o  bcphidry -- Black Carbon hydrophilic dry deposition flux
 !    o  bcphodry -- Black Carbon hydrophobic dry deposition flux
 !    o  bcphiwet -- Black Carbon hydrophilic wet deposition flux
@@ -3502,10 +3590,17 @@ contains
 !    o  dstdry2  -- Size 2 dust -- dry deposition flux
 !    o  dstdry3  -- Size 3 dust -- dry deposition flux
 !    o  dstdry4  -- Size 4 dust -- dry deposition flux
+<<<<<<< HEAD
 ! 
 !    The following fields are sometimes received from the coupler,
 !      depending on model options:
 ! 
+=======
+!
+!    The following fields are sometimes received from the coupler,
+!      depending on model options:
+!
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 !    o  algae1   --
 !    o  algae2   --
 !    o  algae3   --
@@ -3530,7 +3625,11 @@ contains
 !    o  zaer4    --
 !    o  zaer5    --
 !    o  zaer6    --
+<<<<<<< HEAD
 ! 
+=======
+!
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 !-----------------------------------------------------------------------
 !
 ! !REVISION HISTORY:
@@ -3550,7 +3649,11 @@ contains
    character (len=StrKIND) :: &
       label,                  &
       message
+<<<<<<< HEAD
  
+=======
+
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
    integer ::  &
       i,n
 
@@ -3681,16 +3784,27 @@ contains
     call seq_timemgr_EClockGetData( EClock, stepno=cur_ice_stepno )
 #ifdef MOABDEBUG
     write(lnum,"(I0.2)")cur_ice_stepno
+<<<<<<< HEAD
     outfile = 'IceImp_'//trim(lnum)//'.h5m'//C_NULL_CHAR
+=======
+    outfile = 'ice_import_'//trim(lnum)//'.h5m'//C_NULL_CHAR
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
     wopts   = 'PARALLEL=WRITE_PART'//C_NULL_CHAR
     ierr = iMOAB_WriteMesh(MPSIID, outfile, wopts)
     if (ierr > 0 )  then
        write(iceLogUnit,*) 'Fail to write ice state '
     endif
+<<<<<<< HEAD
 #endif   
 !----------------------------------------------------------------------- 
 !
 !  zero out padded cells 
+=======
+#endif
+!-----------------------------------------------------------------------
+!
+!  zero out padded cells
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 !
 !-----------------------------------------------------------------------
 
@@ -4096,6 +4210,10 @@ contains
 
  end subroutine ice_import_moab!}}}
 #endif
+<<<<<<< HEAD
+=======
+>>>>>>> b740307984 (Rotate sea ice cell velocity to geographic directions in coupling)
+>>>>>>> 1a5da42f4f (Rotate sea ice cell velocity to geographic directions in coupling)
 end module ice_comp_mct
 
 !|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
