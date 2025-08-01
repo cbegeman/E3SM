@@ -2194,6 +2194,12 @@ module ocn_time_integration_split
             enddo ! iEdge
             !$omp end do
             !$omp end parallel
+            call mpas_log_write('validate timelevel1 intermediate')
+            call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
+                                      scratchPool, tracersPool, 1)
+            call mpas_log_write('validate timelevel2 intermediate')
+            call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
+                                      scratchPool, tracersPool, 2)
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          ! If large iteration complete, compute all variables at
@@ -2638,6 +2644,12 @@ module ocn_time_integration_split
 #endif
 
          call mpas_timer_stop('se loop fini')
+         call mpas_log_write('validate timelevel1')
+         call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
+                                   scratchPool, tracersPool, 1)
+         call mpas_log_write('validate timelevel2')
+         call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
+                                   scratchPool, tracersPool, 2)
          call mpas_timer_stop('se loop')
 
       end do  ! outer timestep loop (splitExplicitStep)
