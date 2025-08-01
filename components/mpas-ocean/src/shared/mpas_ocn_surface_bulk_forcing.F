@@ -697,7 +697,8 @@ contains
       !-----------------------------------------------------------------
 
       real(kind=RKIND), dimension(:), intent(in) :: &
-                  totalStressZonal, totalStressMeridional
+                  totalStressZonal, totalStressMeridional, &
+                  iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional
 
       real(kind=RKIND), dimension(:), intent(in) :: iceFraction
 
@@ -705,25 +706,36 @@ contains
       ! output variables
       !-----------------------------------------------------------------
 
+      !real(kind=RKIND), dimension(:), allocatable, intent(out) :: &
+      real(kind=RKIND), dimension(:), intent(out) ::  &
+                  airOcnStressZonal, airOcnStressMeridional, &
+                  iceOcnStressZonal, iceOcnStressMeridional
       integer, intent(out) :: err !< [out] error flag
 
       ! End preamble
       !-----------------------------------------------------------------
       ! Begin code
 
+      integer :: i, iCell
+      real(kind=RKIND) :: iceOcnRelVelocityAbs, dragCoeff
+
+      ! TODO replace with mpas-seaice ice-ocn drag coeff 0.00536
+      dragCoeff = config_implicit_top_drag_coeff
       !*** Initialize error flag and module defaults
 
       err = 0
       !*** Set on/off flags based in user input configuration
 
+      !allocate(iceOcnStressZonal(nCellsAll))
+      !allocate(iceOcnStressMeridional(nCellsAll))
       if (.not. config_use_bulk_wind_stress) return
       !$omp parallel
       !$omp do schedule(runtime) private(iceOcnRelVelocityAbs)
-      do i = 1, nCells
+      do i = 1, nCellsAll
         iceOcnRelVelocityAbs = sqrt(iceOcnRelVelocityZonal(iCell)**2 + &
                                     iceOcnRelVelocityMeridional(iCell)**2)
-        iceOcnStressZonal(iCell) = dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal(iCell)
-        iceOcnStressMeridional(iCell) = dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional(iCell)
+        iceOcnStressZonal(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal(iCell)
+        iceOcnStressMeridional(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional(iCell)
         airOcnStressZonal(iCell) = totalStressZonal(iCell) - iceOcnStressZonal(iCell)
         airOcnStressMeridional(iCell) = totalStressMeridional(iCell) - iceOcnStressMeridional(iCell)
       enddo
