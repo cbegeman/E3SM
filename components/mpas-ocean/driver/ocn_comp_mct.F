@@ -3680,6 +3680,8 @@ contains
       call mpas_pool_get_field(forcingPool, 'longWaveHeatFluxDown', longWaveHeatFluxDownField)
       call mpas_pool_get_field(forcingPool, 'evaporationFlux', evaporationFluxField)
       call mpas_pool_get_field(forcingPool, 'seaIceHeatFlux', seaIceHeatFluxField)
+      call mpas_pool_get_field(forcingPool, 'iceVelocityZonal', iceVelocityZonalField)
+      call mpas_pool_get_field(forcingPool, 'iceVelocityMeridional', iceVelocityMeridionalField)
       call mpas_pool_get_field(forcingPool, 'icebergHeatFlux', icebergHeatFluxField)
       call mpas_pool_get_field(forcingPool, 'snowFlux', snowFluxField)
       call mpas_pool_get_field(forcingPool, 'seaIceFreshWaterFlux', seaIceFreshWaterFluxField)
@@ -3721,6 +3723,8 @@ contains
       longWaveHeatFluxDown => longWaveHeatFluxDownField % array
       evaporationFlux => evaporationFluxField % array
       seaIceHeatFlux => seaIceHeatFluxField % array
+      iceVelocityZonal => iceVelocityZonalField % array
+      iceVelocityMeridional => iceVelocityMeridionalField % array
       icebergHeatFlux => icebergHeatFluxField % array
       snowFlux => snowFluxField % array
       seaIceFreshWaterFlux => seaIceFreshWaterFluxField % array
@@ -3873,6 +3877,12 @@ contains
         end if
         if ( evaporationFluxField % isActive ) then
            evaporationFlux(i) = x2o_om(n, index_x2o_Foxx_evap)
+        end if
+        if ( iceVelocityZonalField % isActive ) then
+           iceVelocityZonal(i) = x2o_om(n, index_x2o_So_uSeaIceVelocity)
+        end if
+        if ( iceVelocityMeridionalField % isActive ) then
+           iceVelocityMeridional(i) = x2o_om(n, index_x2o_So_vSeaIceVelocity)
         end if
         if ( seaIceHeatFluxField % isActive ) then
            seaIceHeatFlux(i) = x2o_om(n, index_x2o_Fioi_melth)
