@@ -1004,6 +1004,20 @@ module ocn_time_integration_split
             call mpas_timer_start('btr se subcycle loop')
             do j = 1, nBtrSubcycles * config_btr_subcycle_loop_factor
 
+               ! Compute the time since the last coupling interval,
+               ! which is also the time since the last baroclinic time step
+               ! the time doesn't advance at all during additional loops
+               dtBtr = floor(j, config_btr_subcycle_loop_factor) * (dt / nBtrSubcycles)
+
+               call ocn_surface_forcing_rotate_velocity( &
+                        iceVelocityZonalCur, iceVelocityMeridionalCur,
+                        dtBtr, &
+                        iceVelocityZonalNew, iceVelocityMeridionalNew)
+               ! TODO convert from zonal/meridional to normal velocity
+               ! call ocn_reconstruct(
+               !         iceVelocityZonalNew, iceVelocityMeridionalNew, &
+               !         normalVelocityIce)
+
                ! Update halos if needed
                if (cellHaloComputeCounter < neededHalos) then
 
@@ -1120,11 +1134,18 @@ module ocn_time_integration_split
                              normalBarotropicVelocitySubcycleCur(eoe)* &
                                        fEdge(eoe)
                      end do
-                     dragTerm = 2.0_RKIND * (dragCoeff + topDragCoeff * landIceEdgeFraction(iEdge)) * &
-                           abs(normalBarotropicVelocitySubcycleCur(iEdge))* &
-                           normalBarotropicVelocitySubcycleCur(iEdge)/ &
-                           (bottomDepth(cell1) + bottomDepth(cell2) + &
-                            sshSubcycleCur(cell1) + sshSubcycleCur(cell2))
+                     ! Compute the relative ice-ocean velocity
+                     normalVelocityIceOcn = normalBarotropicVelocitySubcycleCur(iEdge) - normalVelocityIce(iEdge)
+                     dragTerm = 2.0_RKIND * &
+                          ( (dragCoeff + topDragCoeff * landIceEdgeFraction(iEdge)) * &
+                            abs(normalBarotropicVelocitySubcycleCur(iEdge)) * &
+                            normalBarotropicVelocitySubcycleCur(iEdge) + &
+                            topDragCoeff * seaIceEdgeFraction(iEdge) * &
+                            abs(normalVelocityIceOcn) * &
+                            normalVelocityIceOcn + &
+                          ) / &
+                          ( bottomDepth(cell1) + bottomDepth(cell2) + &
+                            sshSubcycleCur(cell1) + sshSubcycleCur(cell2) )
 
                      normalBarotropicVelocitySubcycleNew(iEdge) = &
                            temp_mask* &
