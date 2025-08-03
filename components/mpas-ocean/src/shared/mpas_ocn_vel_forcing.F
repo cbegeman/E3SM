@@ -95,6 +95,8 @@ contains
          btrDrag,    &!< [in] barotropic velocity at edges
          sfcFlxAttCoeff, &!< [in] attenuation coefficient for sfc fluxes
          surfaceStress    !< [in] surface stress at edges
+                          !<      This should be the full stress whether drag is applied on the barotropic time step or not
+
 
       !-----------------------------------------------------------------
       ! input/output variables
@@ -123,10 +125,17 @@ contains
 
       err = 0
 
+      ! Even when we are splitting the ice-ocean stress between barotropic
+      ! and baroclinic time steps, we do not need to adjust the surface
+      ! stress field given by the coupler yet (see below)
+      ! It doesn't need to be rotated because the next time step starts out
+      ! with applying the baroclinic stress
       call ocn_vel_forcing_surface_stress_tend(sfcFlxAttCoeff, &
                    surfaceStress, layerThickEdgeMean, tend, err1)
       err = ior(err, err1)
 
+      ! Then apply a correction (apply less drag) on the baroclinic time step
+      ! when drag has been applied on the barotropic time step
       call ocn_vel_forcing_explicit_negative_drag_tend(btrDrag, &
                    layerThickEdgeDrag, tend, err1)
       err = ior(err, err1)
