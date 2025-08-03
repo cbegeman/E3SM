@@ -678,11 +678,12 @@ contains
 !
 !  routine ocn_surface_bulk_forcing_split
 !
-!> \brief   Initializes bulk forcing module
-!> \author  Doug Jacobsen
-!> \date    04/25/12
+!> \brief   Separate the total surface stress from the coupler into the
+!>          air-ocean component and the sea ice-ocean component.
+!> \author
+!> \date
 !> \details
-!>  This routine initializes the bulk forcing module.
+!>  This routine is currently only needed for diagnostics.
 !
 !-----------------------------------------------------------------------
 
@@ -719,11 +720,19 @@ contains
       integer :: i, iCell
       real(kind=RKIND) :: iceOcnRelVelocityAbs, dragCoeff
 
+      !*** Initialize error flag and module defaults
+      err = 0
+
+      if (config_use_split) then ! TODO
+         airOcnStressZonal = totalStressZonal
+         airOcnStressMeridional = totalStressMeridional
+         iceOcnStressZonal(:) = 0.0_RKIND
+         iceOcnStressMeridional(:) = 0.0_RKIND
+      endif
+
       ! TODO replace with mpas-seaice ice-ocn drag coeff 0.00536
       dragCoeff = config_implicit_top_drag_coeff
-      !*** Initialize error flag and module defaults
 
-      err = 0
       !*** Set on/off flags based in user input configuration
 
       !allocate(iceOcnStressZonal(nCellsAll))
