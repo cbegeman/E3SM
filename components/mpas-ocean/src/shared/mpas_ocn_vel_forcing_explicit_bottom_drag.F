@@ -273,7 +273,8 @@ contains
       dragCoeff = 0.0_RKIND
 
       !*** Reset values based on input model configuration
-      if (config_btr_bottom_drag) splitDragOff = .false.
+      if (config_btr_bottom_drag .or. config_use_drag_from_sea_ice_velocity) &
+         splitDragOff = .false.
 
       if (trim(config_bottom_drag_mode) == 'explicit') then
          explicitBottomDragOff = .false.
