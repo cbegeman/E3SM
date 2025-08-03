@@ -1745,6 +1745,10 @@ contains
         case ('constant')
           if (config_use_implicit_top_drag) then
             implicitTopDragCoef = config_implicit_top_drag_coeff
+            ! Note that this is only used when the top surface is stationary
+            ! because the implicit mixing must use the absolute ocean velocity
+            ! not the relative velocity between ocean and the top surface
+            ! Thus this is never used for sea ice
           endif
           dragType = dragTypeConst
           call mpas_log_write(' Implicit bottom drag type is: constant')
