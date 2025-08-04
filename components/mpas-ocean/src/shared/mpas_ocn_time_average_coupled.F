@@ -53,7 +53,8 @@ module ocn_time_average_coupled
         type (mpas_pool_type), intent(inout) :: forcingPool
 
         real (kind=RKIND), dimension(:,:), pointer :: avgTracersSurfaceValue, avgSurfaceVelocity, avgSSHGradient, &
-                                                      avgLandIceBoundaryLayerTracers, avgLandIceTracerTransferVelocities
+                                                      avgLandIceBoundaryLayerTracers, avgLandIceTracerTransferVelocities, &
+                                                      avgBarotropicVelocity
 
         real (kind=RKIND), dimension(:), pointer :: avgEffectiveDensityInLandIce, avgTotalFreshWaterTemperatureFlux, &
                                                     avgLandIceFreshwaterFlux, &
@@ -92,6 +93,7 @@ module ocn_time_average_coupled
 
         call mpas_pool_get_array(forcingPool, 'avgTracersSurfaceValue', avgTracersSurfaceValue)
         call mpas_pool_get_array(forcingPool, 'avgSurfaceVelocity', avgSurfaceVelocity)
+        call mpas_pool_get_array(forcingPool, 'avgBarotropicVelocity', avgBarotropicVelocity)
         call mpas_pool_get_array(forcingPool, 'avgSSHGradient', avgSSHGradient)
         call mpas_pool_get_array(forcingPool, 'nAccumulatedCoupled', nAccumulatedCoupled)
         call mpas_pool_get_array(forcingPool, 'avgTotalFreshWaterTemperatureFlux', avgTotalFreshWaterTemperatureFlux)
@@ -100,6 +102,7 @@ module ocn_time_average_coupled
         !$omp do schedule(runtime)
         do iCell = 1, nCells
            avgSurfaceVelocity(:, iCell) = 0.0_RKIND
+           avgBarotropicVelocity(:, iCell) = 0.0_RKIND
            avgTracersSurfaceValue(:, iCell) = 0.0_RKIND
            avgSSHGradient(:, iCell) = 0.0_RKIND
            avgTotalFreshWaterTemperatureFlux(iCell) = 0.0_RKIND
@@ -269,6 +272,7 @@ module ocn_time_average_coupled
         integer, intent(in) :: timeLevel
 
         real (kind=RKIND), dimension(:,:), pointer :: avgSurfaceVelocity
+        real (kind=RKIND), dimension(:,:), pointer :: avgBarotropicVelocity
         real (kind=RKIND), dimension(:,:), pointer :: avgTracersSurfaceValue
         real (kind=RKIND), dimension(:,:), pointer :: avgSSHGradient
         integer :: iCell
@@ -322,6 +326,7 @@ module ocn_time_average_coupled
 
         call mpas_pool_get_array(forcingPool, 'avgTracersSurfaceValue', avgTracersSurfaceValue)
         call mpas_pool_get_array(forcingPool, 'avgSurfaceVelocity', avgSurfaceVelocity)
+        call mpas_pool_get_array(forcingPool, 'avgBarotropicVelocity', avgBarotropicVelocity)
         call mpas_pool_get_array(forcingPool, 'avgSSHGradient', avgSSHGradient)
 
         call mpas_pool_get_array(forcingPool, 'totalFreshWaterTemperatureFlux', totalFreshWaterTemperatureFlux)
@@ -357,6 +362,8 @@ module ocn_time_average_coupled
            avgSSHGradient(index_SSHmeridional, iCell) = ( avgSSHGradient(index_SSHmeridional, iCell) * nAccumulatedCoupled &
                                                  + gradSSHMeridional(iCell) ) / ( nAccumulatedCoupled + 1 )
            avgSurfaceVelocity(:, iCell) = ( avgSurfaceVelocity(:, iCell) * nAccumulatedCoupled + surfaceVelocity(:, iCell) ) &
+                                        / ( nAccumulatedCoupled + 1 )
+           avgBarotropicVelocity(:, iCell) = ( avgBarotropicVelocity(:, iCell) * nAccumulatedCoupled + barotropicVelocity(:, iCell) ) &
                                         / ( nAccumulatedCoupled + 1 )
            avgTotalFreshWaterTemperatureFlux(iCell) = ( avgTotalFreshWaterTemperatureFlux(iCell) * nAccumulatedCoupled &
                                                + totalFreshWaterTemperatureFlux(iCell) ) / ( nAccumulatedCoupled + 1 )
