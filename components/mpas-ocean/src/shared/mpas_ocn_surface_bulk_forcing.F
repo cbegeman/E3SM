@@ -723,11 +723,12 @@ contains
       !*** Initialize error flag and module defaults
       err = 0
 
-      if (config_use_split) then ! TODO
+      if (.not. config_use_drag_from_sea_ice_velocity) then
          airOcnStressZonal = totalStressZonal
          airOcnStressMeridional = totalStressMeridional
          iceOcnStressZonal(:) = 0.0_RKIND
          iceOcnStressMeridional(:) = 0.0_RKIND
+         return
       endif
 
       ! TODO replace with mpas-seaice ice-ocn drag coeff 0.00536
