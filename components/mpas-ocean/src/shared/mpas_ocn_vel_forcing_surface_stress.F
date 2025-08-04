@@ -44,7 +44,8 @@ module ocn_vel_forcing_surface_stress
    !--------------------------------------------------------------------
 
    public :: ocn_vel_forcing_surface_stress_tend, &
-             ocn_vel_forcing_surface_stress_init
+             ocn_vel_forcing_surface_stress_init, &
+             ocn_surface_forcing_rotate_velocity
 
    !--------------------------------------------------------------------
    !
@@ -234,6 +235,35 @@ contains
    end subroutine ocn_vel_forcing_surface_stress_init!}}}
 
 !***********************************************************************
+
+   subroutine ocn_surface_forcing_rotate_velocity( &
+                           iceVelocityZonalCur, iceVelocityMeridionalCur, &
+                           dtBtr, &
+                           iceVelocityZonalNew, iceVelocityMeridionalNew)
+
+      real(kind=RKIND), dimension(:), intent(in) :: iceVelocityZonalCur, &
+                                                    iceVelocityMeridionalCur
+      real(kind=RKIND), intent(in) :: dtBtr
+      real(kind=RKIND), dimension(:), intent(out) :: iceVelocityZonalNew, &
+                                                      iceVelocityMeridionalNew
+
+      integer :: iEdge
+      real(kind=RKIND) :: theta
+
+      !$omp parallel
+      !$omp do schedule(runtime) &
+      !$omp    private(theta)
+      do iEdge = 1, nEdgesAll
+        theta = fEdge(iEdge) * dtBtr
+        iceVelocityZonalNew(iEdge) = iceVelocityZonalCur(iEdge) * cos(theta) &
+                                   + iceVelocityMeridionalCur(iEdge) * sin(theta)
+        iceVelocityMeridionalNew(iEdge) = - iceVelocityZonalCur(iEdge) * sin(theta) &
+                                          + iceVelocityMeridionalCur(iEdge) * cos(theta)
+      enddo
+      !$omp end do
+      !$omp end parallel
+
+   end subroutine ocn_surface_forcing_rotate_velocity
 
 end module ocn_vel_forcing_surface_stress
 
