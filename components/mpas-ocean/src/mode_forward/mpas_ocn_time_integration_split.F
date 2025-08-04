@@ -215,6 +215,9 @@ module ocn_time_integration_split
          seaIceFractionEdge, &
          iceVelocityMeridionalCur, &
          iceVelocityMeridionalNew, &
+         surfaceVelocityZonal, &
+         surfaceVelocityMeridional, &
+         normalSurfaceVelocity, &
          iceVelocityZonalCur, &
          iceVelocityZonalNew, &
          baroclinicThickness
@@ -1035,11 +1038,18 @@ module ocn_time_integration_split
                   ! the time doesn't advance at all during additional loops
                   dtBtr = floor(REAL(j) / REAL(config_btr_subcycle_loop_factor)) * (dt / nBtrSubcycles)
 
+                  ! We predict the ocean surface velocity by rotating the one from the last baroclinic timestep
+                  call ocn_surface_forcing_rotate_velocity( &
+                           surfaceVelocity(indexSurfaceVelocityZonal,:), surfaceVelocity(indexSurfaceVelocityMeridional,:), &
+                           dtBtr, &
+                           surfaceVelocityZonal, surfaceVelocityMeridional)
                   call ocn_surface_forcing_rotate_velocity( &
                            iceVelocityZonalCur, iceVelocityMeridionalCur, &
                            dtBtr, &
                            iceVelocityZonalNew, iceVelocityMeridionalNew)
                   ! convert from zonal/meridional to normal velocity
+                  normalSurfaceVelocity(iEdge) = surfaceVelocityZonal(iEdge) * cos(angleEdge(iEdge)) &
+                                               + surfaceVelocityMeridional(iEdge) * sin(angleEdge(iEdge))
                   normalVelocityIce(iEdge) = iceVelocityZonalNew(iEdge) * cos(angleEdge(iEdge)) &
                                            + iceVelocityMeridionalNew(iEdge) * sin(angleEdge(iEdge))
                endif
@@ -1163,7 +1173,7 @@ module ocn_time_integration_split
                         dragTerm = 0.0_RKIND
                      else
                         ! Compute the relative ice-ocean velocity
-                        normalVelocityIceOcn = normalBarotropicVelocitySubcycleCur(iEdge) - normalVelocityIce(iEdge)
+                        normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
                         dragTerm = 2.0_RKIND * &
                              ( (dragCoeff + topDragCoeff * landIceEdgeFraction(iEdge)) * &
                                abs(normalBarotropicVelocitySubcycleCur(iEdge)) * &
