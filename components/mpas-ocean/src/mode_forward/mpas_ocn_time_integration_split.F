@@ -519,6 +519,7 @@ module ocn_time_integration_split
          ! eq:init-bcl-vel
          ! This is what will be used as the velocity field for fuperp at the
          ! first coriolis iteration
+         ! And it will be used at the TODO
          normalBaroclinicVelocityNew(k,iEdge) = &
                                  wettingVelocityBaroclinicCur(k,iEdge) * &
                                  normalBaroclinicVelocityCur(k,iEdge)
@@ -683,9 +684,9 @@ module ocn_time_integration_split
          end if
 
          call mpas_timer_start('se loop')
-         call mpas_log_write('se loop')
 
          stage1_tend_time = min(splitExplicitStep,2)
+         call mpas_log_write('se loop $i, stage1 t=$i', intArgs=(/splitExplicitStep, stage1_tend_time/))
 
          call mpas_pool_get_array(statePool, 'normalVelocity', &
                            normalVelocityCur, stage1_tend_time)
@@ -820,7 +821,7 @@ module ocn_time_integration_split
          do j=1,numClinicIterations(splitExplicitStep)
 
             call mpas_timer_start('bcl iters on linear Coriolis')
-            call mpas_log_write('bcl iters on linear Coriolis')
+            call mpas_log_write('bcl iter $i on linear Coriolis', intArgs=(/j/))
 
             ! Put f*normalBaroclinicVelocity^{perp} in
             ! normalVelocityNew as a work variable
@@ -898,9 +899,9 @@ module ocn_time_integration_split
                   !{\bf u}'_{k,n+1/2} = \frac{1}{2}\left(
                   !        {\bf u}^{'}_{k,n} +{\bf u}'_{k,n+1}\right)
                   ! so that normalBaroclinicVelocityNew is at time n+1/2
-                  ! wettingVelocity here is still determined by the last set of barotropic iterations
+                  ! normalBaroclinicVelocityCur already has wettingVelocity applied from the previous time step
                   normalBaroclinicVelocityNew(k,iEdge) = 0.5_RKIND * &
-                     ( wettingVelocityBaroclinicCur(k,iEdge) * normalBaroclinicVelocityCur(k,iEdge) + &
+                     ( normalBaroclinicVelocityCur(k,iEdge) + &
                        ( uTemp(k,iEdge) - dt * barotropicForcing(iEdge)))
 
                enddo
@@ -1071,8 +1072,8 @@ module ocn_time_integration_split
             cellHaloComputeCounter = 0
             edgeHaloComputeCounter = 0
 
-            call mpas_timer_start('btr se subcycle loop')
             do j = 1, nBtrSubcycles * config_btr_subcycle_loop_factor
+               call mpas_timer_start('btr se subcycle loop $i', intArgs=(/j/))
 
                if (j == 1) then
                !$omp parallel
