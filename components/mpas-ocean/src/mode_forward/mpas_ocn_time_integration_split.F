@@ -2544,8 +2544,6 @@ module ocn_time_integration_split
             ! so normalBaroclinicVelocity does not have to be
             ! recomputed here.
 
-            ! normalBaroclinicVelocity_{n+1/2} has already been scaled by wetting velocity factor
-            ! normalBaroclinicVelocity_n needs to be scaled here
 #ifdef MPAS_OPENACC
             !$acc parallel present(minLevelEdgeBot, maxLevelEdgeTop) &
             !$acc   present(normalVelocityNew) &
@@ -2564,11 +2562,13 @@ module ocn_time_integration_split
 #ifdef MPAS_OPENACC
             !$acc loop vector
 #endif
+            ! normalBaroclinicVelocity_{n+1/2} has already been scaled by wetting velocity factor
+            ! normalBaroclinicVelocity_n should have been scaled by wetting velocity factor on the previous time step
             do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
                normalVelocityNew(k,iEdge) =                              &
                              ( normalBarotropicVelocityNew(iEdge) +      &
                                2*normalBaroclinicVelocityNew(k,iEdge)) &
-                           - wettingVelocityBaroclinicCur(k,iEdge) * normalBaroclinicVelocityCur(k,iEdge)
+                           - normalBaroclinicVelocityCur(k,iEdge)
             end do
 
             end do ! iEdges
