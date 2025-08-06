@@ -1073,7 +1073,7 @@ module ocn_time_integration_split
             edgeHaloComputeCounter = 0
 
             do j = 1, nBtrSubcycles * config_btr_subcycle_loop_factor
-               call mpas_timer_start('btr se subcycle loop $i', intArgs=(/j/))
+               call mpas_log_write('btr se subcycle loop $i', intArgs=(/j/))
 
                if (j == 1) then
                !$omp parallel
