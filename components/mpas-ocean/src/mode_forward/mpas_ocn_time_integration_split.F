@@ -1072,6 +1072,7 @@ module ocn_time_integration_split
             cellHaloComputeCounter = 0
             edgeHaloComputeCounter = 0
 
+            call mpas_timer_start('btr se subcycle loop')
             do j = 1, nBtrSubcycles * config_btr_subcycle_loop_factor
                call mpas_log_write('btr se subcycle loop $i', intArgs=(/j/))
 
@@ -2715,7 +2716,7 @@ module ocn_time_integration_split
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       call mpas_timer_start("se implicit vert mix")
-      call mpas_log_write("se implicit vert mix")
+      call mpas_log_write("start se implicit vert mix")
 
       ! Call ocean diagnostic solve in preparation for vertical mixing.
       ! Note it is called again after vertical mixing, because u and
@@ -2745,6 +2746,7 @@ module ocn_time_integration_split
          !$acc enter data copyin(landIceDraft)
       endif
 #endif
+      call mpas_log_write('validate timelevel2')
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
 
@@ -2795,6 +2797,7 @@ module ocn_time_integration_split
       !$acc exit data delete(layerThicknessNew, normalVelocityNew)
 #endif
 
+      call mpas_log_write("call implicit vert mix")
       call ocn_vmix_implicit(dt, meshPool, statePool, forcingPool, &
                              scratchPool, err, 2)
 
@@ -2937,6 +2940,7 @@ module ocn_time_integration_split
         end do
       end if
 
+      call mpas_log_write('validate timelevel2')
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
       baroclinicThickness(:) = 0.0_RKIND
