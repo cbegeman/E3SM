@@ -1907,6 +1907,10 @@ module ocn_time_integration_split
                                  layerThickEdgeFlux(k,iEdge)
                enddo
 
+               if (abs(barotropicThicknessFlux(iEdge) - normalThicknessFluxSum) > &
+                   0.1_RKIND * normalThicknessFluxSum) then
+                  call mpas_log_write('$i: velocityCorrection exceeds 10%', intArgs=(/iEdge/))
+               endif
                normalVelocityCorrection = useVelocityCorrection* &
                              ((barotropicThicknessFlux(iEdge) - &
                                normalThicknessFluxSum)/thicknessSum)
@@ -2137,6 +2141,8 @@ module ocn_time_integration_split
             !$omp end do
             !$omp end parallel
 #endif
+            call mpas_log_write('validate timelevel2 intermediate after tracer update')
+            call ocn_validate_state(domain, 2)
 
 #ifdef MPAS_OPENACC
             !$acc update device(layerThicknessNew)
@@ -2205,6 +2211,8 @@ module ocn_time_integration_split
             !$omp end do
             !$omp end parallel
 #endif
+            call mpas_log_write('validate timelevel2 intermediate')
+            call ocn_validate_state(domain, 2)
 
             ! Efficiency note: We really only need this to compute
             ! layerThickEdgeFlux, density, pressure, and SSH
@@ -2212,6 +2220,8 @@ module ocn_time_integration_split
             call ocn_diagnostic_solve(dt, statePool, forcingPool, &
                                       meshPool, verticalMeshPool, scratchPool, &
                                       tracersPool, 2, full=.false.)
+            call mpas_log_write('validate timelevel2 intermediate after diagnostic solve')
+            call ocn_validate_state(domain, 2)
             baroclinicThickness(:) = 0.0_RKIND
             !$omp parallel
             !$omp do schedule(runtime) &
@@ -2227,12 +2237,6 @@ module ocn_time_integration_split
             enddo ! iEdge
             !$omp end do
             !$omp end parallel
-            call mpas_log_write('validate timelevel1 intermediate')
-            call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                      scratchPool, tracersPool, 1)
-            call mpas_log_write('validate timelevel2 intermediate')
-            call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                      scratchPool, tracersPool, 2)
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          ! If large iteration complete, compute all variables at
@@ -2702,11 +2706,9 @@ module ocn_time_integration_split
 
          call mpas_timer_stop('se loop fini')
          call mpas_log_write('validate timelevel1')
-         call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                   scratchPool, tracersPool, 1)
+         call ocn_validate_state(domain, 1)
          call mpas_log_write('validate timelevel2')
-         call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                   scratchPool, tracersPool, 2)
+         call ocn_validate_state(domain, 2)
          call mpas_timer_stop('se loop')
 
       end do  ! outer timestep loop (splitExplicitStep)
@@ -2747,8 +2749,7 @@ module ocn_time_integration_split
       endif
 #endif
       call mpas_log_write('validate timelevel2')
-      call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                scratchPool, tracersPool, 2)
+      call ocn_validate_state(domain, 2)
 
       call mpas_dmpar_field_halo_exch(domain, 'surfaceFrictionVelocity')
       call mpas_dmpar_field_halo_exch(domain, 'tangentialVelocity')
@@ -2941,8 +2942,7 @@ module ocn_time_integration_split
       end if
 
       call mpas_log_write('validate timelevel2')
-      call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                scratchPool, tracersPool, 2)
+      call ocn_validate_state(domain, 2)
       baroclinicThickness(:) = 0.0_RKIND
       !$omp parallel
       !$omp do schedule(runtime) &
