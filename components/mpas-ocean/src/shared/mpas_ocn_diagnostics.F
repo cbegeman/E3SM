@@ -3072,8 +3072,7 @@ contains
 
       err = 0
 
-      if (config_vert_coord_movement == 'impermeable_interfaces' .or. &
-          configVertAdvMethod == vertAdvRemap) then
+      if (config_vert_coord_movement == 'impermeable_interfaces') then
          vertAleTransportTop = 0.0_RKIND
          !$acc update device(vertAleTransportTop)
          return
