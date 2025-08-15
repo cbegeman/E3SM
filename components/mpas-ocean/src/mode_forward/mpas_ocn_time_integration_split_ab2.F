@@ -708,12 +708,16 @@ module ocn_time_integration_split_ab2
          ! compute vertAleTransportTop.  Use u (rather than &
          ! normalTransportVelocity) for momentum advection.
          ! Use the most recent time level available.
-
-         if (associated(highFreqThicknessNew)) then
-            call ocn_vert_transport_velocity_top( &
-                 verticalMeshPool, layerThicknessCur, &
-                 layerThickEdgeFlux, normalVelocityCur, sshCur, dt, &
-                 vertAleTransportTop, err, highFreqThicknessNew)
+         allocate(layerInterfaceVelocity(nVertLevels, nCellsAll), &
+                  div_hu(nVertLevels, nCellsAll), &
+                  projectedSSH(nCellsAll))
+#ifdef MPAS_OPENACC
+         !$acc enter data create(projectedSSH, div_hu)
+#endif
+         call ocn_diagnostic_solve_divergence_hu(sshCur, layerThickEdgeFlux, &
+                  normalVelocityCur, dt, div_hu, projectedSSH)
+         if ( configVertAdvMethod == vertAdvRemap ) then
+            vertAleTransportTop = 0.0_RKIND
          else
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
@@ -1749,17 +1753,20 @@ module ocn_time_integration_split_ab2
          !$acc enter data copyin(layerThicknessCur, sshCur)
          !$acc update device(layerThickEdgeFlux, normalTransportVelocity)
 #endif
-         if (associated(highFreqThicknessNew)) then
-#ifdef MPAS_OPENACC
-            !$acc enter data copyin(highFreqThicknessNew)
-#endif
-            call ocn_vert_transport_velocity_top( &
-                 verticalMeshPool, layerThicknessCur, &
-                 layerThickEdgeFlux, normalTransportVelocity, sshCur, &
-                 dt, vertAleTransportTop, err, highFreqThicknessNew)
-#ifdef MPAS_OPENACC
-            !$acc exit data delete(highFreqThicknessNew)
-#endif
+         call ocn_diagnostic_solve_divergence_hu(sshCur, layerThickEdgeFlux, &
+                  normalTransportVelocity, dt, div_hu_tr, projectedSSH_tr)
+         if ( configVertAdvMethod == vertAdvRemap ) then
+            ! This is the layerInterfaceVelocity implicit in w=0 during Stage 1
+            !$omp parallel
+            !$omp do schedule(runtime) &
+            !$omp private(k)
+            do iCell = 1, nCellsAll
+               do k = minLevelCell(iCell), maxLevelCell(iCell)
+                  layerInterfaceVelocity(k,iCell) = div_hu(k,iCell)
+               enddo
+            enddo
+            !$omp end do
+            !$omp end parallel
          else
             call ocn_vert_transport_velocity_top( &
                  verticalMeshPool, layerThicknessCur, &
@@ -2177,6 +2184,46 @@ module ocn_time_integration_split_ab2
                !$acc update device(normalTransportVelocity)
 #endif
 
+#ifdef MPAS_OPENACC
+               !$acc enter data copyin(layerThicknessCur, sshCur)
+               !$acc update device(layerThickEdgeFlux, normalTransportVelocity)
+#endif
+               allocate(div_hu_tr(nVertLevels, nCellsAll), &
+                        projectedSSH_tr(nCellsAll))
+#ifdef MPAS_OPENACC
+               !$acc enter data create(projectedSSH_tr, div_hu_tr)
+#endif
+               call ocn_diagnostic_solve_divergence_hu(sshCur, layerThickEdgeFlux, &
+                        normalTransportVelocity, dt, div_hu_tr, projectedSSH_tr)
+               if ( configVertAdvMethod == vertAdvRemap ) then
+                  ! This is the layerInterfaceVelocity implicit in w=0 during Stage 1
+                  !$omp parallel
+                  !$omp do schedule(runtime) &
+                  !$omp private(k)
+                  do iCell = 1, nCellsAll
+                     do k = minLevelCell(iCell), maxLevelCell(iCell)
+                        layerInterfaceVelocity(k,iCell) = div_hu(k,iCell)
+                     enddo
+                  enddo
+                  !$omp end do
+                  !$omp end parallel
+               else
+                  if (associated(highFreqThicknessNew)) then
+#ifdef MPAS_OPENACC
+                     !$acc enter data copyin(highFreqThicknessNew)
+#endif
+                     call ocn_layer_interface_velocity(verticalMeshPool, &
+                                 projectedSSH_tr, layerThicknessCur, &
+                                 dt, layerInterfaceVelocity, err, highFreqThicknessNew)
+#ifdef MPAS_OPENACC
+                     !$acc exit data delete(highFreqThicknessNew)
+#endif
+                  else
+                     call ocn_layer_interface_velocity(verticalMeshPool, &
+                                 projectedSSH_tr, layerThicknessCur, &
+                                 dt, layerInterfaceVelocity, err)
+                  endif
+               endif
                call ocn_vert_transport_velocity_top( &
                     verticalMeshPool, layerThicknessCur, &
                     layerThickEdgeFlux, normalTransportVelocity,sshCur, dt, &
