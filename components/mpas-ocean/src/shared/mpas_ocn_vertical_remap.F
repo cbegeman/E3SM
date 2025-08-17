@@ -141,6 +141,8 @@ module ocn_vertical_remap
       allocate(layerThicknessNew(nVertLevels, nCells + 1))
       allocate(layerThickEdgeNew(nVertLevels, nEdges))
 
+      layerThickness = layerThicknessNew
+
       ! Compute new layer thicknesses based on vertical coordinate choice
       ! Currently, zstar coordinate is hard-coded
       call ocn_vert_regrid(restingThickness, layerThickness, &
