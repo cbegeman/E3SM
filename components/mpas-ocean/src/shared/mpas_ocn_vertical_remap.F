@@ -75,9 +75,10 @@ module ocn_vertical_remap
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_remap_vert_state(block, err, timeLevel)
+   subroutine ocn_remap_vert_state(domain, err, timeLevel)
 
-      type (block_type), intent(in) :: block
+      type (domain_type), intent(inout) :: &
+         domain  !< [inout] model state to advance forward
       integer, intent(in) :: timeLevel
       integer, intent(out) :: err
 
@@ -94,15 +95,15 @@ module ocn_vertical_remap
 
       type(rmap_work) :: work ! Internal workspace for PPR
       type(rcon_ends), dimension(:), allocatable :: bcUpper, bcLower
+      type (block_type), pointer :: block
 
       real (kind=RKIND), dimension(:, :, :), allocatable :: dataNow, dataNew
       real (kind=RKIND), dimension(:, :), allocatable :: &
-         layerThicknessNew,            & ! layerThickness (new target grid)
          layerThickEdgeNew,            & ! layerThickness at edges (new target grid)
          heightCellNow, heightEdgeNow, & ! depth at layer interfaces (lagrangian grid)
          heightCellNew, heightEdgeNew    ! depth at layer interfaces (new target grid)
 
-      real (kind=RKIND), dimension(:, :), pointer :: layerThickness, restingThickness
+      real (kind=RKIND), dimension(:, :), pointer :: layerThickness, layerThicknessNew, restingThickness
       real (kind=RKIND), dimension(:, :), pointer :: normalVelocity
       real (kind=RKIND), dimension(:, :), pointer :: highFreqThickness,lowFreqDivergence
       real (kind=RKIND), dimension(:, :, :), pointer :: tracersGroup
@@ -112,6 +113,8 @@ module ocn_vertical_remap
       itimestepLastRemap = itimestepLastRemap + 1
       if (itimestepLastRemap < config_vert_remap_interval) return
       itimestepLastRemap = 0
+
+      block => domain%blocklist
 
       ! Remapping currently only supports one block for the whole domain rather
       ! than sub-blocks
@@ -123,6 +126,7 @@ module ocn_vertical_remap
       call mpas_pool_get_array(verticalMeshPool, 'restingThickness', restingThickness)
 
       call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThickness, timeLevel)
+      call mpas_pool_get_array(statePool, 'layerThickness', layerThicknessNew, timeLevel)
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
       if (config_use_freq_filtered_thickness) then
          call mpas_pool_get_array(statePool, 'highFreqThickness', highFreqThickness, timeLevel)
@@ -138,7 +142,6 @@ module ocn_vertical_remap
       allocate(heightCellNew(nVertLevels + 1, nCells))
       allocate(heightEdgeNow(nVertLevels + 1, nEdges))
       allocate(heightEdgeNew(nVertLevels + 1, nEdges))
-      allocate(layerThicknessNew(nVertLevels, nCells + 1))
       allocate(layerThickEdgeNew(nVertLevels, nEdges))
 
       layerThickness = layerThicknessNew
@@ -147,6 +150,8 @@ module ocn_vertical_remap
       ! Currently, zstar coordinate is hard-coded
       call ocn_vert_regrid(restingThickness, layerThickness, &
                            layerThicknessNew, err)
+      call mpas_dmpar_field_halo_exch(domain, 'layerThickness', &
+                                      timeLevel=timeLevel)
 
       ! Compute the layer interface locations between bottomDepth and -ssh
       ! (rather than between -bottomDepth and ssh due to PPR limitations)
@@ -237,9 +242,6 @@ module ocn_vertical_remap
       end do
       !$omp end do
       !$omp end parallel
-
-      ! Assign new layerThicknesses
-      layerThickness = layerThicknessNew
 
       !----------------------------------------------------------------------------
       ! ACTUAL REMAPPING FROM HERE

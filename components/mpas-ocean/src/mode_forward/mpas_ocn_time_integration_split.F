@@ -2580,14 +2580,8 @@ module ocn_time_integration_split
 
          call mpas_timer_start("vertical remap")
 
-         call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
-
-         ! Store the current, Lagrangian location for computation of the
-         ! Eulerian vertical velocity induced by remapping
-         layerThicknessLagNew = layerThicknessNew
-
          ! Perform the remapping
-         call ocn_remap_vert_state(block, err, 2)
+         call ocn_remap_vert_state(domain, err, 2)
 
          call mpas_timer_stop("vertical remap")
 
