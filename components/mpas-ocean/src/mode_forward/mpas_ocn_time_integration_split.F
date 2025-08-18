@@ -735,7 +735,7 @@ module ocn_time_integration_split
 
          ! compute velocity tendencies, T(u*,w*,p*)
          call mpas_timer_start("se bcl vel")
-         call mpas_log_write("se bcl vel")
+         !call mpas_log_write("se bcl vel")
          call mpas_timer_start('se bcl vel tend')
 
          ! compute vertAleTransportTop.  Use u (rather than &
@@ -789,7 +789,6 @@ module ocn_time_integration_split
          do j=1,numClinicIterations(splitExplicitStep)
 
             call mpas_timer_start('bcl iters on linear Coriolis')
-            call mpas_log_write('bcl iters on linear Coriolis')
 
             ! Put f*normalBaroclinicVelocity^{perp} in
             ! normalVelocityNew as a work variable
@@ -920,7 +919,7 @@ module ocn_time_integration_split
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
          call mpas_timer_start("se btr vel")
-         call mpas_log_write("se btr vel")
+         !call mpas_log_write("se btr vel")
 
          oldBtrSubcycleTime = 1
          newBtrSubcycleTime = 2
@@ -1786,7 +1785,7 @@ module ocn_time_integration_split
             ! efficiency: This next block of code is really a check for
             ! debugging, and can be removed later.
             call mpas_timer_start('btr se ssh verif')
-            call mpas_log_write('btr se ssh verif')
+            !call mpas_log_write('btr se ssh verif')
 
             ! Correction velocity
             !   normalVelocityCorrection = (Flux - Sum(h u*))/H
@@ -1920,7 +1919,7 @@ module ocn_time_integration_split
          ! monotonic advection.
 
          call mpas_timer_start('se thick tend')
-         call mpas_log_write('se thick tend')
+         !call mpas_log_write('se thick tend')
 
          ! compute vertAleTransportTop.  Use normalTransportVelocity
          ! for advection of layerThickness and tracers.
@@ -1928,7 +1927,7 @@ module ocn_time_integration_split
          ! layerThickEdgeFlux because layerThickness has not yet
          ! been computed for time level 2.
          call mpas_timer_start('thick vert trans vel top')
-         call mpas_log_write('thick vert trans vel top')
+         !call mpas_log_write('thick vert trans vel top')
 #ifdef MPAS_OPENACC
          !$acc enter data copyin(layerThicknessCur, sshCur)
          !$acc update device(layerThickEdgeFlux, normalTransportVelocity)
@@ -1968,7 +1967,7 @@ module ocn_time_integration_split
          call mpas_timer_stop("se halo thickness")
 
          call mpas_timer_start('se tracer tend', .false.)
-         call mpas_log_write('se tracer tend')
+         !call mpas_log_write('se tracer tend')
          call ocn_tend_tracer(tendPool, statePool, forcingPool, &
                               meshPool, swForcingPool, &
                               dt, activeTracersOnly, 2)
@@ -2194,12 +2193,12 @@ module ocn_time_integration_split
             enddo ! iEdge
             !$omp end do
             !$omp end parallel
-            call mpas_log_write('validate timelevel1 intermediate')
-            call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                      scratchPool, tracersPool, 1)
-            call mpas_log_write('validate timelevel2 intermediate')
-            call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                      scratchPool, tracersPool, 2)
+            !call mpas_log_write('validate timelevel1 intermediate')
+            !call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
+            !                          scratchPool, tracersPool, 1)
+            !call mpas_log_write('validate timelevel2 intermediate')
+            !call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
+            !                          scratchPool, tracersPool, 2)
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          ! If large iteration complete, compute all variables at
@@ -2644,12 +2643,6 @@ module ocn_time_integration_split
 #endif
 
          call mpas_timer_stop('se loop fini')
-         call mpas_log_write('validate timelevel1')
-         call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                   scratchPool, tracersPool, 1)
-         call mpas_log_write('validate timelevel2')
-         call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
-                                   scratchPool, tracersPool, 2)
          call mpas_timer_stop('se loop')
 
       end do  ! outer timestep loop (splitExplicitStep)
@@ -2659,7 +2652,6 @@ module ocn_time_integration_split
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       call mpas_timer_start("se implicit vert mix")
-      call mpas_log_write("se implicit vert mix")
 
       ! Call ocean diagnostic solve in preparation for vertical mixing.
       ! Note it is called again after vertical mixing, because u and
@@ -2794,7 +2786,6 @@ module ocn_time_integration_split
       if ( configVertAdvMethod == vertAdvRemap ) then
 
          call mpas_timer_start("vertical remap")
-         call mpas_log_write("vertical remap")
 
          call mpas_pool_get_array(statePool, 'layerThicknessLag', layerThicknessLagNew, 2)
 
