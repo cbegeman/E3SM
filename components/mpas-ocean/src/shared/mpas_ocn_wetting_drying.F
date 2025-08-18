@@ -55,6 +55,7 @@ module ocn_wetting_drying
    public :: ocn_wetting_drying_verify, ocn_prevent_drying_rk4, &
              ocn_wetting_drying_outflux_barotropic_factor, &
              ocn_wetting_drying_barotropic_factor, &
+             ocn_wetting_drying_update_land_ice, &
              ocn_wetting_velocity_factor_on_cell_edges
 
    !--------------------------------------------------------------------
