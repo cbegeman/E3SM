@@ -193,7 +193,6 @@ module ocn_time_integration_split
          lat,              &! cell latitude
          sshCell1,         &! sea sfc height in neighboring cells
          sshCell2,         &
-         sshGrad            ! temp for holding ssh gradient
 
       real (kind=RKIND), dimension(:,:), allocatable:: &
          uTemp
@@ -201,6 +200,7 @@ module ocn_time_integration_split
       real (kind=RKIND), dimension(:), allocatable :: &
          btrvel_temp,      &
          sshTemp,          &
+         sshGrad,          &! temp for holding ssh gradient
          deltaSSH,         &
          wctEdge,          &! The flux water column thickness at edges:
                             ! The baroclinic contribution is centered or upwinded based on normalVelocity
@@ -781,6 +781,21 @@ module ocn_time_integration_split
          ! BEGIN baroclinic iterations on linear Coriolis term
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+         ! precompute the ssh gradient because SSH is not updated during these iterations
+         allocate(sshGrad(nEdgesOwned))
+         !$omp parallel
+         !$omp do schedule(runtime) &
+         !$omp private(cell1, cell2)
+         do iEdge = 1, nEdgesOwned
+            cell1 = cellsOnEdge(1,iEdge)
+            cell2 = cellsOnEdge(2,iEdge)
+            sshGrad(iEdge) = splitFact * gravity * &
+                      (sshNew(cell2) - sshNew(cell1)) &
+                      /dcEdge(iEdge)
+         enddo ! iEdge
+         !$omp end do
+         !$omp end parallel
+
          do j=1,numClinicIterations(splitExplicitStep)
 
             call mpas_timer_start('bcl iters on linear Coriolis')
@@ -797,10 +812,9 @@ module ocn_time_integration_split
             ! exchange immediately after this computation.
 
             allocate(uTemp(nVertLevels,nEdgesOwned))
-
             !$omp parallel
             !$omp do schedule(runtime) &
-            !$omp private(k, cell1, cell2, uTemp, sshGrad, &
+            !$omp private(k, cell1, cell2, uTemp, &
             !$omp         normalThicknessFluxSum, thicknessSum)
             do iEdge = 1, nEdgesOwned
 
@@ -809,13 +823,8 @@ module ocn_time_integration_split
                   cycle
                endif
 
-               cell1 = cellsOnEdge(1,iEdge)
-               cell2 = cellsOnEdge(2,iEdge)
                ! could put this after with uTemp(maxleveledgetop+1:nvertlevels)=0
                uTemp(:,iEdge) = 0.0_RKIND
-               sshGrad = splitFact * gravity * &
-                         (sshNew(cell2) - sshNew(cell1)) &
-                         /dcEdge(iEdge)
                do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
 
                   ! normalBaroclinicVelocityNew =
@@ -830,7 +839,7 @@ module ocn_time_integration_split
                          ( normalBaroclinicVelocityCur(k,iEdge)            &
                            + dt * (normalVelocityTend(k,iEdge)             &
                                    + normalVelocityNew(k,iEdge)            &
-                                   + wettingVelocityBaroclinicCur(k,iEdge) * sshGrad ))
+                                   + wettingVelocityBaroclinicCur(k,iEdge) * sshGrad(iEdge) ))
                   !if (iEdge == logEdge) &
                   !   call mpas_log_write('wettingVelocityBaroclinicCur at cor iter $i = $r, sshEdge = $r', &
                   !                       intArgs=(/j/), realArgs=(/wettingVelocityBaroclinicCur(k,iEdge), &
@@ -889,6 +898,7 @@ module ocn_time_integration_split
             !$omp end parallel
 
             deallocate(uTemp)
+            deallocate(sshGrad)
 
             call mpas_timer_start("se halo normalBaroclinicVelocity")
             call mpas_dmpar_field_halo_exch(domain, &
