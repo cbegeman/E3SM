@@ -818,6 +818,12 @@ contains
          !$acc exit data copyout(wctEdge) delete(baroclinicThickness, deltaSSH, btrVelocity)
 #endif
 
+      case (thickEdgeFluxConstant)
+         do iEdge = 1, nEdgesAll
+            if ( maxLevelEdgeTop(iEdge) == 0 ) cycle
+            wctEdge(iEdge) = baroclinicThickness(iEdge)
+         end do
+
       case default
          ! Should have been caught on init
          call mpas_log_write('Thickness flux option unknown', &
@@ -1347,11 +1353,11 @@ contains
          cell1, cell2                ! neighbor cell   addresses
 
       real(kind=RKIND) :: &
+         invAreaTri1,          &! 1/triangle area
          invAreaCell1,         &! 1/cell area
          invLength,            &! 1/length
          layerThicknessVertex, &! layer thickness at vertex
-         apvm_scale_factor,    &! scale factor for APVM form
-         areaDual               ! unmaksed dual-cell overlap
+         apvm_scale_factor      ! scale factor for APVM form
 
       ! Local arrays
       ! normalizedPlanetaryVorticityVertex: earth's rotational rate
@@ -1391,29 +1397,25 @@ contains
       !$acc    present(normalizedRelativeVorticityVertex, &
       !$acc            normalizedPlanetaryVorticityVertex, &
       !$acc            relativeVorticity, fVertex, layerThickness, &
-      !$acc            kiteAreasOnVertex, cellsOnVertex, &
-      !$acc            minLevelVertexTop, maxLevelVertexBot) &
-      !$acc    private(i, k, iCell, areaDual, layerThicknessVertex)
+      !$acc            areaTriangle, kiteAreasOnVertex, cellsOnVertex, &
+      !$acc            maxLevelVertexBot) &
+      !$acc    private(i, k, iCell, invAreaTri1, layerThicknessVertex)
 #else
       !$omp parallel
       !$omp do schedule(runtime) &
-      !$omp    private(i, k, iCell, areaDual, layerThicknessVertex)
+      !$omp    private(i, k, iCell, invAreaTri1, layerThicknessVertex)
 #endif
       do iVertex = 1, nVertices
-         normalizedRelativeVorticityVertex(:,iVertex) = 0.0_RKIND
-         normalizedPlanetaryVorticityVertex(:,iVertex) = 0.0_RKIND
-         do k = minLevelVertexTop(iVertex), maxLevelVertexBot(iVertex)
+         invAreaTri1 = 1.0_RKIND / areaTriangle(iVertex)
+         do k = 1, maxLevelVertexBot(iVertex)
             layerThicknessVertex = 0.0_RKIND
-            areaDual = 0.0_RKIND  ! only the unmasked kites
             do i = 1, vertexDegree
                iCell = cellsOnVertex(i,iVertex)
                layerThicknessVertex = layerThicknessVertex &
                                     + layerThickness(k,iCell) &
                                     * kiteAreasOnVertex(i,iVertex)
-               areaDual = areaDual + cellMask(k,iCell) &
-                                    * kiteAreasOnVertex(i,iVertex)
             end do
-            layerThicknessVertex = layerThicknessVertex/areaDual
+            layerThicknessVertex = layerThicknessVertex*invAreaTri1
             if (layerThicknessVertex == 0) cycle
 
             normalizedRelativeVorticityVertex(k,iVertex) = &
