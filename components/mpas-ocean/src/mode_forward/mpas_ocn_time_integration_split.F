@@ -3000,6 +3000,8 @@ module ocn_time_integration_split
          call mpas_pool_get_array(meshPool, 'minLevelEdgeBot', minLevelEdgeBot)
          call mpas_pool_get_array(meshPool, 'maxLevelEdgeTop', maxLevelEdgeTop)
 
+         normalTransportVelocity = normalVelocity
+
          !*** Compute barotropic velocity at first timestep
          !*** This is only done upon start-up.
          if (unsplit) then
