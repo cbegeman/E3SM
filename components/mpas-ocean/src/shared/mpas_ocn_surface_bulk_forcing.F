@@ -62,9 +62,10 @@ module ocn_surface_bulk_forcing
    !
    !--------------------------------------------------------------------
 
-   logical ::              &
-      bulkWindStressOff,   &! on/off switch for bulk wind stress
-      bulkThicknessFluxOff  ! on/off switch for bulk thickness flux
+   logical ::               &
+      bulkWindStressOff,    &! on/off switch for bulk wind stress
+      bulkThicknessFluxOff, &! on/off switch for bulk thickness flux
+      splitSeaIce            ! on/off switch for splitting wind stress into air-ocean and ice-ocean components
 
 !***********************************************************************
 
@@ -236,6 +237,8 @@ contains
          iEdge, iCell,   &! loop indices for edge, cell loops
          nCells, nEdges   ! number of cells, edges participating
 
+      real (kind=RKIND), dimension(:), allocatable :: iceOcnStressZonalOld, iceOcnStressMeridionalOld
+
       real (kind=RKIND), dimension(:), pointer :: &
          windStressZonal, &! zonal wind stress from forcing
          windStressMerid, &! meridional wind stress from forcing
@@ -265,6 +268,44 @@ contains
 
       nEdges = nEdgesHalo(3)
       nCells = nCellsHalo(2)
+
+      if (splitSeaIce) then ! Split the surface stress into sea ice and atm components
+        call ocn_surface_bulk_forcing_split( &
+                    windStressZonal, windStressMeridional, iceFraction, &
+                    iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional,  &
+                    airOcnStressZonal, airOcnStressMeridional,            &
+                    iceOcnStressZonal, iceOcnStressMeridional, err)
+
+        ! Store temporary variable for comparison
+        allocate(iceOcnStressZonalOld(nCells))
+        allocate(iceOcnStressMeridionalOld(nCells))
+        iceOcnStressZonalOld(:) = iceOcnStressZonal(:)
+        iceOcnStressMeridionalOld(:) = iceOcnStressMeridional(:)
+
+        ! Use the relative velocity between sea ice at the last coupling interval and the barotropic ocean velocity at the last time step
+        call ocn_surface_stress_modify_for_split_sea_ice( &
+                         btrVelZonal, btrVelMeridional, &
+                         surfaceVelocityZonal, surfaceVelocityMeridional, &
+                         btrDragZonal, btrDragMeridional, &
+                         iceOcnStressZonal, iceOcnStressMeridional, & !inout
+        )
+        ! Check the ratio between old and new ice-ocean zonal stress
+        do iCell = 1, nCells
+           if (max(abs(iceOcnStressZonalOld(iCell)), abs(iceOcnStressMeridionalOld(iCell))) > 1.0e-12_RKIND) then
+           if (abs(iceOcnStressZonal(iCell) / iceOcnStressZonalOld(iCell)) > 10.0_RKIND .or. &
+               abs(iceOcnStressMeridional(iCell) / iceOcnStressMeridionalOld(iCell)) > 10.0_RKIND) then
+              call mpas_log_write('Warning: Large change in iceOcnStressZonal: old [$r, $r], new [$r, $r]', &
+                   realArgs=(/iceOcnStressZonalOld(iCell), iceOcnStressMeridionalOld(iCell), &
+                              iceOcnStressZonal(iCell), iceOcnStressMeridional(iCell)/)
+           end if
+           end if
+        end do
+
+        ! Start with the airOcnStress and add back an independently computed iceOcnStress
+        windStressZonal = airOcnStressZonal + iceOcnStressZonal
+        windStressMerid = airOcnStressMeridional + iceOcnStressMeridional
+
+      endif
 
       !*** Convert coupled climate model wind stress to internal
       !*** ocean model wind stress by averaging cell-centered wind
@@ -543,6 +584,7 @@ contains
       err = 0
       bulkWindStressOff    = .true.
       bulkThicknessFluxOff = .true.
+      splitSeaIce = .false.
 
       !*** Set on/off flags based in user input configuration
 
@@ -551,9 +593,100 @@ contains
       if (config_use_bulk_thickness_flux) &
          bulkThicknessFluxOff = .false.
 
+      if (config_use_drag_from_sea_ice_velocity) &
+         splitSeaIce = .true.
       !-----------------------------------------------------------------
 
    end subroutine ocn_surface_bulk_forcing_init!}}}
+
+!***********************************************************************
+!
+!  routine ocn_surface_stress_modify_for_split_sea_ice
+!
+!> \brief   Separate the total surface stress from the coupler into the
+!>          air-ocean component and the sea ice-ocean component.
+!> \author
+!> \date
+!> \details
+!>  This routine is currently only needed for diagnostics.
+!
+!-----------------------------------------------------------------------
+
+subroutine ocn_surface_stress_modify_for_split_sea_ice( &
+     iceVelocityZonal, iceVelocityMeridional, &
+     zonalVelocity, meridionalVelocity, &
+     btrDragZonal, btrDragMeridional, &
+     iceOcnStressZonal, iceOcnStressMeridional)
+
+   ! Arguments
+   real(kind=RKIND), dimension(:), intent(in) :: iceVelocityZonal, iceVelocityMeridional
+   real(kind=RKIND), dimension(:), intent(in) :: zonalVelocity, meridionalVelocity
+   real(kind=RKIND), dimension(:), intent(in) :: btrDragZonal, btrDragMeridional
+   real(kind=RKIND), dimension(:), intent(inout) :: windStressZonal, windStressMeridional
+
+   ! Locals
+   integer :: iCell, nCells
+   real(kind=RKIND), dimension(:), allocatable :: btrVelocityZonal, btrVelocityMeridional
+   real(kind=RKIND) :: intBtrDragZonal, intBtrDragMeridional
+   real(kind=RKIND) :: momRatioZonal, momRatioMeridional
+   real(kind=RKIND) :: iceOcnRelBtrVelZonal, iceOcnRelBtrVelMeridional
+   real(kind=RKIND) :: iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional
+   real(kind=RKIND) :: iceOcnStressNewZonal, iceOcnStressNewMeridional
+   real(kind=RKIND) :: oldWindStressZonal, oldWindStressMeridional
+
+   nCells = nCellsHalo(2)
+
+   allocate(surfaceVelocityZonal(nCells), &
+            surfaceVelocityMeridional(nCells))
+   allocate(btrVelocityZonal(nCells), btrVelocityMeridional(nCells))
+
+   do iCell = 1, nCells
+     surfaceVelocityZonal(iCell) = zonalVelocity(1,iCell)
+     surfaceVelocityMeridional(iCell) = meridionalVelocity(1,iCell)
+     ! Compute the barotropic velocity weighted by layer thickness
+     do k = minLevelCell(iCell), maxLevelCell(iCell)
+       btrVelocityZonal(iCell) = btrVelocityZonal(iCell) + &
+              zonalVelocity(k,iCell) * layerThickness(k,iCell)
+       btrVelocityMeridional(iCell) = btrVelocityMeridional(iCell) + &
+              meridionalVelocity(k,iCell) * layerThickness(k,iCell)
+     enddo
+     btrVelocityZonal(iCell) = btrVelocityZonal(iCell) / (ssh(iCell) + bottomDepth(iCell))
+     btrVelocityMeridional(iCell) = btrVelocityMeridional(iCell) / (ssh(iCell) + bottomDepth(iCell))
+   enddo
+
+   do iCell = 1, nCells
+      oldWindStressZonal = windStressZonal(iCell)
+      oldWindStressMeridional = windStressMeridional(iCell)
+
+      ! Calculate relative velocities
+      iceOcnRelBtrVelZonal = iceVelocityZonal(iCell) - btrVelZonal(iCell)
+      iceOcnRelBtrVelMeridional = iceVelocityMeridional(iCell) - btrVelMeridional(iCell)
+      iceOcnRelVelocityZonal = iceVelocityZonal(iCell) - surfaceVelocityZonal(iCell)
+      iceOcnRelVelocityMeridional = iceVelocityMeridional(iCell) - surfaceVelocityMeridional(iCell)
+
+      ! Integrate bottom drag
+      intBtrDragZonal = btrDragZonal(iCell) * (ssh(iCell) + bottomDepth(iCell))
+      intBtrDragMeridional = btrDragMeridional(iCell) * (ssh(iCell) + bottomDepth(iCell))
+
+      ! Avoid division by zero
+      if (abs(iceOcnRelBtrVelZonal) > 1.0e-12_RKIND) then
+         momRatioZonal = iceOcnRelVelocityZonal / iceOcnRelBtrVelZonal
+      else
+         momRatioZonal = 0.0_RKIND
+      end if
+      if (abs(iceOcnRelBtrVelMeridional) > 1.0e-12_RKIND) then
+         momRatioMeridional = iceOcnRelVelocityMeridional / iceOcnRelBtrVelMeridional
+      else
+         momRatioMeridional = 0.0_RKIND
+      end if
+
+      ! Compute new ice-ocean stress
+      iceOcnStressZonal(iCell) = momRatioZonal * intBtrDragZonal / layerThickness(1,iCell)
+      iceOcnStressMeridional(iCell) = momRatioMeridional * intBtrDragMeridional / layerThickness(1,iCell)
+
+   end do
+
+end subroutine ocn_surface_stress_modify_for_split_sea_ice
 
 !***********************************************************************
 !
