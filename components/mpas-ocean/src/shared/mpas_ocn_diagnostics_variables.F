@@ -190,12 +190,11 @@ module ocn_diagnostics_variables
 
    real (kind=RKIND), dimension(:), pointer :: salinitySurfaceRestoringTendency
 
-   real (kind=RKIND), dimension(:,:), pointer :: surfaceVelocity, barotropicVelocity
+   real (kind=RKIND), dimension(:,:), pointer :: surfaceVelocity, barotropicDrag
    real (kind=RKIND), dimension(:), pointer :: gradSSHZonal, gradSSHMeridional
    real (kind=RKIND), dimension(:), pointer :: gradSSHX
    real (kind=RKIND), dimension(:), pointer :: gradSSHY
    real (kind=RKIND), dimension(:), pointer :: gradSSHZ
-   real (kind=RKIND), dimension(:), pointer :: barotropicVelocityZonal, barotropicVelocityMeridional
    real (kind=RKIND), dimension(:), pointer :: btrVelocityX
    real (kind=RKIND), dimension(:), pointer :: btrVelocityY
    real (kind=RKIND), dimension(:), pointer :: btrVelocityZ
@@ -547,8 +546,8 @@ contains
 
          call mpas_pool_get_array(diagnosticsPool, 'surfaceVelocity', &
                    surfaceVelocity)
-         call mpas_pool_get_array(diagnosticsPool, 'barotropicVelocity', &
-                   barotropicVelocity)
+         call mpas_pool_get_array(diagnosticsPool, 'barotropicDrag', &
+                   barotropicDrag)
 
          call mpas_pool_get_array(diagnosticsPool, 'vertVelocityTop', &
                    vertVelocityTop)
@@ -1292,7 +1291,7 @@ contains
                  slopeTriadDown,                  &
                  normRelVortEdge,                 &
                  surfaceVelocity,                 &
-                 barotropicVelocity,              &
+                 barotropicDrag,                  &
                  vertVelocityTop,                 &
                  eddyVelocityX,                   &
                  eddyVelocityY,                   &

@@ -305,7 +305,7 @@ contains
          timeLevelIn    !< [in] Time level for state fields
 
       ! Input structures with lots of fields
-      type (mpas_pool_type), intent(in) :: statePool ! replace
+      type (mpas_pool_type), intent(in) :: statePool
 
       !-----------------------------------------------------------------
       ! output variables
@@ -443,8 +443,8 @@ contains
 
       ! Compute bulk forcing surface stress
       call ocn_surface_bulk_forcing_vel( &
-                                    forcingPool, sfcStress, &
-                                    sfcStressMag, err)
+                                    statePool, forcingPool, &
+                                    sfcStress, sfcStressMag, err)
 
       ! Add top drag to surface stress
       call ocn_surface_land_ice_fluxes_vel( &

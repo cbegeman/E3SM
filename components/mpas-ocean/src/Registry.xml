@@ -2471,10 +2471,6 @@
 			 description="baroclinic velocity, used in split-explicit time-stepping"
 			 packages="splitTimeIntegrator"
 		/>
-		<var name="barotropicDrag" type="real" dimensions="nEdges Time" units="m s^-1"
-			 description="barotropic velocity, used in subcycling in stage 2 of split-explicit time-stepping"
-			 packages="splitTimeIntegrator"
-		/>
 
 		<!-- FIELD FOR LAND-ICE COUPLING -->
 		<var name="effectiveDensityInLandIce" type="real" dimensions="nCells Time" units="kg m^-3"
@@ -2963,6 +2959,15 @@
 
 			/>
 			<var name="surfaceVelocityMeridional" array_group="vel_meridional" units="m s^-1"
+				 description="Meridional surface velocity reconstructed at cell centers"
+			/>
+		</var_array>
+		<var_array name="barotropicDrag" type="real" dimensions="nCells Time" packages="forwardMode;analysisMode">
+			<var name="barotropicDragZonal" array_group="drag_zonal" units="m s^-1"
+				 description="Zonal surface velocity reconstructed at cell centers"
+
+			/>
+			<var name="barotropicDragMeridional" array_group="drag_meridional" units="m s^-1"
 				 description="Meridional surface velocity reconstructed at cell centers"
 			/>
 		</var_array>
