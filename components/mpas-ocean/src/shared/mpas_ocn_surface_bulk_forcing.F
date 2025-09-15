@@ -315,6 +315,11 @@ contains
           iceOcnRelVelocityZonal(iCell) = iceVelocityZonal(iCell) - surfaceVelocityZonal(iCell)
           iceOcnRelVelocityMeridional(iCell) = iceVelocityMeridional(iCell) - surfaceVelocityMeridional(iCell)
         enddo
+        iCell = 1
+        call mpas_log_write('Debug: iceVelocityZonal, iceVelocityMeridional: [$r, $r]', &
+             realArgs=(/iceVelocityZonal(iCell), iceVelocityMeridional(iCell)/))
+        call mpas_log_write('Debug: surfaceVelocityZonal, surfaceVelocityMeridional: [$r, $r]', &
+             realArgs=(/surfaceVelocityZonal(iCell), surfaceVelocityMeridional(iCell)/))
         call ocn_surface_bulk_forcing_split( &
                     windStressZonal, windStressMeridional, iceFraction, &
                     iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional,  &

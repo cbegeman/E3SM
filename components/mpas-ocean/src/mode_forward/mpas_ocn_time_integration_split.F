@@ -1028,6 +1028,10 @@ module ocn_time_integration_split
             wctEdge(:) = 0.0_RKIND
             allocate(deltaSSH(nCellsAll))
             deltaSSH(:) = 0.0_RKIND
+            allocate(surfaceVelocityZonal(nCellsAll))
+            surfaceVelocityZonal(:) = 0.0_RKIND
+            allocate(surfaceVelocityMeridional(nCellsAll))
+            surfaceVelocityMeridional(:) = 0.0_RKIND
             dragTermSubcycleMean(:) = 0.0_RKIND
 
             cellHaloComputeCounter = 0
@@ -1043,9 +1047,14 @@ module ocn_time_integration_split
 
                   ! We predict the ocean surface velocity by rotating the one from the last baroclinic timestep
                   call ocn_surface_forcing_rotate_velocity( &
-                           surfaceVelocity(indexSurfaceVelocityZonal,:), surfaceVelocity(indexSurfaceVelocityMeridional,:), &
+                           surfaceVelocity(indexSurfaceVelocityZonal,:), &
+                           surfaceVelocity(indexSurfaceVelocityMeridional,:), &
                            dtBtr, &
                            surfaceVelocityZonal, surfaceVelocityMeridional)
+                  call mpas_log_write('surfaceVelocityZonalOld = $r, surfaceVelocityZonalNew = $r', &
+                       realArgs=(/surfaceVelocity(indexSurfaceVelocityZonal,1), surfaceVelocityZonal(1)/))
+                  call mpas_log_write('surfaceVelocityMeridionalOld = $r, surfaceVelocityMeridionalNew = $r', &
+                       realArgs=(/surfaceVelocity(indexSurfaceVelocityMeridional,1), surfaceVelocityMeridional(1)/))
                   call ocn_surface_forcing_rotate_velocity( &
                            iceVelocityZonalCur, iceVelocityMeridionalCur, &
                            dtBtr, &
@@ -1689,6 +1698,8 @@ module ocn_time_integration_split
             deallocate(btrvel_temp)
             deallocate(wctEdge)
             deallocate(deltaSSH)
+            deallocate(surfaceVelocityZonal)
+            deallocate(surfaceVelocityMeridional)
 
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             ! END Barotropic subcycle loop
