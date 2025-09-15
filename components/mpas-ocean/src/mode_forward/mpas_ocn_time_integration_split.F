@@ -104,7 +104,8 @@ module ocn_time_integration_split
       useVelocityCorrection,&! mask for velocity correction
       splitFact, &! mask for terms in split or unsplit cases
       dragCoeff, &! drag coefficient to use when bottom drag is split
-      topDragCoeff, &! drag coefficient to use when bottom drag is split
+      seaIceDragCoeff, &
+      landIceDragCoeff, &! drag coefficient to use when bottom drag is split
       self_attraction_and_loading_beta
 
 !***********************************************************************
@@ -1187,10 +1188,10 @@ module ocn_time_integration_split
                         ! Compute the relative ice-ocean velocity
                         normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
                         dragTerm = 2.0_RKIND * &
-                             ( (dragCoeff + topDragCoeff * landIceEdgeFraction(iEdge)) * &
+                             ( (dragCoeff + landIceDragCoeff * landIceEdgeFraction(iEdge)) * &
                                abs(normalBarotropicVelocitySubcycleCur(iEdge)) * &
                                normalBarotropicVelocitySubcycleCur(iEdge) + &
-                               topDragCoeff * seaIceFractionEdge(iEdge) * &
+                               seaIceDragCoeff * seaIceFractionEdge(iEdge) * &
                                abs(normalVelocityIceOcn) * &
                                normalVelocityIceOcn &
                              ) / &
@@ -1485,10 +1486,16 @@ module ocn_time_integration_split
                                          sshSubcycleCur(cell2) &
                               +      config_btr_gam2_SSHWt1  * &
                                          sshSubcycleNew(cell2)
-                     dragTerm = 2.0_RKIND * (dragCoeff + topDragCoeff * landIceEdgeFraction(iEdge)) * &
-                           abs(normalBarotropicVelocitySubcycleCur(iEdge))* &
-                               normalBarotropicVelocitySubcycleCur(iEdge)/ &
-                           (bottomDepth(cell1) + bottomDepth(cell2) + &
+                     normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
+                     dragTerm = 2.0_RKIND * &
+                          ( (dragCoeff + landIceDragCoeff * landIceEdgeFraction(iEdge)) * &
+                            abs(normalBarotropicVelocitySubcycleCur(iEdge)) * &
+                            normalBarotropicVelocitySubcycleCur(iEdge) + &
+                            seaIceDragCoeff * seaIceFractionEdge(iEdge) * &
+                            abs(normalVelocityIceOcn) * &
+                            normalVelocityIceOcn &
+                          ) / &
+                          ( bottomDepth(cell1) + bottomDepth(cell2) + &
                             sshCell1 + sshCell2)
 
                      ! normalBarotropicVelocityNew =
@@ -3081,13 +3088,19 @@ module ocn_time_integration_split
       if (config_btr_bottom_drag) then
          dragCoeff = config_implicit_constant_bottom_drag_coeff
          if (config_use_implicit_top_drag) then
-            topDragCoeff = config_implicit_top_drag_coeff
+            landIceDragCoeff = config_implicit_top_drag_coeff
          else
-            topDragCoeff = config_land_ice_flux_explicit_topDragCoeff
+            landIceDragCoeff = config_land_ice_flux_explicit_topDragCoeff
          endif
+         seaIceDragCoeff = 0.0_RKIND
+      elseif (config_use_drag_from_sea_ice_velocity) then
+         dragCoeff = 0.0_RKIND
+         landIceDragCoeff = 0.0_RKIND
+         seaIceDragCoeff = 5.36e-3_RKIND ! default value given in sea ice namelist
       else
          dragCoeff = 0.0_RKIND
-         topDragCoeff = 0.0_RKIND
+         seaIceDragCoeff = 0.0_RKIND
+         landIceDragCoeff = 0.0_RKIND
       endif
 
       !*** Determine the time integration type and set associated masks
