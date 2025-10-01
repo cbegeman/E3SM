@@ -192,9 +192,9 @@ module ocn_time_integration_split
          temp_mask,        &! temporary mask (edgeMask)
          lat,              &! cell latitude
          sshCell1,         &! sea sfc height in neighboring cells
-         sshCell2,         &
+         sshCell2
 
-      real (kind=RKIND), dimension(:,:), allocatable:: &
+      real (kind=RKIND), dimension(:,:), allocatable :: &
          uTemp
 
       real (kind=RKIND), dimension(:), allocatable :: &
