@@ -195,6 +195,10 @@
 			description="Logical flag that controls if critical passages are deepened to a minimum depth."
 			possible_values=".true. or .false."
 		/>
+		<nml_option name="config_global_ocean_smooth_under_land_ice" type="logical" default_value=".true." units="unitless"
+			description="Logical flag that controls if layers should be smoothed under land ice."
+			possible_values=".true. or .false."
+		/>
 		<nml_option name="config_global_ocean_depress_by_land_ice" type="logical" default_value=".false." units="unitless"
 			description="Logical flag that controls if sea surface pressure and layer thicknesses should be altered by an overlying ice sheet/shelf."
 			possible_values=".true. or .false."

@@ -202,7 +202,9 @@ contains
       call mpas_log_write( 'Initializing vertical coordinate.')
       ! compute the vertical grid (layerThickness, restingThickness, maxLevelCell, zMid)
       ! based on bottomDepth and refBottomDepth and apply PBCs if requested
-      call ocn_init_vertical_grid(domain, iErr=iErr)
+      if (config_global_ocean_vertical_grid_source .ne. 'mpas_variable') then
+        call ocn_init_vertical_grid(domain, iErr=iErr)
+      end if
 
       if(iErr .ne. 0) then
         call mpas_log_write( 'ocn_init_vertical_grid failed.', MPAS_LOG_CRIT)
@@ -1035,7 +1037,7 @@ contains
 
              landIceDraft(iCell) = landIceDraftObserved(iCell)
              landIcePressure(iCell) = landIcePressureObserved(iCell)
-             if (landIcePressure(iCell) > 0.0_RKIND) then
+             if (landIcePressure(iCell) > 0.0_RKIND .and. config_global_ocean_smooth_under_land_ice ) then
                 sshAdjustmentMask(iCell) = 1
              end if
           end do
