@@ -312,6 +312,9 @@ contains
           surfaceVelocityMeridional(iCell) = surfaceVelocity(indexSurfaceVelocityMeridional,iCell)
 
           ! Calculate relative velocities
+          ! TODO this is only correct for use in ocn_surface_bulk_forcing_split if
+          ! surfaceVelocity* has stayed the same since the last time windStress* was defined
+          ! i.e., the ocn-atm coupling interval
           iceOcnRelVelocityZonal(iCell) = iceVelocityZonal(iCell) - surfaceVelocityZonal(iCell)
           iceOcnRelVelocityMeridional(iCell) = iceVelocityMeridional(iCell) - surfaceVelocityMeridional(iCell)
         enddo
