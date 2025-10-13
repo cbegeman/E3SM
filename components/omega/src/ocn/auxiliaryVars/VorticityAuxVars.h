@@ -31,19 +31,32 @@ class VorticityAuxVars {
       Real LayerThickVertex[VecLength] = {0};
       Real RelVortVertexTmp[VecLength] = {0};
 
-      for (int J = 0; J < VertexDegree; ++J) {
-         const int JCell = CellsOnVertex(IVertex, J);
-         const int JEdge = EdgesOnVertex(IVertex, J);
+      for (int KVec = 0; KVec < VecLength; ++KVec) {
 
-         for (int KVec = 0; KVec < VecLength; ++KVec) {
-            const int K = KStart + KVec;
-            LayerThickVertex[KVec] += InvAreaTriangle *
-                                      KiteAreasOnVertex(IVertex, J) *
+         const int K = KStart + KVec;
+         const Real AreaDual = 0._Real
+         const int BoundaryVertex = 0
+
+         for (int J = 0; J < VertexDegree; ++J) {
+            const int JCell = CellsOnVertex(IVertex, J);
+            const int JEdge = EdgesOnVertex(IVertex, J);
+            if (KVec > MaxLayerCell(JCell) or KVec < MinLayerCell(JCell))
+               BoundaryVertex = 1;
+
+            if (KVec <= MaxLayerCell(JCell) or KVec >= MinLayerCell(JCell))
+               AreaDual += KiteAreasOnVertex(IVertex, J);
+
+            LayerThickVertex[KVec] += KiteAreasOnVertex(IVertex, J) *
                                       LayerThickCell(JCell, K);
-            RelVortVertexTmp[KVec] += InvAreaTriangle * DcEdge(JEdge) *
+            RelVortVertexTmp[KVec] += DcEdge(JEdge) *
                                       EdgeSignOnVertex(IVertex, J) *
                                       NormalVelEdge(JEdge, K);
          }
+         LayerThickVertex[KVec] = LayerThickVertex[KVec] /
+                                  AreaDual;
+         RelVortVertexTmp[KVec] = InvAreaTriangle *
+                                  (1 - BoundaryVertex) *
+                                  RelVortVertexTmp[KVec];
       }
 
       for (int KVec = 0; KVec < VecLength; ++KVec) {
