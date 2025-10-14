@@ -1417,7 +1417,7 @@ contains
 
               do iCell = 1, nCells
 
-                if((smoothingMask(iCell) == 0) .or. (maxLevelCell(iCell) .ne. nVertLevels+1)) cycle
+                if(smoothingMask(iCell) == 0) cycle
 
                 if(-bottomDepth(iCell) > zBot(iCell)) then
                   ! we missed maxLevelCell, either because k < config_rx1_min_levels or
