@@ -1106,7 +1106,7 @@ contains
       real (kind=RKIND) :: dzEdgeK, dzEdgeKp1, dzEdgeMean, dzVertGoal, &
                            zMean, weight, rx1Goal, dzVertMean, &
                            zMidNext, frac, stretch, localMaxRx1Edge, &
-                           localStretchMax, localStretchMin
+                           localStretchMax, localStretchMin, columnThickness
 
       logical :: moveInterface
 
@@ -1373,7 +1373,18 @@ contains
             ! start with maxLevelCell == nVertLevels+1; we will update it when we encounter the bottom
             maxLevelCell(:) = nVertLevels+1
           end where
-
+          ! TODO
+          do iCell = 1, nCells
+            k = maxLevelCell(iCell)
+            do while (refBottomDepth(k) > bottomDepth(iCell) + ssh(iCell) .and. k > config_rx1_min_levels)
+              k = k-1
+            end do
+            if (maxLevelCell(iCell) .ne. k) &
+              call mpas_log_write('maxLevelCell adjusted from $i to $i for z_bed=$r, ssh=$r',&
+                                  intArgs=(/maxLevelCell(iCell), k/), &
+                                  realArgs=(/bottomDepth(iCell), ssh(iCell)/))
+            maxLevelCell(iCell) = k
+          enddo
           block_ptr => block_ptr % next
         end do
 
@@ -1405,6 +1416,7 @@ contains
               end if
 
               do iCell = 1, nCells
+
                 if((smoothingMask(iCell) == 0) .or. (maxLevelCell(iCell) .ne. nVertLevels+1)) cycle
 
                 if(-bottomDepth(iCell) > zBot(iCell)) then
