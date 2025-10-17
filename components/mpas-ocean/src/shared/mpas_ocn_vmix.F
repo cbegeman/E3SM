@@ -464,25 +464,25 @@ contains
 
       integer :: iEdge, k, cell1, cell2, N, Nsurf
 
-      real (kind=RKIND), dimension(:), allocatable :: bTemp, C, rTemp
-      real (kind=RKIND) :: A, m
+      real (kind=RKIND), dimension(:), allocatable :: alpha, bTemp, C, dTemp, E, F
+      real (kind=RKIND) :: A, m, botDragTerm, topDragTerm
 
       err = 0
 
       if(.not.velVmixOn) return
 
-      allocate(bTemp(nVertLevels),C(nVertLevels),rTemp(nVertLevels))
+      allocate(alpha(nVertLevels),bTemp(nVertLevels),C(nVertLevels),dTemp(nVertLevels),E(nVertLevels),F(nVertLevels))
 
 #ifdef MPAS_OPENACC
-      !$acc enter data create(bTemp, C, rTemp)
+      !$acc enter data create(alpha, bTemp, C, dTemp, E, F)
 
       !$acc parallel loop present(maxLevelEdgeTop, minLevelEdgeBot, cellsOnEdge, &
       !$acc    layerThickEdgeDrag, layerThickEdgeMean, layerThickness, vertViscTopOfEdge, &
       !$acc    normalVelocity, landIceEdgeFraction, kineticEnergyCell) &
-      !$acc    private(Nsurf, N, cell1, cell2, A, bTemp, C, m, rTemp, k)
+      !$acc    private(Nsurf, N, cell1, cell2, A, bTemp, C, m, k, botDragTerm, topDragTerm)
 #else
       !$omp parallel
-      !$omp do schedule(runtime) private(Nsurf, N, cell1, cell2, A, bTemp, C, m, rTemp, k)
+      !$omp do schedule(runtime) private(Nsurf, N, cell1, cell2, A, bTemp, C, dTemp, m, k, botDragTerm, topDragTerm)
 #endif
       do iEdge = 1, nEdgesOwned
         N = maxLevelEdgeTop(iEdge)
@@ -492,6 +492,8 @@ contains
          cell1 = cellsOnEdge(1,iEdge)
          cell2 = cellsOnEdge(2,iEdge)
 
+         ! Solve an equation of the form:
+         ! C(k)X(k+1) + B(k)X(k) + A(k)X(k-1) = D(k)
          ! one active layer
          if (N .eq. Nsurf) then
             normalVelocity(N,iEdge) = normalVelocity(N,iEdge)  &
@@ -500,44 +502,61 @@ contains
          else
 
            ! tridiagonal matrix algorithm
+           k = Nsurf
            C(Nsurf)     = -2.0_RKIND*dt*vertViscTopOfEdge(Nsurf+1,iEdge) &
                       / (layerThickEdgeMean(Nsurf,iEdge) + layerThickEdgeMean(Nsurf+1,iEdge)) &
                       / layerThickEdgeMean(Nsurf,iEdge)
-           bTemp(Nsurf) = 1.0_RKIND - C(Nsurf) &
-              + dt * implicitTopDragCoef * landIceEdgeFraction(iEdge) &
+           topDragTerm = dt * implicitTopDragCoef * landIceEdgeFraction(iEdge) &
                 * sqrt(kineticEnergyCell(Nsurf,cell1) + kineticEnergyCell(Nsurf,cell2)) / &
                 layerThickEdgeMean(Nsurf,iEdge)
-           rTemp(Nsurf) = normalVelocity(Nsurf,iEdge)
+           bTemp(Nsurf) = 1.0_RKIND - C(Nsurf) + topDragTerm
+           !rTemp(Nsurf) = normalVelocity(Nsurf,iEdge)
+           dTemp(Nsurf) = 0.0_RKIND
+           alpha(Nsurf) = -C(Nsurf) / bTemp(Nsurf)
+           E(Nsurf) = - C(Nsurf) / bTemp(Nsurf)
+           F(Nsurf) = (normalVelocity(Nsurf,iEdge) + dTemp(k)) / bTemp(Nsurf)
 
            ! first pass: set the coefficients
            do k = Nsurf+1, N-1
+              C(k)     = -2.0_RKIND*dt*vertViscTopOfEdge(k+1,iEdge) &
+                     / (layerThickEdgeMean(k,iEdge) + layerThickEdgeMean(k+1,iEdge)) &
+                     / layerThickEdgeMean(k,iEdge)
               A        = -2.0_RKIND*dt*vertViscTopOfEdge(k,iEdge) &
                      / (layerThickEdgeMean(k-1,iEdge) + layerThickEdgeMean(k,iEdge)) &
                      / layerThickEdgeMean(k,iEdge)
               m        = A/bTemp(k-1)
-              C(k)     = -2.0_RKIND*dt*vertViscTopOfEdge(k+1,iEdge) &
-                     / (layerThickEdgeMean(k,iEdge) + layerThickEdgeMean(k+1,iEdge)) &
-                     / layerThickEdgeMean(k,iEdge)
+              alpha(k) = (-C(k) * (1.0_RKIND + alpha(k-1))) / &
+                         (1.0_RKIND - C(k) + alpha(k-1))
+              E(k)     = -C(k) / (1.0_RKIND - C(k) + alpha(k-1))
               bTemp(k) = 1.0_RKIND - A - C(k) - m*C(k-1)
-              rTemp(k) = normalVelocity(k,iEdge) - m*rTemp(k-1)
+              !rTemp(k) = normalVelocity(k,iEdge) - m*rTemp(k-1)
+              dTemp(k) = - C(k-1) * F(k-1)
+              F(k)     = (normalVelocity(k,iEdge) + dTemp(k)) / &
+                         (1.0_RKIND - C(k) + alpha(k-1))
            enddo
 
-           A = -2.0_RKIND*dt*vertViscTopOfEdge(N,iEdge) &
-             / (layerThickEdgeMean(N-1,iEdge) + layerThickEdgeMean(N,iEdge)) &
-             / layerThickEdgeMean(N,iEdge)
-           m = A/bTemp(N-1)
-
-           ! x(N) = rTemp(N) / bTemp(N)
            ! Apply bottom drag boundary condition on the viscous term
            ! using sqrt(2.0*kineticEnergyEdge(k,iEdge))
-           normalVelocity(N,iEdge) = (normalVelocity(N,iEdge) - m*rTemp(N-1)) &
-               / (1.0_RKIND - A + dt*implicitBottomDragCoef &
-               * sqrt(kineticEnergyCell(N,cell1) + kineticEnergyCell(N,cell2)) / layerThickEdgeDrag(N,iEdge) &
-               - m*C(N-1))
+           botDragTerm = dt*implicitBottomDragCoef &
+               * sqrt(kineticEnergyCell(N,cell1) + kineticEnergyCell(N,cell2)) / layerThickEdgeDrag(N,iEdge)
+
+           ! Re-normalizing by layerThickEdgeMean seems necessary
+           A = layerThickEdgeMean(N-1,iEdge) * C(N-1) / layerThickEdgeMean(N,iEdge)
+           m = A /bTemp(N-1)
+           E(N) = 1.0_RKIND / (1.0_RKIND - A + botDragTerm - m*C(N-1))
+           dTemp(N) = - C(N-1) * F(N-1)
+           F(N) = dTemp(N) / &
+                  (1.0_RKIND - A + botDragTerm - m*C(N-1))
+           normalVelocity(N,iEdge) = E(N)*normalVelocity(N,iEdge) + F(N)
+
            ! second pass: back substitution
            do k = N-1, Nsurf, -1
-              normalVelocity(k,iEdge) = (rTemp(k) - C(k)*normalVelocity(k+1,iEdge)) / bTemp(k)
+              ! This is the original implementation
+              !E(k) = - C(k) / bTemp(k)
+              !F(k) = rTemp(k) / bTemp(k)
+              normalVelocity(k,iEdge) = E(k)*normalVelocity(k+1,iEdge) + F(k)
            enddo
+
            normalVelocity(1:Nsurf-1,iEdge) = 0.0_RKIND
            normalVelocity(N+1:nVertLevels,iEdge) = 0.0_RKIND
 
@@ -553,7 +572,7 @@ contains
       !$acc exit data delete(bTemp, C, rTemp)
 #endif
 
-      deallocate(bTemp,C,rTemp)
+      deallocate(bTemp,C,dTemp, E,F,rTemp)
 
    !--------------------------------------------------------------------
 
