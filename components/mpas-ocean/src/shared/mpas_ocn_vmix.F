@@ -502,7 +502,6 @@ contains
          else
 
            ! tridiagonal matrix algorithm
-           k = Nsurf
            C(Nsurf)     = -2.0_RKIND*dt*vertViscTopOfEdge(Nsurf+1,iEdge) &
                       / (layerThickEdgeMean(Nsurf,iEdge) + layerThickEdgeMean(Nsurf+1,iEdge)) &
                       / layerThickEdgeMean(Nsurf,iEdge)
@@ -514,7 +513,7 @@ contains
            dTemp(Nsurf) = 0.0_RKIND
            alpha(Nsurf) = -C(Nsurf) / bTemp(Nsurf)
            E(Nsurf) = - C(Nsurf) / bTemp(Nsurf)
-           F(Nsurf) = (normalVelocity(Nsurf,iEdge) + dTemp(k)) / bTemp(Nsurf)
+           F(Nsurf) = (normalVelocity(Nsurf,iEdge) + dTemp(Nsurf)) / bTemp(Nsurf)
 
            ! first pass: set the coefficients
            do k = Nsurf+1, N-1
@@ -569,10 +568,10 @@ contains
 #endif
 
 #ifdef MPAS_OPENACC
-      !$acc exit data delete(bTemp, C, rTemp)
+      !$acc exit data delete(bTemp,C,dTemp,E,F)
 #endif
 
-      deallocate(bTemp,C,dTemp, E,F,rTemp)
+      deallocate(bTemp,C,dTemp,E,F)
 
    !--------------------------------------------------------------------
 
@@ -1232,8 +1231,10 @@ contains
 
       integer :: iCell, k, iTracer, num_tracers, N, Nsurf
 
-      real (kind=RKIND), dimension(:), allocatable :: bTemp, C
-      real (kind=RKIND), dimension(:,:), allocatable :: rTemp
+      !real (kind=RKIND), dimension(:), allocatable :: C
+      real (kind=RKIND), dimension(:), allocatable :: alpha, bTemp, C, E, F
+      real (kind=RKIND), dimension(:,:), allocatable :: rTemp, nonLocalTerm
+      !real (kind=RKIND), dimension(:,:), allocatable :: alpha, bTemp, dTemp, rTemp
       real (kind=RKIND) :: A, m
 
       err = 0
@@ -1242,21 +1243,24 @@ contains
 
       num_tracers = size(tracers, dim=1)
 
-      allocate(bTemp(nVertLevels),C(nVertLevels))
-      allocate(rTemp(num_tracers,nVertLevels))
+      allocate(alpha(nVertLevels),bTemp(nVertLevels),C(nVertLevels), &
+               E(nVertLevels),F(nVertLevels))
+      allocate(nonLocalTerm(num_tracers,nVertLevels),rTemp(num_tracers,nVertLevels))
+      !allocate(nonLocalTerm(num_tracers,nVertLevels),alpha(num_tracers,nVertLevels), &
+      !         bTemp(num_tracers,nVertLevels),dTemp(num_tracers,nVertLevels),rTemp(num_tracers,nVertLevels), &
 
       call mpas_timer_start('vmix tracers tend imp loop', .false.)
 
-#ifdef MPAS_OPENACC
-      !$acc enter data create(bTemp, C, rTemp)
-
-      !$acc parallel loop present(maxLevelCell, minLevelCell, vertDiffTopOfCell, &
-      !$acc    layerThickness, tracers, tracerGroupSurfaceFlux, vertNonLocalFlux) &
-      !$acc    private(Nsurf, N, A, bTemp, C, m, rTemp, iTracer, k)
-#else
-      !$omp parallel
-      !$omp do schedule(runtime) private(Nsurf, N, A, bTemp, C, m, rTemp, iTracer, k)
-#endif
+!#ifdef MPAS_OPENACC
+!      !$acc enter data create(bTemp, C, rTemp)
+!
+!      !$acc parallel loop present(maxLevelCell, minLevelCell, vertDiffTopOfCell, &
+!      !$acc    layerThickness, tracers, tracerGroupSurfaceFlux, vertNonLocalFlux) &
+!      !$acc    private(Nsurf, N, A, bTemp, C, m, rTemp, iTracer, k, nonLocalTerm)
+!#else
+!      !$omp parallel
+!      !$omp do schedule(runtime) private(Nsurf, N, A, bTemp, C, m, rTemp, iTracer, k, nonLocalTerm)
+!#endif
       do iCell = 1, nCellsOwned
          Nsurf = minLevelCell(iCell)
          N = maxLevelCell(iCell)
@@ -1266,16 +1270,22 @@ contains
                     / (layerThickness(Nsurf,iCell) + layerThickness(Nsurf+1,iCell)) &
                     / layerThickness(Nsurf,iCell)
          bTemp(Nsurf) = 1.0_RKIND - C(Nsurf)
+         alpha(Nsurf) = -C(Nsurf) / bTemp(Nsurf)
          if ( config_cvmix_kpp_nonlocal_with_implicit_mix ) then
             do iTracer = 1, num_tracers
-               rTemp(iTracer,Nsurf) = tracers(iTracer,Nsurf,iCell) + dt*tracerGroupSurfaceFlux(iTracer,iCell) &
+               nonLocalTerm(iTracer,Nsurf) = dt*tracerGroupSurfaceFlux(iTracer,iCell) &
                     * (-vertNonLocalFlux(1, Nsurf+1,iCell) )/ layerThickness(Nsurf,iCell)
             enddo
          else
-            do iTracer = 1, num_tracers
-               rTemp(iTracer,Nsurf) = tracers(iTracer,Nsurf,iCell)
-            enddo
+            nonLocalTerm(:,Nsurf) = 0.0_RKIND
          endif
+         do iTracer = 1, num_tracers
+            rTemp(iTracer,Nsurf) = tracers(iTracer,Nsurf,iCell) + nonLocalTerm(iTracer,Nsurf)
+         enddo
+         !do iTracer = 1, num_tracers
+         !   E(iTracer,Nsurf) = -C(Nsurf) / bTemp(iTracer,Nsurf)
+         !   F(iTracer,Nsurf) = (tracers(iTracer,Nsurf,iCell) + nonLocalTerm(iTracer,Nsurf) + dTemp(iTracer,Nsurf)) / bTemp(iTracer,Nsurf)
+         !enddo
 
          ! first pass: set the coefficients
          do k = Nsurf+1, N-1
@@ -1284,58 +1294,75 @@ contains
             m        = A/bTemp(k-1)
             C(k)     = -2.0_RKIND*dt*vertDiffTopOfCell(k+1,iCell) &
                    / (layerThickness(k,iCell) + layerThickness(k+1,iCell)) / layerThickness(k,iCell)
-            bTemp(k) = 1.0_RKIND - A - C(k) - m*C(k-1)
+            bTemp(k) = 1.0_RKIND - C(k) + alpha(k-1)
+            alpha(k) = (-C(k) * (1.0_RKIND + alpha(k-1))) / bTemp(k)
             if ( config_cvmix_kpp_nonlocal_with_implicit_mix ) then
                do iTracer = 1, num_tracers
-                  rTemp(iTracer,k) = tracers(iTracer,k,iCell) + dt*tracerGroupSurfaceFlux(iTracer,iCell) &
-                       * (vertNonLocalFlux(1,k,iCell) - vertNonLocalFlux(1,k+1,iCell)) / layerThickness(k,iCell) &
-                       - m*rTemp(iTracer,k-1)
+                  nonLocalTerm(iTracer,k) = dt*tracerGroupSurfaceFlux(iTracer,iCell) &
+                       * (vertNonLocalFlux(1,k,iCell) - vertNonLocalFlux(1,k+1,iCell)) / layerThickness(k,iCell)
                enddo
             else
-               do iTracer = 1, num_tracers
-                  rTemp(iTracer,k) = tracers(iTracer,k,iCell) - m*rTemp(iTracer,k-1)
-               enddo
+               nonLocalTerm(:,k) = 0.0_RKIND
             endif
+            do iTracer = 1, num_tracers
+               rTemp(iTracer,k) = tracers(iTracer,k,iCell) - m*rTemp(iTracer,k-1) + nonLocalTerm(iTracer,k)
+            enddo
+            !   dTemp(iTracer,k) = -C(k-1) * F(iTracer,k-1)
+            !   E(iTracer,k) = -C(k) / &
+            !                  (1.0_RKIND - C(k) + alpha(iTracer,k-1) + nonLocalTerm(iTracer,k))
+            !   F(iTracer,k) = (tracers(iTracer,k,iCell) + dTemp(iTracer,k)) / &
+            !                  (1.0_RKIND - C(k) + alpha(iTracer,k-1) + nonLocalTerm(iTracer,k))
+
          enddo
 
          A = -2.0_RKIND*dt*vertDiffTopOfCell(N,iCell) &
            / (layerThickness(N-1,iCell) + layerThickness(N,iCell)) / layerThickness(N,iCell)
          m = A/bTemp(N-1)
+         bTemp(N) = 1.0_RKIND - A - m*C(N-1)
+         !bTemp(N) = 1.0_RKIND - A + alpha(N-1)
 
          ! x(N) = rTemp(N) / bTemp(N)
          if ( config_cvmix_kpp_nonlocal_with_implicit_mix ) then
             do iTracer = 1, num_tracers
-               tracers(iTracer,N,iCell) = (tracers(iTracer,N,iCell) + dt*tracerGroupSurfaceFlux(iTracer,iCell) &
-                      * vertNonLocalFlux(1,N,iCell) / layerThickness(N,iCell) &
-                      - m*rTemp(iTracer,N-1)) / (1.0_RKIND - A - m*C(N-1))
+               nonLocalTerm(iTracer,N) = dt*tracerGroupSurfaceFlux(iTracer,iCell) &
+                      * vertNonLocalFlux(1,N,iCell) / layerThickness(N,iCell)
             enddo
          else
-            do iTracer = 1, num_tracers
-               tracers(iTracer,N,iCell) = (tracers(iTracer,N,iCell) - m*rTemp(iTracer,N-1)) &
-                      / (1.0_RKIND - A - m*C(N-1))
-            enddo
+            nonLocalTerm(:,N) = 0.0_RKIND
          endif
+         do iTracer = 1, num_tracers
+            tracers(iTracer,N,iCell) = (tracers(iTracer,N,iCell) - m*rTemp(iTracer,N-1) + nonLocalTerm(iTracer,N)) &
+                   / bTemp(N)
+         enddo
+         !   dTemp(iTracer,N) = -C(N-1) * F(iTracer,N-1)
+         !   E(iTracer,N) = 1.0_RKIND / (1.0_RKIND - A + nonLocalTerm(iTracer,N) + m*C(N-1))
+         !   F(iTracer,N) = dTemp(iTracer,N) / (1.0_RKIND - A + nonLocalTerm(iTracer,N) + m*C(N-1))
+
          ! second pass: back subsititution
          do k = N-1, Nsurf, -1
             do iTracer = 1, num_tracers
-               tracers(iTracer,k,iCell) = (rTemp(iTracer,k) - C(k)*tracers(iTracer,k+1,iCell)) / bTemp(k)
-            enddo
+               E(k) = - C(k) / bTemp(k)
+               F(k) = rTemp(iTracer,k) / bTemp(k)
+               tracers(iTracer,k,iCell) = E(k)*tracers(iTracer,k+1,iCell) + F(k)
+               !tracers(iTracer,k,iCell) = (rTemp(iTracer,k) - C(k)*tracers(iTracer,k+1,iCell)) / bTemp(k) 
+           enddo
          enddo
          tracers(:,1:Nsurf-1,iCell) = -1e34
          tracers(:,N+1:nVertLevels,iCell) = -1e34
 
       end do
-#ifndef MPAS_OPENACC
-      !$omp end do
-      !$omp end parallel
-#endif
-
-#ifdef MPAS_OPENACC
-      !$acc exit data delete(bTemp, C, rTemp)
-#endif
+!#ifndef MPAS_OPENACC
+!      !$omp end do
+!      !$omp end parallel
+!#endif
+!
+!#ifdef MPAS_OPENACC
+!      !$acc exit data delete(bTemp, C, rTemp)
+!#endif
       call mpas_timer_stop('vmix tracers tend imp loop')
 
       deallocate(bTemp, C, rTemp)
+      !deallocate(alpha, bTemp, C, dTemp, E, F, rTemp)
 
    !--------------------------------------------------------------------
 
