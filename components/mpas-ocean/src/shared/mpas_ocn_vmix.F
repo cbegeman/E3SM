@@ -509,7 +509,6 @@ contains
                 * sqrt(kineticEnergyCell(Nsurf,cell1) + kineticEnergyCell(Nsurf,cell2)) / &
                 layerThickEdgeMean(Nsurf,iEdge)
            bTemp(Nsurf) = 1.0_RKIND - C(Nsurf) + topDragTerm
-           !rTemp(Nsurf) = normalVelocity(Nsurf,iEdge)
            dTemp(Nsurf) = 0.0_RKIND
            alpha(Nsurf) = -C(Nsurf) / bTemp(Nsurf)
            E(Nsurf) = - C(Nsurf) / bTemp(Nsurf)
@@ -528,7 +527,6 @@ contains
                          (1.0_RKIND - C(k) + alpha(k-1))
               E(k)     = -C(k) / (1.0_RKIND - C(k) + alpha(k-1))
               bTemp(k) = 1.0_RKIND - A - C(k) - m*C(k-1)
-              !rTemp(k) = normalVelocity(k,iEdge) - m*rTemp(k-1)
               dTemp(k) = - C(k-1) * F(k-1)
               F(k)     = (normalVelocity(k,iEdge) + dTemp(k)) / &
                          (1.0_RKIND - C(k) + alpha(k-1))
@@ -550,9 +548,6 @@ contains
 
            ! second pass: back substitution
            do k = N-1, Nsurf, -1
-              ! This is the original implementation
-              !E(k) = - C(k) / bTemp(k)
-              !F(k) = rTemp(k) / bTemp(k)
               normalVelocity(k,iEdge) = E(k)*normalVelocity(k+1,iEdge) + F(k)
            enddo
 
@@ -1231,10 +1226,8 @@ contains
 
       integer :: iCell, k, iTracer, num_tracers, N, Nsurf
 
-      !real (kind=RKIND), dimension(:), allocatable :: C
       real (kind=RKIND), dimension(:), allocatable :: alpha, bTemp, C, E, F
       real (kind=RKIND), dimension(:,:), allocatable :: rTemp, nonLocalTerm
-      !real (kind=RKIND), dimension(:,:), allocatable :: alpha, bTemp, dTemp, rTemp
       real (kind=RKIND) :: A, m
 
       err = 0
@@ -1246,21 +1239,19 @@ contains
       allocate(alpha(nVertLevels),bTemp(nVertLevels),C(nVertLevels), &
                E(nVertLevels),F(nVertLevels))
       allocate(nonLocalTerm(num_tracers,nVertLevels),rTemp(num_tracers,nVertLevels))
-      !allocate(nonLocalTerm(num_tracers,nVertLevels),alpha(num_tracers,nVertLevels), &
-      !         bTemp(num_tracers,nVertLevels),dTemp(num_tracers,nVertLevels),rTemp(num_tracers,nVertLevels), &
 
       call mpas_timer_start('vmix tracers tend imp loop', .false.)
 
-!#ifdef MPAS_OPENACC
-!      !$acc enter data create(bTemp, C, rTemp)
-!
-!      !$acc parallel loop present(maxLevelCell, minLevelCell, vertDiffTopOfCell, &
-!      !$acc    layerThickness, tracers, tracerGroupSurfaceFlux, vertNonLocalFlux) &
-!      !$acc    private(Nsurf, N, A, bTemp, C, m, rTemp, iTracer, k, nonLocalTerm)
-!#else
-!      !$omp parallel
-!      !$omp do schedule(runtime) private(Nsurf, N, A, bTemp, C, m, rTemp, iTracer, k, nonLocalTerm)
-!#endif
+#ifdef MPAS_OPENACC
+      !$acc enter data create(bTemp, C, E, F, rTemp, nonLocalTerm)
+
+      !$acc parallel loop present(maxLevelCell, minLevelCell, vertDiffTopOfCell, &
+      !$acc    layerThickness, tracers, tracerGroupSurfaceFlux, vertNonLocalFlux) &
+      !$acc    private(Nsurf, N, alpha, A, bTemp, C, E, F, m, rTemp, iTracer, k, nonLocalTerm)
+#else
+      !$omp parallel
+      !$omp do schedule(runtime) private(Nsurf, N, A, alpha, bTemp, C, E, F, m, rTemp, iTracer, k, nonLocalTerm)
+#endif
       do iCell = 1, nCellsOwned
          Nsurf = minLevelCell(iCell)
          N = maxLevelCell(iCell)
@@ -1282,10 +1273,6 @@ contains
          do iTracer = 1, num_tracers
             rTemp(iTracer,Nsurf) = tracers(iTracer,Nsurf,iCell) + nonLocalTerm(iTracer,Nsurf)
          enddo
-         !do iTracer = 1, num_tracers
-         !   E(iTracer,Nsurf) = -C(Nsurf) / bTemp(iTracer,Nsurf)
-         !   F(iTracer,Nsurf) = (tracers(iTracer,Nsurf,iCell) + nonLocalTerm(iTracer,Nsurf) + dTemp(iTracer,Nsurf)) / bTemp(iTracer,Nsurf)
-         !enddo
 
          ! first pass: set the coefficients
          do k = Nsurf+1, N-1
@@ -1307,19 +1294,12 @@ contains
             do iTracer = 1, num_tracers
                rTemp(iTracer,k) = tracers(iTracer,k,iCell) - m*rTemp(iTracer,k-1) + nonLocalTerm(iTracer,k)
             enddo
-            !   dTemp(iTracer,k) = -C(k-1) * F(iTracer,k-1)
-            !   E(iTracer,k) = -C(k) / &
-            !                  (1.0_RKIND - C(k) + alpha(iTracer,k-1) + nonLocalTerm(iTracer,k))
-            !   F(iTracer,k) = (tracers(iTracer,k,iCell) + dTemp(iTracer,k)) / &
-            !                  (1.0_RKIND - C(k) + alpha(iTracer,k-1) + nonLocalTerm(iTracer,k))
-
          enddo
 
          A = -2.0_RKIND*dt*vertDiffTopOfCell(N,iCell) &
            / (layerThickness(N-1,iCell) + layerThickness(N,iCell)) / layerThickness(N,iCell)
          m = A/bTemp(N-1)
          bTemp(N) = 1.0_RKIND - A - m*C(N-1)
-         !bTemp(N) = 1.0_RKIND - A + alpha(N-1)
 
          ! x(N) = rTemp(N) / bTemp(N)
          if ( config_cvmix_kpp_nonlocal_with_implicit_mix ) then
@@ -1334,9 +1314,6 @@ contains
             tracers(iTracer,N,iCell) = (tracers(iTracer,N,iCell) - m*rTemp(iTracer,N-1) + nonLocalTerm(iTracer,N)) &
                    / bTemp(N)
          enddo
-         !   dTemp(iTracer,N) = -C(N-1) * F(iTracer,N-1)
-         !   E(iTracer,N) = 1.0_RKIND / (1.0_RKIND - A + nonLocalTerm(iTracer,N) + m*C(N-1))
-         !   F(iTracer,N) = dTemp(iTracer,N) / (1.0_RKIND - A + nonLocalTerm(iTracer,N) + m*C(N-1))
 
          ! second pass: back subsititution
          do k = N-1, Nsurf, -1
@@ -1344,25 +1321,23 @@ contains
                E(k) = - C(k) / bTemp(k)
                F(k) = rTemp(iTracer,k) / bTemp(k)
                tracers(iTracer,k,iCell) = E(k)*tracers(iTracer,k+1,iCell) + F(k)
-               !tracers(iTracer,k,iCell) = (rTemp(iTracer,k) - C(k)*tracers(iTracer,k+1,iCell)) / bTemp(k) 
            enddo
          enddo
          tracers(:,1:Nsurf-1,iCell) = -1e34
          tracers(:,N+1:nVertLevels,iCell) = -1e34
 
       end do
-!#ifndef MPAS_OPENACC
-!      !$omp end do
-!      !$omp end parallel
-!#endif
-!
-!#ifdef MPAS_OPENACC
-!      !$acc exit data delete(bTemp, C, rTemp)
-!#endif
+#ifndef MPAS_OPENACC
+      !$omp end do
+      !$omp end parallel
+#endif
+
+#ifdef MPAS_OPENACC
+      !$acc exit data delete(bTemp, C, rTemp)
+#endif
       call mpas_timer_stop('vmix tracers tend imp loop')
 
-      deallocate(bTemp, C, rTemp)
-      !deallocate(alpha, bTemp, C, dTemp, E, F, rTemp)
+      deallocate(alpha, bTemp, C, dTemp, E, F, rTemp)
 
    !--------------------------------------------------------------------
 
