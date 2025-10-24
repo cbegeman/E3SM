@@ -464,25 +464,25 @@ contains
 
       integer :: iEdge, k, cell1, cell2, N, Nsurf
 
-      real (kind=RKIND), dimension(:), allocatable :: alpha, bTemp, C, dTemp, E, F
+      real (kind=RKIND), dimension(:), allocatable :: alpha, bTemp, C, dTemp, E, F, rTemp
       real (kind=RKIND) :: A, m, botDragTerm, topDragTerm
 
       err = 0
 
       if(.not.velVmixOn) return
 
-      allocate(alpha(nVertLevels),bTemp(nVertLevels),C(nVertLevels),dTemp(nVertLevels),E(nVertLevels),F(nVertLevels))
+      allocate(alpha(nVertLevels),bTemp(nVertLevels),C(nVertLevels),dTemp(nVertLevels),E(nVertLevels),F(nVertLevels),rTemp(nVertLevels))
 
 #ifdef MPAS_OPENACC
-      !$acc enter data create(alpha, bTemp, C, dTemp, E, F)
+      !$acc enter data create(alpha, bTemp, C, dTemp, E, F,rTemp)
 
       !$acc parallel loop present(maxLevelEdgeTop, minLevelEdgeBot, cellsOnEdge, &
       !$acc    layerThickEdgeDrag, layerThickEdgeMean, layerThickness, vertViscTopOfEdge, &
       !$acc    normalVelocity, landIceEdgeFraction, kineticEnergyCell) &
-      !$acc    private(Nsurf, N, cell1, cell2, A, bTemp, C, m, k, botDragTerm, topDragTerm)
+      !$acc    private(Nsurf, N, cell1, cell2, A, bTemp, C, m, k, botDragTerm, topDragTerm, rTemp)
 #else
       !$omp parallel
-      !$omp do schedule(runtime) private(Nsurf, N, cell1, cell2, A, bTemp, C, dTemp, m, k, botDragTerm, topDragTerm)
+      !$omp do schedule(runtime) private(Nsurf, N, cell1, cell2, A, bTemp, C, dTemp, m, k, botDragTerm, topDragTerm, rTemp)
 #endif
       do iEdge = 1, nEdgesOwned
         N = maxLevelEdgeTop(iEdge)
@@ -509,6 +509,7 @@ contains
                 * sqrt(kineticEnergyCell(Nsurf,cell1) + kineticEnergyCell(Nsurf,cell2)) / &
                 layerThickEdgeMean(Nsurf,iEdge)
            bTemp(Nsurf) = 1.0_RKIND - C(Nsurf) + topDragTerm
+           rTemp(Nsurf) = normalVelocity(Nsurf,iEdge)
            dTemp(Nsurf) = 0.0_RKIND
            alpha(Nsurf) = -C(Nsurf) / bTemp(Nsurf)
            E(Nsurf) = - C(Nsurf) / bTemp(Nsurf)
@@ -527,6 +528,7 @@ contains
                          (1.0_RKIND - C(k) + alpha(k-1))
               E(k)     = -C(k) / (1.0_RKIND - C(k) + alpha(k-1))
               bTemp(k) = 1.0_RKIND - A - C(k) - m*C(k-1)
+              rTemp(k) = normalVelocity(k,iEdge) - m*rTemp(k-1)
               dTemp(k) = - C(k-1) * F(k-1)
               F(k)     = (normalVelocity(k,iEdge) + dTemp(k)) / &
                          (1.0_RKIND - C(k) + alpha(k-1))
@@ -535,16 +537,24 @@ contains
            ! Apply bottom drag boundary condition on the viscous term
            ! using sqrt(2.0*kineticEnergyEdge(k,iEdge))
            botDragTerm = dt*implicitBottomDragCoef &
-               * sqrt(kineticEnergyCell(N,cell1) + kineticEnergyCell(N,cell2)) / layerThickEdgeDrag(N,iEdge)
+               * sqrt(kineticEnergyCell(N,cell1) + kineticEnergyCell(N,cell2)) / &
+               layerThickEdgeDrag(N,iEdge)
 
            ! Re-normalizing by layerThickEdgeMean seems necessary
            A = layerThickEdgeMean(N-1,iEdge) * C(N-1) / layerThickEdgeMean(N,iEdge)
+
            m = A /bTemp(N-1)
-           E(N) = 1.0_RKIND / (1.0_RKIND - A + botDragTerm - m*C(N-1))
-           dTemp(N) = - C(N-1) * F(N-1)
-           F(N) = dTemp(N) / &
-                  (1.0_RKIND - A + botDragTerm - m*C(N-1))
-           normalVelocity(N,iEdge) = E(N)*normalVelocity(N,iEdge) + F(N)
+
+           !dTemp(N) = - C(N-1) * F(N-1)
+           dTemp(N) = -m * rTemp(N-1)
+           bTemp(N) = 1.0_RKIND - A + botDragTerm - m*C(N-1)
+
+           normalVelocity(N,iEdge) = (normalVelocity(N,iEdge) + dTemp(N)) &
+               / bTemp(N)
+           !E(N) = 1.0_RKIND / (1.0_RKIND - A + botDragTerm - m*C(N-1))
+           !F(N) = dTemp(N) / &
+           !       (1.0_RKIND - A + botDragTerm - m*C(N-1))
+           !normalVelocity(N,iEdge) = E(N)*normalVelocity(N,iEdge) + F(N)
 
            ! second pass: back substitution
            do k = N-1, Nsurf, -1
@@ -1337,7 +1347,7 @@ contains
 #endif
       call mpas_timer_stop('vmix tracers tend imp loop')
 
-      deallocate(alpha, bTemp, C, dTemp, E, F, rTemp)
+      deallocate(alpha, bTemp, C, E, F, rTemp)
 
    !--------------------------------------------------------------------
 
