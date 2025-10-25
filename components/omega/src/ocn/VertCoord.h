@@ -112,6 +112,12 @@ class VertCoord {
    HostArray1DReal VertCoordMovementWeightsH;
    HostArray2DReal RefLayerThicknessH;
 
+   // Masks
+   Array2DReal EdgeMask;      ///< Mask to determine if computations should be
+                              ///  done on edge
+   HostArray2DReal EdgeMaskH; ///< Mask to determine if computations should be
+                              ///  done on edge
+
    // BottomDepth read from mesh file
    Array1DReal BottomDepth;
 
@@ -154,6 +160,9 @@ class VertCoord {
    /// Read InitialVertCoord stream and complete initialization
    void completeSetup(Config *Options /// [in] configuration options
    );
+
+   /// Initialize computational masks
+   void setMasks();
 
    /// Copy member arrays from device to host
    void copyToHost();

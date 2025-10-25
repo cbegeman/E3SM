@@ -610,6 +610,35 @@ void VertCoord::minMaxLayerVertex() {
 } // end MinMaxLayerVertex
 
 //------------------------------------------------------------------------------
+// set computational masks for mesh elements
+void VertCoord::setMasks() {
+
+   EdgeMask = Array2DReal("EdgeMask", NEdgesSize, NVertLayers);
+
+   OMEGA_SCOPE(LocEdgeMask, EdgeMask);
+   OMEGA_SCOPE(LocMinLyrEdgeBot, MinLayerEdgeBot);
+   OMEGA_SCOPE(LocMaxLyrEdgeTop, MaxLayerEdgeTop);
+
+   // EdgeMask = 1 if active layers on both sides, 0 otherwise.
+   deepCopy(EdgeMask, 0.);
+   parallelForOuter(
+       {NEdgesAll}, KOKKOS_LAMBDA(int IEdge, const TeamMember &Team) {
+          const I4 KMin = LocMinLyrEdgeBot(IEdge);
+          const I4 KMax = LocMaxLyrEdgeTop(IEdge);
+
+          parallelForInner(
+              Team, KMax - KMin + 1, INNER_LAMBDA(int K) {
+                 I4 KLyr = KMin + K;
+
+                 LocEdgeMask(IEdge, KLyr) = 1._Real;
+              });
+       });
+
+   EdgeMaskH = createHostMirrorCopy(EdgeMask);
+
+} // end setMasks()
+
+//------------------------------------------------------------------------------
 // Store VertCoordMovementWeights based on config choice
 void VertCoord::initMovementWeights(
     Config *Options // [in] configuration options
