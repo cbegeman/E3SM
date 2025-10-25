@@ -66,7 +66,7 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    Err = IO::getDimFromFile(MeshFileID, "nVertLevels", NVertLayersID,
                             NVertLayers);
    if (!Err.isSuccess()) {
-      LOG_WARN("VertCoord: error reading nVertLevels from mesh file, "
+      LOG_INFO("VertCoord: error reading nVertLevels from mesh file, "
                "using NVertLayers = 1");
       NVertLayers = 1;
    }
@@ -160,14 +160,14 @@ void VertCoord::completeSetup(Config *Options //< [in] configuration options
    if (IsValidated) {
       Err = IOStream::read(StreamName);
       if (!Err.isSuccess()) {
-         LOG_WARN("VertCoord: Error reading {} stream", StreamName);
+         LOG_INFO("VertCoord: Error reading {} stream", StreamName);
          I4 Sum1 = 0;
          parallelReduce(
              {MinLayerCell.extent_int(0)},
              KOKKOS_LAMBDA(int I, int &Accum) { Accum += LocMinLayerCell(I); },
              Sum1);
          if (Sum1 < 0) {
-            LOG_WARN("VertCoord: Error reading minLevelCell from {}, "
+            LOG_INFO("VertCoord: Error reading minLevelCell from {}, "
                      "using MinLayerCell = 0",
                      StreamName);
             deepCopy(MinLayerCell, 1);
@@ -178,7 +178,7 @@ void VertCoord::completeSetup(Config *Options //< [in] configuration options
              KOKKOS_LAMBDA(int I, int &Accum) { Accum += LocMaxLayerCell(I); },
              Sum2);
          if (Sum2 < 0) {
-            LOG_WARN("VertCoord: Error reading maxLevelCell from {}, "
+            LOG_INFO("VertCoord: Error reading maxLevelCell from {}, "
                      "using MaxLayerCell = NVertLayers - 1",
                      StreamName);
             deepCopy(MaxLayerCell, NVertLayers);
@@ -642,6 +642,7 @@ void VertCoord::setMasks() {
    OMEGA_SCOPE(LocMinLyrCell, MinLayerCell);
    OMEGA_SCOPE(LocMaxLyrCell, MaxLayerCell);
 
+   // CellMask = 1 in active layers, 0 otherwise.
    deepCopy(CellMask, 0.);
    parallelForOuter(
        {NCellsAll}, KOKKOS_LAMBDA(int ICell, const TeamMember &Team) {
