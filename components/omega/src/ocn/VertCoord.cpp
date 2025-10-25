@@ -636,6 +636,28 @@ void VertCoord::setMasks() {
 
    EdgeMaskH = createHostMirrorCopy(EdgeMask);
 
+   CellMask = Array2DReal("CellMask", NCellsSize, NVertLayers);
+
+   OMEGA_SCOPE(LocCellMask, CellMask);
+   OMEGA_SCOPE(LocMinLyrCell, MinLayerCell);
+   OMEGA_SCOPE(LocMaxLyrCell, MaxLayerCell);
+
+   deepCopy(CellMask, 0.);
+   parallelForOuter(
+       {NCellsAll}, KOKKOS_LAMBDA(int ICell, const TeamMember &Team) {
+          const I4 KMin = LocMinLyrCell(ICell);
+          const I4 KMax = LocMaxLyrCell(ICell);
+
+          parallelForInner(
+              Team, KMax - KMin + 1, INNER_LAMBDA(int K) {
+                 I4 KLyr = KMin + K;
+
+                 LocCellMask(ICell, KLyr) = 1._Real;
+              });
+       });
+
+   CellMaskH = createHostMirrorCopy(CellMask);
+
 } // end setMasks()
 
 //------------------------------------------------------------------------------

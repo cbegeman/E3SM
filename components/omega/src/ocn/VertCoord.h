@@ -117,6 +117,10 @@ class VertCoord {
                               ///  done on edge
    HostArray2DReal EdgeMaskH; ///< Mask to determine if computations should be
                               ///  done on edge
+   Array2DReal CellMask;      ///< Mask to determine if computations should be
+                              ///  done on cell
+   HostArray2DReal CellMaskH; ///< Mask to determine if computations should be
+                              ///  done on cell
 
    // BottomDepth read from mesh file
    Array1DReal BottomDepth;
