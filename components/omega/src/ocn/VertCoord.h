@@ -151,7 +151,7 @@ class VertCoord {
    static void init1();
 
    /// 2nd phase of initialization for default vertical coordinate
-   static void init2();
+   static void init2(bool ReadStream = true);
 
    /// Creates a new vertical coordinate object by calling the constructor and
    /// puts it in the AllVertCoords map. This object is mostly empty and must
@@ -162,7 +162,8 @@ class VertCoord {
    );
 
    /// Read InitialVertCoord stream and complete initialization
-   void completeSetup(Config *Options /// [in] configuration options
+   void completeSetup(Config *Options, /// [in] configuration options
+                      bool ReadStream  /// [in] logical to read stream
    );
 
    /// Initialize computational masks

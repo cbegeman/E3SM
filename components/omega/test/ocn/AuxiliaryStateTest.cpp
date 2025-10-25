@@ -111,6 +111,8 @@ int initAuxStateTest(const std::string &mesh) {
    VertCoord::init1();
    HorzMesh::init();
 
+   VertCoord::init2(false);
+
    Tracers::init();
    int StateErr = OceanState::init();
    if (StateErr != 0) {
@@ -138,10 +140,11 @@ int testAuxState() {
       return -1;
    }
 
-   const auto *Mesh = HorzMesh::getDefault();
-   auto *MeshHalo   = Halo::getDefault();
+   const auto *Mesh   = HorzMesh::getDefault();
+   const auto *VCoord = VertCoord::getDefault();
+   auto *MeshHalo     = Halo::getDefault();
    // test creation of another auxiliary state
-   AuxiliaryState::create("AnotherAuxState", Mesh, MeshHalo, 12, 3);
+   AuxiliaryState::create("AnotherAuxState", Mesh, VCoord, MeshHalo, 12, 3);
 
    // test retrievel of another
    if (AuxiliaryState::get("AnotherAuxState")) {

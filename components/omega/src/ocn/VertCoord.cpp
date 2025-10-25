@@ -36,11 +36,13 @@ void VertCoord::init1() {
 //------------------------------------------------------------------------------
 // Complete initialization of default vertical coordinate, requires prior
 // initialization of HorzMesh.
-void VertCoord::init2() {
+void VertCoord::init2(bool ReadStream //< [in] optional argument to read stream,
+                                      //< true by default
+) {
 
    Config *OmegaConfig = Config::getOmegaConfig();
 
-   DefaultVertCoord->completeSetup(OmegaConfig);
+   DefaultVertCoord->completeSetup(OmegaConfig, ReadStream);
 
 } // end init2
 
@@ -128,7 +130,8 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
 
 //------------------------------------------------------------------------------
 // Complete construction of new VertCoord instance
-void VertCoord::completeSetup(Config *Options //< [in] configuration options
+void VertCoord::completeSetup(Config *Options, //< [in] configuration options
+                              bool ReadStream  //< [in] logical to read stream
 ) {
 
    // Define field metadata
@@ -151,50 +154,62 @@ void VertCoord::completeSetup(Config *Options //< [in] configuration options
       StreamName.append(Name);
    }
 
-   auto VCoordStream = IOStream::get(StreamName);
-
-   bool IsValidated = VCoordStream->validate();
-
-   // Read InitialVertCoord stream
    Error Err; // Error code
-   if (IsValidated) {
-      Err = IOStream::read(StreamName);
-      if (!Err.isSuccess()) {
-         LOG_INFO("VertCoord: Error reading {} stream", StreamName);
-         I4 Sum1 = 0;
-         parallelReduce(
-             {MinLayerCell.extent_int(0)},
-             KOKKOS_LAMBDA(int I, int &Accum) { Accum += LocMinLayerCell(I); },
-             Sum1);
-         if (Sum1 < 0) {
-            LOG_INFO("VertCoord: Error reading minLevelCell from {}, "
-                     "using MinLayerCell = 0",
-                     StreamName);
-            deepCopy(MinLayerCell, 1);
-         }
-         I4 Sum2 = 0;
-         parallelReduce(
-             {MaxLayerCell.extent_int(0)},
-             KOKKOS_LAMBDA(int I, int &Accum) { Accum += LocMaxLayerCell(I); },
-             Sum2);
-         if (Sum2 < 0) {
-            LOG_INFO("VertCoord: Error reading maxLevelCell from {}, "
-                     "using MaxLayerCell = NVertLayers - 1",
-                     StreamName);
-            deepCopy(MaxLayerCell, NVertLayers);
-         }
-         Real Sum3 = 0.;
-         parallelReduce(
-             {BottomDepth.extent_int(0)},
-             KOKKOS_LAMBDA(int I, Real &Accum) { Accum += LocBottomDepth(I); },
-             Sum3);
-         if (Sum3 < 0.) {
-            ABORT_ERROR("VertCoord: Error reading bottomDepth from {}",
+
+   if (ReadStream) {
+      auto VCoordStream = IOStream::get(StreamName);
+
+      bool IsValidated = VCoordStream->validate();
+
+      // Read InitialVertCoord stream
+      if (IsValidated) {
+         Err = IOStream::read(StreamName);
+         if (!Err.isSuccess()) {
+            LOG_INFO("VertCoord: Error reading {} stream", StreamName);
+            I4 Sum1 = 0;
+            parallelReduce(
+                {MinLayerCell.extent_int(0)},
+                KOKKOS_LAMBDA(int I, int &Accum) {
+                   Accum += LocMinLayerCell(I);
+                },
+                Sum1);
+            if (Sum1 < 0) {
+               LOG_INFO("VertCoord: Error reading minLevelCell from {}, "
+                        "using MinLayerCell = 0",
                         StreamName);
+               deepCopy(MinLayerCell, 1);
+            }
+            I4 Sum2 = 0;
+            parallelReduce(
+                {MaxLayerCell.extent_int(0)},
+                KOKKOS_LAMBDA(int I, int &Accum) {
+                   Accum += LocMaxLayerCell(I);
+                },
+                Sum2);
+            if (Sum2 < 0) {
+               LOG_INFO("VertCoord: Error reading maxLevelCell from {}, "
+                        "using MaxLayerCell = NVertLayers - 1",
+                        StreamName);
+               deepCopy(MaxLayerCell, NVertLayers);
+            }
+            Real Sum3 = 0.;
+            parallelReduce(
+                {BottomDepth.extent_int(0)},
+                KOKKOS_LAMBDA(int I, Real &Accum) {
+                   Accum += LocBottomDepth(I);
+                },
+                Sum3);
+            if (Sum3 < 0.) {
+               ABORT_ERROR("VertCoord: Error reading bottomDepth from {}",
+                           StreamName);
+            }
          }
+      } else {
+         ABORT_ERROR("Error validating IO stream {}", StreamName);
       }
    } else {
-      ABORT_ERROR("Error validating IO stream {}", StreamName);
+      deepCopy(MinLayerCell, 1);
+      deepCopy(MaxLayerCell, NVertLayers);
    }
 
    // Subtract 1 to convert to zero-based indexing
@@ -207,6 +222,8 @@ void VertCoord::completeSetup(Config *Options //< [in] configuration options
    // Compute Edge and Vertex vertical ranges
    minMaxLayerEdge();
    minMaxLayerVertex();
+
+   // Set computational masks
    setMasks();
 
    // Initialize movement weights

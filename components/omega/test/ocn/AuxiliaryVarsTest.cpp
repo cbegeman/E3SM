@@ -615,7 +615,8 @@ int testVelocityDel2AuxVars(Real RTol) {
 
    const auto Decomp = Decomp::getDefault();
    const auto Mesh   = HorzMesh::getDefault();
-   VelocityDel2AuxVars VelocityDel2Aux("", Mesh, NVertLayers);
+   const auto VCoord = VertCoord::getDefault();
+   VelocityDel2AuxVars VelocityDel2Aux("", Mesh, VCoord, NVertLayers);
 
    // Use analytical expressions to compute inputs
 
@@ -721,9 +722,10 @@ int testTracerAuxVars(const Array2DReal &LayerThickCell,
    TestSetup Setup;
    int Err = 0;
 
-   const auto Mesh = HorzMesh::getDefault();
+   const auto Mesh   = HorzMesh::getDefault();
+   const auto VCoord = VertCoord::getDefault();
 
-   TracerAuxVars TracerAux("", Mesh, NVertLayers, NTracers);
+   TracerAuxVars TracerAux("", Mesh, VCoord, NVertLayers, NTracers);
    TracerAux.TracersOnEdgeChoice = FluxTracerEdgeOption::Upwind;
 
    // Set input arrays
@@ -833,15 +835,16 @@ int initAuxVarsTest(const std::string &mesh) {
 
    HorzMesh::init();
 
+   VertCoord::init2(false);
+
    return Err;
 }
 
 void finalizeAuxVarsTest() {
-   VertCoord::clear();
    Field::clear();
-   Dimension::clear();
    HorzMesh::clear();
    VertCoord::clear();
+   Dimension::clear();
    Halo::clear();
    Decomp::clear();
    MachEnv::removeAll();

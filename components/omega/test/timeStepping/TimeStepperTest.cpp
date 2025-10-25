@@ -179,6 +179,7 @@ int initTimeStepperTest(const std::string &mesh) {
        Dimension::create("NVertLayers", NVertLayers);
 
    HorzMesh::init();
+   VertCoord::init2(false);
    Tracers::init();
    AuxiliaryState::init();
    Tendencies::init();
@@ -207,8 +208,8 @@ int initTimeStepperTest(const std::string &mesh) {
       LOG_ERROR("TimeStepperTest: error creating test state");
    }
 
-   auto *TestAuxState = AuxiliaryState::create("TestAuxState", DefMesh, DefHalo,
-                                               NVertLayers, NTracers);
+   auto *TestAuxState = AuxiliaryState::create(
+       "TestAuxState", DefMesh, DefVertCoord, DefHalo, NVertLayers, NTracers);
 
    Config *OmegaConfig = Config::getOmegaConfig();
    TestAuxState->readConfigOptions(OmegaConfig);
