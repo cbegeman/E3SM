@@ -141,9 +141,6 @@ HorzMesh::HorzMesh(const std::string &Name, //< [in] Name for new mesh
    // Compute EdgeSignOnCells and EdgeSignOnVertex
    computeEdgeSign();
 
-   // TODO: implement setMasks during Mesh constructor
-   setMasks(NVertLayers);
-
    // set mesh scaling coefficients
    setMeshScaling();
 
@@ -573,33 +570,6 @@ void HorzMesh::computeEdgeSign() {
 
    EdgeSignOnVertexH = createHostMirrorCopy(EdgeSignOnVertex);
 } // end computeEdgeSign
-
-//------------------------------------------------------------------------------
-// set computational masks for mesh elements
-// TODO: this is just a placeholder, implement actual masks for edges, cells,
-// and vertices
-void HorzMesh::setMasks(int NVertLayers) {
-
-   EdgeMask = Array2DReal("EdgeMask", NEdgesSize, NVertLayers);
-
-   OMEGA_SCOPE(LocEdgeMask, EdgeMask);
-   OMEGA_SCOPE(LocCellsOnEdge, CellsOnEdge);
-   OMEGA_SCOPE(LocNCellsAll, NCellsAll);
-
-   deepCopy(EdgeMask, 1.0);
-   parallelFor(
-       {NEdgesAll, NVertLayers}, KOKKOS_LAMBDA(int Edge, int K) {
-          const I4 Cell1 = LocCellsOnEdge(Edge, 0);
-          const I4 Cell2 = LocCellsOnEdge(Edge, 1);
-          if (!(Cell1 >= 0 and Cell1 < LocNCellsAll) or
-              !(Cell2 >= 0 and Cell2 < LocNCellsAll)) {
-             LocEdgeMask(Edge, K) = 0.0;
-          }
-       });
-
-   EdgeMaskH = createHostMirrorCopy(EdgeMask);
-
-} // end setMasks
 
 //------------------------------------------------------------------------------
 // Set mesh scaling coefficients for mixing terms in momentum and tracer

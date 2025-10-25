@@ -81,8 +81,6 @@ class HorzMesh {
    // private function.
    void computeEdgeSign();
 
-   void setMasks(int NVertLayers);
-
    void setMeshScaling();
 
    // Variables
