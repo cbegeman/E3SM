@@ -207,6 +207,7 @@ void VertCoord::completeSetup(Config *Options //< [in] configuration options
    // Compute Edge and Vertex vertical ranges
    minMaxLayerEdge();
    minMaxLayerVertex();
+   setMasks();
 
    // Initialize movement weights
    initMovementWeights(Options);
