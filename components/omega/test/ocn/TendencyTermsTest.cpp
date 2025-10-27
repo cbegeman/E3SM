@@ -1028,7 +1028,9 @@ void initTendTest(const std::string &MeshFile, int NVertLayers) {
       ABORT_ERROR("TendencyTermsTest: error initializing default halo");
    }
 
-   VertCoord::init1();
+   HorzMesh::init();
+
+   VertCoord::init(false);
 
    // Reset NVertLayers to the test value
    auto *DefVertCoord        = VertCoord::getDefault();
@@ -1036,10 +1038,6 @@ void initTendTest(const std::string &MeshFile, int NVertLayers) {
    Dimension::destroy("NVertLayers");
    std::shared_ptr<Dimension> VertDim =
        Dimension::create("NVertLayers", NVertLayers);
-
-   HorzMesh::init();
-
-   VertCoord::init2(false);
 
 } // end initTendTest
 

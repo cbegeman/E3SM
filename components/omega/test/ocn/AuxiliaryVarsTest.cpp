@@ -825,17 +825,15 @@ int initAuxVarsTest(const std::string &mesh) {
       LOG_ERROR("AuxVarsTest: error initializing default halo");
    }
 
-   VertCoord::init1();
+   HorzMesh::init();
+
+   VertCoord::init(false);
    // Reset NVertLayers to the test value
    auto *DefVertCoord        = VertCoord::getDefault();
    DefVertCoord->NVertLayers = NVertLayers;
    Dimension::destroy("NVertLayers");
    std::shared_ptr<Dimension> VertDim =
        Dimension::create("NVertLayers", NVertLayers);
-
-   HorzMesh::init();
-
-   VertCoord::init2(false);
 
    return Err;
 }

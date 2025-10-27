@@ -170,16 +170,16 @@ int initTimeStepperTest(const std::string &mesh) {
       LOG_ERROR("TimeStepperTest: error initializing default halo");
    }
 
+   HorzMesh::init();
+
    // Initialize the vertical coordinate and reset NVertLayers to 1
-   VertCoord::init1();
+   VertCoord::init(false);
    auto *DefVertCoord        = VertCoord::getDefault();
    DefVertCoord->NVertLayers = 1;
    Dimension::destroy("NVertLayers");
    std::shared_ptr<Dimension> VertDim =
        Dimension::create("NVertLayers", NVertLayers);
 
-   HorzMesh::init();
-   VertCoord::init2(false);
    Tracers::init();
    AuxiliaryState::init();
    Tendencies::init();

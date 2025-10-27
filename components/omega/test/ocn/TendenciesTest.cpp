@@ -110,9 +110,8 @@ int initTendenciesTest(const std::string &mesh) {
       LOG_ERROR("TendenciesTest: error initializing default halo");
    }
 
-   VertCoord::init1();
    HorzMesh::init();
-   VertCoord::init2(false);
+   VertCoord::init(false);
    Tracers::init();
 
    int StateErr = OceanState::init();

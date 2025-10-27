@@ -11,7 +11,6 @@
 #include "OceanTestCommon.h"
 #include "OmegaKokkos.h"
 #include "Pacer.h"
-#include "VertCoord.h"
 #include "mpi.h"
 
 #include <cmath>
@@ -450,8 +449,6 @@ int initOperatorsTest(const std::string &MeshFile) {
       LOG_ERROR("OperatorsTest: error initializing default halo");
    }
 
-   VertCoord::init1();
-
    HorzMesh::init();
 
    return Err;
@@ -459,7 +456,6 @@ int initOperatorsTest(const std::string &MeshFile) {
 
 void finalizeOperatorsTest() {
    HorzMesh::clear();
-   VertCoord::clear();
    Dimension::clear();
    Halo::clear();
    Decomp::clear();

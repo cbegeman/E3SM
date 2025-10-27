@@ -23,35 +23,57 @@ VertCoord *VertCoord::DefaultVertCoord = nullptr;
 std::map<std::string, std::unique_ptr<VertCoord>> VertCoord::AllVertCoords;
 
 //------------------------------------------------------------------------------
-// Begin initialization of default vertical coordinate, requires prior
-// initialization of Decomp.
-void VertCoord::init1() {
+// Initialize the default vertical coordinate, requires prior initialization
+// of HorzMesh. If ReadStream is true, the InitialVertCoord stream will be
+// read during construction.
+void VertCoord::init(bool ReadStream //< [in] optional argument to read stream,
+                                     //< true by default
+) {
 
    Decomp *DefDecomp = Decomp::getDefault();
 
-   VertCoord::DefaultVertCoord = create("Default", DefDecomp);
-
-} // end init1
-
-//------------------------------------------------------------------------------
-// Complete initialization of default vertical coordinate, requires prior
-// initialization of HorzMesh.
-void VertCoord::init2(bool ReadStream //< [in] optional argument to read stream,
-                                      //< true by default
-) {
-
    Config *OmegaConfig = Config::getOmegaConfig();
 
-   DefaultVertCoord->completeSetup(OmegaConfig, ReadStream);
+   VertCoord::DefaultVertCoord =
+       create("Default", DefDecomp, OmegaConfig, ReadStream);
 
-} // end init2
+} // end init
 
 //------------------------------------------------------------------------------
-// Construct a new VertCoord instance given a Decomp. New object is incomplete
-// and completeSetup must be called afterwards
+// Construct a new VertCoord instance given a Decomp.
 VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
-                     const Decomp *Decomp      //< [in] associated Decomp
+                     const Decomp *Decomp,     //< [in] associated Decomp
+                     Config *Options,          //< [in] configuration options
+                     bool ReadStream           //< [in] logical to read stream
 ) {
+   Error Err; // Error code
+
+   // Read Config for movement weight type, store in enum
+   Config VCoordConfig("VertCoord");
+   Err += Options->get(VCoordConfig);
+   CHECK_ERROR_ABORT(Err, "VertCoord: VertCoord group not found in Config");
+
+   std::string MovementWeightStr;
+   Err += VCoordConfig.get("MovementWeightType", MovementWeightStr);
+   CHECK_ERROR_ABORT(Err,
+                     "VertCoord: MovementWeightType not found in VertCoord");
+
+   if (MovementWeightStr == "Fixed") {
+      MvmtWgtChoice = MovementWeightType::Fixed;
+   } else if (MovementWeightStr == "Uniform") {
+      MvmtWgtChoice = MovementWeightType::Uniform;
+   } else {
+      ABORT_ERROR("VertCoord: Unknown MovementWeightType requested");
+   }
+
+   // Fetch reference desnity from Config
+   Config TendConfig("Tendencies");
+   Err.reset();
+   Err += Options->get(TendConfig);
+   CHECK_ERROR_ABORT(Err, "VertCoord: Tendencies group not found in Config");
+
+   Err += TendConfig.get("Density0", Rho0);
+   CHECK_ERROR_ABORT(Err, "VertCoord: Density0 not found in TendConfig");
 
    // Store name suffix
    Name = Name_;
@@ -63,7 +85,6 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    IO::openFile(MeshFileID, MeshFileName, IO::ModeRead);
 
    // Set NVertLayers and NVertLayersP1 and create the vertical dimensions
-   Error Err; // Error code
    I4 NVertLayersID;
    Err = IO::getDimFromFile(MeshFileID, "nVertLevels", NVertLayersID,
                             NVertLayers);
@@ -126,14 +147,6 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    LayerThicknessTargetH = createHostMirrorCopy(LayerThicknessTarget);
    RefLayerThicknessH    = createHostMirrorCopy(RefLayerThickness);
 
-} // end constructor
-
-//------------------------------------------------------------------------------
-// Complete construction of new VertCoord instance
-void VertCoord::completeSetup(Config *Options, //< [in] configuration options
-                              bool ReadStream  //< [in] logical to read stream
-) {
-
    // Define field metadata
    defineFields();
 
@@ -153,8 +166,6 @@ void VertCoord::completeSetup(Config *Options, //< [in] configuration options
    if (Name != "Default") {
       StreamName.append(Name);
    }
-
-   Error Err; // Error code
 
    if (ReadStream) {
       auto VCoordStream = IOStream::get(StreamName);
@@ -219,6 +230,11 @@ void VertCoord::completeSetup(Config *Options, //< [in] configuration options
           LocMaxLayerCell(ICell) -= 1;
        });
 
+   // Make host copies for device arrays read from mesh file
+   MaxLayerCellH = createHostMirrorCopy(MaxLayerCell);
+   MinLayerCellH = createHostMirrorCopy(MinLayerCell);
+   BottomDepthH  = createHostMirrorCopy(BottomDepth);
+
    // Compute Edge and Vertex vertical ranges
    minMaxLayerEdge();
    minMaxLayerVertex();
@@ -227,29 +243,17 @@ void VertCoord::completeSetup(Config *Options, //< [in] configuration options
    setMasks();
 
    // Initialize movement weights
-   initMovementWeights(Options);
+   initMovementWeights();
 
-   // Make host copies for device arrays read from mesh file
-   MaxLayerCellH = createHostMirrorCopy(MaxLayerCell);
-   MinLayerCellH = createHostMirrorCopy(MinLayerCell);
-   BottomDepthH  = createHostMirrorCopy(BottomDepth);
-
-   // Fetch reference desnity from Config
-   Config TendConfig("Tendencies");
-   Err.reset();
-   Err += Options->get(TendConfig);
-   CHECK_ERROR_ABORT(Err, "VertCoord: Tendencies group not found in Config");
-
-   Err += TendConfig.get("Density0", Rho0);
-   CHECK_ERROR_ABORT(Err, "VertCoord: Density0 not found in TendConfig");
-
-} // end completeSetup
+} // end constructor
 
 //------------------------------------------------------------------------------
 // Calls the VertCoord constructor and places it in the AllVertCoords map
 VertCoord *
 VertCoord::create(const std::string &Name, // [in] name for new VertCoord
-                  const Decomp *Decomp     // [in] associated Decomp
+                  const Decomp *Decomp,    // [in] associated Decomp
+                  Config *Options,         // [in] configuration options
+                  bool ReadStream          // [in] logical to read stream
 ) {
    // Check to see if a VertCoord of the same name already exists and, if so,
    // exit with an error
@@ -262,7 +266,7 @@ VertCoord::create(const std::string &Name, // [in] name for new VertCoord
 
    // create a new VertCoord on the heap and put it in a map of unique_ptrs,
    // which will manage its lifetime
-   auto *NewVertCoord = new VertCoord(Name, Decomp);
+   auto *NewVertCoord = new VertCoord(Name, Decomp, Options, ReadStream);
    AllVertCoords.emplace(Name, NewVertCoord);
 
    return NewVertCoord;
@@ -681,35 +685,22 @@ void VertCoord::setMasks() {
 
 //------------------------------------------------------------------------------
 // Store VertCoordMovementWeights based on config choice
-void VertCoord::initMovementWeights(
-    Config *Options // [in] configuration options
-) {
+void VertCoord::initMovementWeights() {
 
    Error Err; // default successful error code
-
-   Config VCoordConfig("VertCoord");
-   Err += Options->get(VCoordConfig);
-   CHECK_ERROR_ABORT(Err, "VertCoord: VertCoord group not found in Config");
-
-   std::string MovementWeightType;
-   Err += VCoordConfig.get("MovementWeightType", MovementWeightType);
-   CHECK_ERROR_ABORT(Err,
-                     "VertCoord: MovementWeightType not found in VertCoord");
 
    VertCoordMovementWeights =
        Array1DReal("VertCoordMovementWeights", NVertLayers);
 
    OMEGA_SCOPE(LocVertCoordMovementWeights, VertCoordMovementWeights);
-   if (MovementWeightType == "Fixed") {
+   if (MvmtWgtChoice == MovementWeightType::Fixed) {
       deepCopy(VertCoordMovementWeights, 0._Real);
       parallelFor(
           {1}, KOKKOS_LAMBDA(const int &) {
              LocVertCoordMovementWeights(0) = 1._Real;
           });
-   } else if (MovementWeightType == "Uniform") {
+   } else if (MvmtWgtChoice == MovementWeightType::Uniform) {
       deepCopy(VertCoordMovementWeights, 1._Real);
-   } else {
-      ABORT_ERROR("VertCoord: Unknown MovementWeightType requested");
    }
 
    VertCoordMovementWeightsH = createHostMirrorCopy(VertCoordMovementWeights);

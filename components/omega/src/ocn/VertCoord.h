@@ -25,6 +25,11 @@
 
 namespace OMEGA {
 
+enum class MovementWeightType {
+   Fixed,  /// Distribute perturbations in top level
+   Uniform /// Uniform stretching
+};
+
 class VertCoord {
 
  private:
@@ -42,6 +47,9 @@ class VertCoord {
    Array2DI4 CellsOnEdge;
    Array2DI4 CellsOnVertex;
 
+   // Choice of VertCoorMovementWeight type
+   MovementWeightType MvmtWgtChoice;
+
    std::string MeshFileName;
    int MeshFileID;
 
@@ -51,8 +59,10 @@ class VertCoord {
    // methods
 
    /// construct a new vertical coordinate object
-   VertCoord(const std::string &Name, ///< [in] Name for new VertCoord
-             const Decomp *MeshDecomp ///< [in] associated Decomp
+   VertCoord(const std::string &Name,  ///< [in] Name for new VertCoord
+             const Decomp *MeshDecomp, ///< [in] associated Decomp
+             Config *Options,          ///< [in] configuration options
+             bool ReadStream           ///< [in] logical to read stream
    );
 
    /// define field metadata
@@ -147,23 +157,16 @@ class VertCoord {
 
    // methods
 
-   /// 1st phase of initialization for default vertical coordinate
-   static void init1();
-
-   /// 2nd phase of initialization for default vertical coordinate
-   static void init2(bool ReadStream = true);
+   /// Initialization of default vertical coordinate
+   static void init(bool ReadStream = true);
 
    /// Creates a new vertical coordinate object by calling the constructor and
-   /// puts it in the AllVertCoords map. This object is mostly empty and must
-   /// completed by completeSetup.
+   /// puts it in the AllVertCoords map.
    static VertCoord *
-   create(const std::string &Name, /// [in] name for new VertCoord
-          const Decomp *MeshDecomp /// [in] associated Decomp
-   );
-
-   /// Read InitialVertCoord stream and complete initialization
-   void completeSetup(Config *Options, /// [in] configuration options
-                      bool ReadStream  /// [in] logical to read stream
+   create(const std::string &Name,  /// [in] name for new VertCoord
+          const Decomp *MeshDecomp, /// [in] associated Decomp
+          Config *Options,          /// [in] configuration options
+          bool ReadStream           /// [in] logical to read stream
    );
 
    /// Initialize computational masks
@@ -193,8 +196,7 @@ class VertCoord {
    // Variable initialization methods
    void minMaxLayerEdge();
    void minMaxLayerVertex();
-   void initMovementWeights(Config *Options ///< [in] configuration options
-   );
+   void initMovementWeights();
 
    /// Sums the mass thickness times g from the top layer down, starting with
    /// the surface pressure
