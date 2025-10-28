@@ -24,10 +24,14 @@ std::map<std::string, std::unique_ptr<VertCoord>> VertCoord::AllVertCoords;
 
 //------------------------------------------------------------------------------
 // Initialize the default vertical coordinate, requires prior initialization
-// of HorzMesh. If ReadStream is true, the InitialVertCoord stream will be
-// read during construction.
-void VertCoord::init(bool ReadStream //< [in] optional argument to read stream,
-                                     //< true by default
+// of HorzMesh. The optional arguments simplify the use of the VertCoord in some
+// unit tests. If ReadStream is false, the InitialVertCoord stream will not be
+// read during construction. If a value for NVertLayers is passed as argument,
+// the dimension will not be read from the mesh file.
+void VertCoord::init(
+    bool ReadStream,  //< [in] optional argument to read stream, true by default
+    int InNVertLayers //< [in] optional argument to set NVertLayers explicitly
+                      //< instead of reading dimension from mesh file
 ) {
 
    Decomp *DefDecomp = Decomp::getDefault();
@@ -35,7 +39,7 @@ void VertCoord::init(bool ReadStream //< [in] optional argument to read stream,
    Config *OmegaConfig = Config::getOmegaConfig();
 
    VertCoord::DefaultVertCoord =
-       create("Default", DefDecomp, OmegaConfig, ReadStream);
+       create("Default", DefDecomp, OmegaConfig, ReadStream, InNVertLayers);
 
 } // end init
 
@@ -44,7 +48,8 @@ void VertCoord::init(bool ReadStream //< [in] optional argument to read stream,
 VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
                      const Decomp *Decomp,     //< [in] associated Decomp
                      Config *Options,          //< [in] configuration options
-                     bool ReadStream           //< [in] logical to read stream
+                     bool ReadStream,          //< [in] logical to read stream
+                     int InNVertLayers         //< [in] int to set vertical dim
 ) {
    Error Err; // Error code
 
@@ -81,18 +86,28 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    // Retrieve mesh filename from Decomp
    MeshFileName = Decomp->MeshFileName;
 
-   // Open the mesh file for reading (assume IO has already been initialized)
-   IO::openFile(MeshFileID, MeshFileName, IO::ModeRead);
+   // If NVertlayers is 0 (default), attempt to read the dimension from the mesh
+   // file. If the mesh file does not define a vertical dimension, use
+   // NVertLayers = 1. If a value for NVertLayers is explicitly provided as an
+   // argument for NVertLayers, use that value is instead.
+   if (InNVertLayers == 0) {
+      // Open the mesh file for reading (assume IO has already been initialized)
+      IO::openFile(MeshFileID, MeshFileName, IO::ModeRead);
 
-   // Set NVertLayers and NVertLayersP1 and create the vertical dimensions
-   I4 NVertLayersID;
-   Err = IO::getDimFromFile(MeshFileID, "nVertLevels", NVertLayersID,
-                            NVertLayers);
-   if (!Err.isSuccess()) {
-      LOG_INFO("VertCoord: error reading nVertLevels from mesh file, "
-               "using NVertLayers = 1");
-      NVertLayers = 1;
+      // Set NVertLayers and NVertLayersP1 and create the vertical dimensions
+      I4 NVertLayersID;
+      Err = IO::getDimFromFile(MeshFileID, "nVertLevels", NVertLayersID,
+                               NVertLayers);
+      if (!Err.isSuccess()) {
+         LOG_INFO("VertCoord: error reading nVertLevels from mesh file, "
+                  "using NVertLayers = 1");
+         NVertLayers = 1;
+      }
+   } else {
+      NVertLayers = InNVertLayers;
    }
+
+   // Create the dimensions
    NVertLayersP1 = NVertLayers + 1;
 
    std::string DimName   = "NVertLayers";
@@ -150,30 +165,41 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    // Define field metadata
    defineFields();
 
-   I4 FillValueI4     = -1;
-   Real FillValueReal = -999._Real;
-
-   deepCopy(MinLayerCell, FillValueI4);
-   deepCopy(MaxLayerCell, FillValueI4);
-   deepCopy(BottomDepth, FillValueReal);
-
    OMEGA_SCOPE(LocMinLayerCell, MinLayerCell);
    OMEGA_SCOPE(LocMaxLayerCell, MaxLayerCell);
    OMEGA_SCOPE(LocBottomDepth, BottomDepth);
 
-   // Fetch input stream and validate
-   std::string StreamName = "InitialVertCoord";
-   if (Name != "Default") {
-      StreamName.append(Name);
-   }
-
+   // If ReadStream is true (default) attempt to read values for  MinLayerCell,
+   // MaxLayerCell, and BottomDepth from the InitialVertCoord stream. Otherwise,
+   // MinLayerCell and MaxLayerCell will be set to the first and last indices of
+   // the vertical range, BottomDepth will remain uninitialized and will need
+   // to be initialized explicitly if needed.
    if (ReadStream) {
-      auto VCoordStream = IOStream::get(StreamName);
 
-      bool IsValidated = VCoordStream->validate();
+      I4 FillValueI4     = -1;
+      Real FillValueReal = -999._Real;
+
+      deepCopy(MinLayerCell, FillValueI4);
+      deepCopy(MaxLayerCell, FillValueI4);
+      deepCopy(BottomDepth, FillValueReal);
+
+      // Fetch input stream and validate
+      std::string StreamName = "InitialVertCoord";
+      if (Name != "Default") {
+         StreamName.append(Name);
+      }
+
+      // Validate InitalVertCoord stream
+      auto VCoordStream = IOStream::get(StreamName);
+      bool IsValidated  = VCoordStream->validate();
 
       // Read InitialVertCoord stream
       if (IsValidated) {
+         // Attempt to read stream, an error will be raised if any field fails
+         // to be read. Determine which fields may not have been read properly.
+         // If MinLayerCell or MaxLayerCell were not read properly default
+         // values will be used. If BottomDepth was not read properly, abort
+         // with error.
          Err = IOStream::read(StreamName);
          if (!Err.isSuccess()) {
             LOG_INFO("VertCoord: Error reading {} stream", StreamName);
@@ -253,7 +279,8 @@ VertCoord *
 VertCoord::create(const std::string &Name, // [in] name for new VertCoord
                   const Decomp *Decomp,    // [in] associated Decomp
                   Config *Options,         // [in] configuration options
-                  bool ReadStream          // [in] logical to read stream
+                  bool ReadStream,  // [in] optional logical to read stream
+                  int InNVertLayers // [in] optional int to set vertical dim
 ) {
    // Check to see if a VertCoord of the same name already exists and, if so,
    // exit with an error
@@ -266,7 +293,8 @@ VertCoord::create(const std::string &Name, // [in] name for new VertCoord
 
    // create a new VertCoord on the heap and put it in a map of unique_ptrs,
    // which will manage its lifetime
-   auto *NewVertCoord = new VertCoord(Name, Decomp, Options, ReadStream);
+   auto *NewVertCoord =
+       new VertCoord(Name, Decomp, Options, ReadStream, InNVertLayers);
    AllVertCoords.emplace(Name, NewVertCoord);
 
    return NewVertCoord;

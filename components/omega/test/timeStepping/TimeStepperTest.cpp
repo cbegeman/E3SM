@@ -37,7 +37,6 @@
 
 #include <cmath>
 #include <iomanip>
-#include <iostream>
 
 using namespace OMEGA;
 
@@ -172,13 +171,10 @@ int initTimeStepperTest(const std::string &mesh) {
 
    HorzMesh::init();
 
-   // Initialize the vertical coordinate and reset NVertLayers to 1
-   VertCoord::init(false);
-   auto *DefVertCoord        = VertCoord::getDefault();
-   DefVertCoord->NVertLayers = 1;
-   Dimension::destroy("NVertLayers");
-   std::shared_ptr<Dimension> VertDim =
-       Dimension::create("NVertLayers", NVertLayers);
+   // initialize vertical coordinate, do not read stream and use local
+   // NVertLayers value
+   VertCoord::init(false, NVertLayers);
+   auto *DefVertCoord = VertCoord::getDefault();
 
    Tracers::init();
    AuxiliaryState::init();
@@ -283,10 +279,9 @@ void finalizeTimeStepperTest() {
    AuxiliaryState::clear();
    OceanState::clear();
    VertCoord::clear();
+   HorzMesh::clear();
    Dimension::clear();
    Field::clear();
-   HorzMesh::clear();
-   VertCoord::clear();
    Halo::clear();
    Decomp::clear();
    MachEnv::removeAll();

@@ -62,7 +62,8 @@ class VertCoord {
    VertCoord(const std::string &Name,  ///< [in] Name for new VertCoord
              const Decomp *MeshDecomp, ///< [in] associated Decomp
              Config *Options,          ///< [in] configuration options
-             bool ReadStream           ///< [in] logical to read stream
+             bool ReadStream,          ///< [in] logical to read stream
+             int NVertLayers           ///< [in] int to set vertical dim
    );
 
    /// define field metadata
@@ -158,7 +159,7 @@ class VertCoord {
    // methods
 
    /// Initialization of default vertical coordinate
-   static void init(bool ReadStream = true);
+   static void init(bool ReadStream = true, int NVertLayers = 0);
 
    /// Creates a new vertical coordinate object by calling the constructor and
    /// puts it in the AllVertCoords map.
@@ -166,7 +167,8 @@ class VertCoord {
    create(const std::string &Name,  /// [in] name for new VertCoord
           const Decomp *MeshDecomp, /// [in] associated Decomp
           Config *Options,          /// [in] configuration options
-          bool ReadStream           /// [in] logical to read stream
+          bool ReadStream = true,   /// [in] optional logical to read stream
+          int NVertLayers = 0       /// [in] optional int to set vertical dim
    );
 
    /// Initialize computational masks

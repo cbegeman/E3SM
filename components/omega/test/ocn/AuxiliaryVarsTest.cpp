@@ -827,21 +827,17 @@ int initAuxVarsTest(const std::string &mesh) {
 
    HorzMesh::init();
 
-   VertCoord::init(false);
-   // Reset NVertLayers to the test value
-   auto *DefVertCoord        = VertCoord::getDefault();
-   DefVertCoord->NVertLayers = NVertLayers;
-   Dimension::destroy("NVertLayers");
-   std::shared_ptr<Dimension> VertDim =
-       Dimension::create("NVertLayers", NVertLayers);
+   // initialize vertical coordinate, do not read stream and use local
+   // NVertLayers value
+   VertCoord::init(false, NVertLayers);
 
    return Err;
 }
 
 void finalizeAuxVarsTest() {
-   Field::clear();
-   HorzMesh::clear();
    VertCoord::clear();
+   HorzMesh::clear();
+   Field::clear();
    Dimension::clear();
    Halo::clear();
    Decomp::clear();

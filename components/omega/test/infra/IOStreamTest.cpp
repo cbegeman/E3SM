@@ -98,12 +98,6 @@ void initIOStreamTest(Clock *&ModelClock // Model clock
    // Initialize the vertical coordinate
    VertCoord::init();
 
-   // Reset vertical layers dimension
-   Dimension::destroy("NVertLayers");
-   I4 NVertLayers = 60;
-   std::shared_ptr<Dimension> VertDim =
-       Dimension::create("NVertLayers", NVertLayers);
-
    // Initialize State
    TmpErr = OceanState::init();
    if (TmpErr != 0)

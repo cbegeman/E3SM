@@ -1030,14 +1030,9 @@ void initTendTest(const std::string &MeshFile, int NVertLayers) {
 
    HorzMesh::init();
 
-   VertCoord::init(false);
-
-   // Reset NVertLayers to the test value
-   auto *DefVertCoord        = VertCoord::getDefault();
-   DefVertCoord->NVertLayers = NVertLayers;
-   Dimension::destroy("NVertLayers");
-   std::shared_ptr<Dimension> VertDim =
-       Dimension::create("NVertLayers", NVertLayers);
+   // initialize vertical coordinate, do not read stream and use local
+   // NVertLayers value
+   VertCoord::init(false, NVertLayers);
 
 } // end initTendTest
 

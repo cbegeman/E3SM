@@ -221,11 +221,10 @@ void finalizeTendenciesTest() {
    AuxiliaryState::clear();
    OceanState::clear();
    VertCoord::clear();
+   HorzMesh::clear();
    Field::clear();
    Dimension::clear();
    TimeStepper::clear();
-   HorzMesh::clear();
-   VertCoord::clear();
    Halo::clear();
    Decomp::clear();
    MachEnv::removeAll();
