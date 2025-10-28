@@ -25,6 +25,7 @@
 #include "mpi.h"
 
 #include <algorithm>
+#include <random>
 
 using namespace OMEGA;
 
@@ -60,14 +61,11 @@ int initVertCoordTest() {
    if (Err != 0)
       LOG_ERROR("VertCoordTest: error initializing default halo");
 
-   // Begin initialization of the default vertical coordinate
-   VertCoord::init1();
-
    // Initialize the default mesh
    HorzMesh::init();
 
-   // Complete initialization of the default vertical coordinate
-   VertCoord::init2();
+   // Initialize the default vertical coordinate
+   VertCoord::init();
 
    return Err;
 } // end initVertCoordTest
@@ -584,6 +582,81 @@ int main(int argc, char *argv[]) {
       } else {
          ErrAll +=
              Error(ErrorCode::Fail, "VertCoordTest: minMaxLayerVertex FAIL");
+      }
+
+      // Tests for Masks
+
+      /// Setup random values for MinLayerCell and MaxLayerCell near the top
+      /// and bottom of each column
+      I4 Seed = 12345;
+      std::mt19937 Generator(Seed);
+
+      I4 MinMin = 0;
+      I4 MaxMin = 10;
+      I4 MinMax = NVertLayers - 11;
+      I4 MaxMax = NVertLayers - 1;
+
+      std::uniform_int_distribution<int> MinDist(MinMin, MaxMin);
+      std::uniform_int_distribution<int> MaxDist(MinMax, MaxMax);
+
+      for (int ICell = 0; ICell < NCellsAll; ICell++) {
+         DefVertCoord->MinLayerCellH(ICell) = MinDist(Generator);
+         DefVertCoord->MaxLayerCellH(ICell) = MaxDist(Generator);
+      }
+
+      deepCopy(DefVertCoord->MinLayerCell, DefVertCoord->MinLayerCellH);
+      deepCopy(DefVertCoord->MaxLayerCell, DefVertCoord->MaxLayerCellH);
+      Kokkos::fence();
+
+      /// Reset min/max layer arrays and set masks
+      DefVertCoord->minMaxLayerEdge();
+      DefVertCoord->minMaxLayerVertex();
+      DefVertCoord->setMasks();
+
+      Err = 0;
+      for (int ICell = 0; ICell < NCellsAll; ++ICell) {
+         /// The sum of the masks in a column is the number of active
+         /// layers in that column
+         Real Expected = DefVertCoord->MaxLayerCellH(ICell) -
+                         DefVertCoord->MinLayerCellH(ICell) + 1._Real;
+         Real Sum = 0.;
+         for (int K = 0; K < NVertLayers; ++K) {
+            Sum += DefVertCoord->CellMaskH(ICell, K);
+         }
+
+         Real Diff = std::abs(Sum - Expected);
+         if (Diff > 1e-10) {
+            Err += 1;
+         }
+      }
+
+      for (int IEdge = 0; IEdge < NEdgesAll; ++IEdge) {
+         Real Expected;
+
+         /// The sum of the masks along an edge is the number of layers with
+         /// active cells on both sides.
+         if ((DefMesh->CellsOnEdgeH(IEdge, 1) == NCellsAll) ||
+             (DefMesh->CellsOnEdgeH(IEdge, 0) == NCellsAll)) {
+            Expected = 0.;
+         } else {
+            Expected = DefVertCoord->MaxLayerEdgeTopH(IEdge) -
+                       DefVertCoord->MinLayerEdgeBotH(IEdge) + 1._Real;
+         }
+         Real Sum = 0.;
+         for (int K = 0; K < NVertLayers; ++K) {
+            Sum += DefVertCoord->EdgeMaskH(IEdge, K);
+         }
+         Real Diff = std::abs(Sum - Expected);
+         if (Diff > 1e-10) {
+            Err += 1;
+         }
+      }
+
+      /// Determine test pass/fail
+      if (Err == 0) {
+         LOG_INFO("VertCoordTest: setMasks PASS");
+      } else {
+         ErrAll += Error(ErrorCode::Fail, "VertCoordTest: setMasks FAIL");
       }
 
       // Finalize Omega objects
