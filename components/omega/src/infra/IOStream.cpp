@@ -1645,6 +1645,15 @@ Error IOStream::readFieldData(
    }
    // For back compatibility, try to read again with old field name
    if (Err.isFail()) {
+      // Check for "Layer" in string, backwards compatibility requires replacing
+      // "Layer" with "Level"
+      std::string OmegaSubStr = "Layer";
+      std::string MPASSubStr  = "Level";
+      size_t pos              = OldFieldName.find(OmegaSubStr);
+      if (pos != std::string::npos) {
+         OldFieldName.replace(pos, OmegaSubStr.length(), MPASSubStr);
+         LOG_INFO("IOStream:: replaced Layer with Level");
+      }
       if (IsDistributed) {
          Err = IO::readArray(DataPtr, LocSize, OldFieldName, FileID, DecompID,
                              FieldID);

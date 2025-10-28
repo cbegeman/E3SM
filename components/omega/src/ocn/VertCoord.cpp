@@ -209,8 +209,8 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
          // values will be used. If BottomDepth was not read properly, abort
          // with error.
          Err = IOStream::read(StreamName);
-         if (!Err.isSuccess()) {
-            LOG_INFO("VertCoord: Error reading {} stream", StreamName);
+         if (Err.isFail()) {
+            LOG_INFO("VertCoord: Error while reading {} stream", StreamName);
             I4 Sum1 = 0;
             parallelReduce(
                 {MinLayerCell.extent_int(0)},
@@ -219,7 +219,7 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
                 },
                 Sum1);
             if (Sum1 < 0) {
-               LOG_INFO("VertCoord: Error reading minLevelCell from {}, "
+               LOG_INFO("VertCoord: Error reading MinLayerCell from {}, "
                         "using MinLayerCell = 0",
                         StreamName);
                deepCopy(MinLayerCell, 1);
@@ -232,7 +232,7 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
                 },
                 Sum2);
             if (Sum2 < 0) {
-               LOG_INFO("VertCoord: Error reading maxLevelCell from {}, "
+               LOG_INFO("VertCoord: Error reading MaxLayerCell from {}, "
                         "using MaxLayerCell = NVertLayers - 1",
                         StreamName);
                deepCopy(MaxLayerCell, NVertLayers);
@@ -313,8 +313,8 @@ VertCoord::create(const std::string &Name, // [in] name for new VertCoord
 void VertCoord::defineFields() {
 
    // Set field names (append Name if not default)
-   MinLayerCellFldName   = "MinLevelCell";
-   MaxLayerCellFldName   = "MaxLevelCell";
+   MinLayerCellFldName   = "MinLayerCell";
+   MaxLayerCellFldName   = "MaxLayerCell";
    BottomDepthFldName    = "BottomDepth";
    PressInterfFldName    = "PressureInterface";
    PressMidFldName       = "PressureMid";
