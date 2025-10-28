@@ -86,22 +86,30 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    // Retrieve mesh filename from Decomp
    MeshFileName = Decomp->MeshFileName;
 
-   // If NVertlayers is 0 (default), attempt to read the dimension from the mesh
-   // file. If the mesh file does not define a vertical dimension, use
-   // NVertLayers = 1. If a value for NVertLayers is explicitly provided as an
-   // argument for NVertLayers, use that value is instead.
+   // If InNVertlayers is 0 (default), attempt to read the dimension from the
+   // mesh file. If the mesh file does not define a vertical dimension, use
+   // NVertLayers = 1. If a value for InNVertLayers is explicitly provided,
+   // use that value is instead.
    if (InNVertLayers == 0) {
+
+      std::string OmegaDimName = "NVertLayers";
+      std::string MPASDimName  = "nVertLevels";
+
       // Open the mesh file for reading (assume IO has already been initialized)
       IO::openFile(MeshFileID, MeshFileName, IO::ModeRead);
 
-      // Set NVertLayers and NVertLayersP1 and create the vertical dimensions
+      // Set NVertLayers
       I4 NVertLayersID;
-      Err = IO::getDimFromFile(MeshFileID, "nVertLevels", NVertLayersID,
+      Err = IO::getDimFromFile(MeshFileID, OmegaDimName, NVertLayersID,
                                NVertLayers);
-      if (!Err.isSuccess()) {
-         LOG_INFO("VertCoord: error reading nVertLevels from mesh file, "
-                  "using NVertLayers = 1");
-         NVertLayers = 1;
+      if (Err.isFail()) { // dim not found, try again with older MPAS name
+         Err = IO::getDimFromFile(MeshFileID, MPASDimName, NVertLayersID,
+                                  NVertLayers);
+         if (Err.isFail()) {
+            LOG_INFO("VertCoord: vertical dimension not found in mesh file, "
+                     "using NVertLayers = 1");
+            NVertLayers = 1;
+         }
       }
    } else {
       NVertLayers = InNVertLayers;
@@ -134,7 +142,7 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    NVerticesSize  = Decomp->NVerticesSize;
    VertexDegree   = Decomp->VertexDegree;
 
-   // Retrieve connectivity arrays from HorzMesh
+   // Retrieve connectivity arrays from Decomp
    CellsOnEdge   = Decomp->CellsOnEdge;
    CellsOnVertex = Decomp->CellsOnVertex;
 
@@ -169,7 +177,7 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    OMEGA_SCOPE(LocMaxLayerCell, MaxLayerCell);
    OMEGA_SCOPE(LocBottomDepth, BottomDepth);
 
-   // If ReadStream is true (default) attempt to read values for  MinLayerCell,
+   // If ReadStream is true (default) attempt to read values for MinLayerCell,
    // MaxLayerCell, and BottomDepth from the InitialVertCoord stream. Otherwise,
    // MinLayerCell and MaxLayerCell will be set to the first and last indices of
    // the vertical range, BottomDepth will remain uninitialized and will need
