@@ -547,7 +547,6 @@ void VertCoord::setStreamArrays(const bool ReadStream) {
    MaxLayerCellH = createHostMirrorCopy(MaxLayerCell);
    MinLayerCellH = createHostMirrorCopy(MinLayerCell);
    BottomDepthH  = createHostMirrorCopy(BottomDepth);
-
 }
 
 //------------------------------------------------------------------------------
