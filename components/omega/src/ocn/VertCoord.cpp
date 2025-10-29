@@ -24,7 +24,7 @@ std::map<std::string, std::unique_ptr<VertCoord>> VertCoord::AllVertCoords;
 
 //------------------------------------------------------------------------------
 // Initialize the default vertical coordinate, requires prior initialization
-// of HorzMesh. The optional arguments simplify the use of the VertCoord in some
+// of Decomp. The optional arguments simplify the use of the VertCoord in some
 // unit tests. If ReadStream is false, the InitialVertCoord stream will not be
 // read during construction. If a value for NVertLayers is passed as argument,
 // the dimension will not be read from the mesh file.
