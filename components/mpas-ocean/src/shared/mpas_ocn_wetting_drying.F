@@ -1073,7 +1073,7 @@ contains
             end if
           end do
           layerThickness(k, iCell) = layerThickness(k, iCell) + dt * divOutFlux + &
-                                     sshLandIceAdjustment(iCell) / nVertLevelsCell
+                                     sshLandIceAdjustment(iCell) / nVertLevels
           columnThickness(iCell) = columnThickness(iCell) + layerThickness(k, iCell)
 
           ! if layer thickness is too small, limit divergence flux outwards with

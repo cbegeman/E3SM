@@ -919,9 +919,6 @@ module ocn_time_integration_split
          ! Stage 2: Barotropic velocity prediction, explicitly subcycled
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-         call mpas_timer_start("se btr vel")
-         !call mpas_log_write("se btr vel")
-
          oldBtrSubcycleTime = 1
          newBtrSubcycleTime = 2
 
@@ -1040,8 +1037,8 @@ module ocn_time_integration_split
             cellHaloComputeCounter = 0
             edgeHaloComputeCounter = 0
 
+            call mpas_timer_start('btr se subcycle loop')
             do j = 1, nBtrSubcycles * config_btr_subcycle_loop_factor
-               call mpas_timer_start('btr se subcycle loop $i', intArgs=(/j/))
 
                if (j == 1) then
                !$omp parallel
@@ -1901,8 +1898,6 @@ module ocn_time_integration_split
             call mpas_timer_stop('btr se ssh verif')
 
          endif ! split_explicit
-
-         call mpas_timer_stop("se btr vel")
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          ! Stage 3: Tracer, density, pressure, vert velocity prediction
