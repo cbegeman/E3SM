@@ -64,8 +64,8 @@ module ocn_vmix_cvmix
    type(cvmix_shear_params_type)  :: cvmix_shear_params
    type(cvmix_tidal_params_type)  :: cvmix_tidal_params
 
-   logical :: cvmixOn, cvmixConvectionOn, cvmixKPPOn, thinFilmViscOn
-   real (kind=RKIND) :: backgroundVisc, backgroundDiff, thinFilmViscConstant, hMin, hMax, hRampFactor
+   logical :: cvmixOn, cvmixConvectionOn, cvmixKPPOn, thinFilmViscOn, thinFilmRampOn
+   real (kind=RKIND) :: backgroundVisc, backgroundDiff
    real (kind=RKIND) :: thinFilmViscConstant, hMin, hMax, hRampFactor
 
    integer :: cvmixBackgroundChoice        ! user choice of cvmix background scheme
@@ -336,7 +336,7 @@ contains
                if (thinFilmViscOn) then
                  if (thinFilmRampOn) then
                    vertViscMin = thinFilmViscConstant * tanh(hRampFactor * &
-                        (columnThickness - hMin * num_levels)/(hMin * num_levels)))
+                        (columnThickness - hMin * num_levels)/(hMin * num_levels))
                  else
                    vertViscMin = thinFilmViscConstant
                  endif
