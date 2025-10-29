@@ -175,9 +175,6 @@ class VertCoord {
           const int NVertLayers = 0 /// [in] optional int to set vertical dim
    );
 
-   /// Initialize computational masks
-   void setMasks();
-
    /// Copy member arrays from device to host
    void copyToHost();
 
@@ -199,10 +196,14 @@ class VertCoord {
    /// Retreive a VertCoord by name
    static VertCoord *get(std::string name);
 
-   // Variable initialization methods
+   // Array initialization methods
+   void setStreamArrays(const bool ReadStream);
    void minMaxLayerEdge();
    void minMaxLayerVertex();
    void initMovementWeights();
+
+   /// Initialize computational masks
+   void setMasks();
 
    /// Sums the mass thickness times g from the top layer down, starting with
    /// the surface pressure

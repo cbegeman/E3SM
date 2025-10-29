@@ -175,101 +175,8 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
    // Define field metadata
    defineFields();
 
-   OMEGA_SCOPE(LocMinLayerCell, MinLayerCell);
-   OMEGA_SCOPE(LocMaxLayerCell, MaxLayerCell);
-   OMEGA_SCOPE(LocBottomDepth, BottomDepth);
-
-   // If ReadStream is true (default) attempt to read values for MinLayerCell,
-   // MaxLayerCell, and BottomDepth from the InitialVertCoord stream. Otherwise,
-   // MinLayerCell and MaxLayerCell will be set to the first and last indices of
-   // the vertical range, BottomDepth will remain uninitialized and will need
-   // to be initialized explicitly if needed.
-   if (ReadStream) {
-
-      I4 FillValueI4     = -1;
-      Real FillValueReal = -999._Real;
-
-      deepCopy(MinLayerCell, FillValueI4);
-      deepCopy(MaxLayerCell, FillValueI4);
-      deepCopy(BottomDepth, FillValueReal);
-
-      // Fetch input stream and validate
-      std::string StreamName = "InitialVertCoord";
-      if (Name != "Default") {
-         StreamName.append(Name);
-      }
-
-      // Validate InitalVertCoord stream
-      auto VCoordStream = IOStream::get(StreamName);
-      bool IsValidated  = VCoordStream->validate();
-
-      // Read InitialVertCoord stream
-      if (IsValidated) {
-         // Attempt to read stream, an error will be raised if any field fails
-         // to be read. Determine which fields may not have been read properly.
-         // If MinLayerCell or MaxLayerCell were not read properly default
-         // values will be used. If BottomDepth was not read properly, abort
-         // with error.
-         Err = IOStream::read(StreamName);
-         if (Err.isFail()) {
-            LOG_INFO("VertCoord: Error while reading {} stream", StreamName);
-            I4 Sum1 = 0;
-            parallelReduce(
-                {MinLayerCell.extent_int(0)},
-                KOKKOS_LAMBDA(int I, int &Accum) {
-                   Accum += LocMinLayerCell(I);
-                },
-                Sum1);
-            if (Sum1 < 0) {
-               LOG_INFO("VertCoord: Error reading MinLayerCell from {}, "
-                        "using MinLayerCell = 0",
-                        StreamName);
-               deepCopy(MinLayerCell, 1);
-            }
-            I4 Sum2 = 0;
-            parallelReduce(
-                {MaxLayerCell.extent_int(0)},
-                KOKKOS_LAMBDA(int I, int &Accum) {
-                   Accum += LocMaxLayerCell(I);
-                },
-                Sum2);
-            if (Sum2 < 0) {
-               LOG_INFO("VertCoord: Error reading MaxLayerCell from {}, "
-                        "using MaxLayerCell = NVertLayers - 1",
-                        StreamName);
-               deepCopy(MaxLayerCell, NVertLayers);
-            }
-            Real Sum3 = 0.;
-            parallelReduce(
-                {BottomDepth.extent_int(0)},
-                KOKKOS_LAMBDA(int I, Real &Accum) {
-                   Accum += LocBottomDepth(I);
-                },
-                Sum3);
-            if (Sum3 < 0.) {
-               ABORT_ERROR("VertCoord: Error reading bottomDepth from {}",
-                           StreamName);
-            }
-         }
-      } else {
-         ABORT_ERROR("Error validating IO stream {}", StreamName);
-      }
-   } else {
-      deepCopy(MinLayerCell, 1);
-      deepCopy(MaxLayerCell, NVertLayers);
-   }
-
-   // Subtract 1 to convert to zero-based indexing
-   parallelFor(
-       {NCellsAll}, KOKKOS_LAMBDA(int ICell) {
-          LocMinLayerCell(ICell) -= 1;
-          LocMaxLayerCell(ICell) -= 1;
-       });
-
-   // Make host copies for device arrays read from mesh file
-   MaxLayerCellH = createHostMirrorCopy(MaxLayerCell);
-   MinLayerCellH = createHostMirrorCopy(MinLayerCell);
-   BottomDepthH  = createHostMirrorCopy(BottomDepth);
+   // Set MinLayerCell, MaxLayerCell, and BottomDepth arrays
+   setStreamArrays(ReadStream);
 
    // Compute Edge and Vertex vertical ranges
    minMaxLayerEdge();
@@ -537,6 +444,111 @@ void VertCoord::clear() {
                           // process, calls the destructors for each
 
 } // end clear
+
+//------------------------------------------------------------------------------
+// If ReadStream = true, read MinLayerCell, MaxLayerCell, and BottomDepth from
+// the initial stream. If ReadStream = false, default values are used.
+void VertCoord::setStreamArrays(const bool ReadStream) {
+
+   Error Err; // Error code
+
+   OMEGA_SCOPE(LocMinLayerCell, MinLayerCell);
+   OMEGA_SCOPE(LocMaxLayerCell, MaxLayerCell);
+   OMEGA_SCOPE(LocBottomDepth, BottomDepth);
+
+   // If ReadStream is true (default) attempt to read values for MinLayerCell,
+   // MaxLayerCell, and BottomDepth from the InitialVertCoord stream. Otherwise,
+   // MinLayerCell and MaxLayerCell will be set to the first and last indices of
+   // the vertical range, BottomDepth will remain uninitialized and will need
+   // to be initialized explicitly if needed.
+   if (ReadStream) {
+
+      I4 FillValueI4     = -1;
+      Real FillValueReal = -999._Real;
+
+      deepCopy(MinLayerCell, FillValueI4);
+      deepCopy(MaxLayerCell, FillValueI4);
+      deepCopy(BottomDepth, FillValueReal);
+
+      // Fetch input stream and validate
+      std::string StreamName = "InitialVertCoord";
+      if (Name != "Default") {
+         StreamName.append(Name);
+      }
+
+      // Validate InitalVertCoord stream
+      auto VCoordStream = IOStream::get(StreamName);
+      bool IsValidated  = VCoordStream->validate();
+
+      // Read InitialVertCoord stream
+      if (IsValidated) {
+         // Attempt to read stream, an error will be raised if any field fails
+         // to be read. Determine which fields may not have been read properly.
+         // If MinLayerCell or MaxLayerCell were not read properly default
+         // values will be used. If BottomDepth was not read properly, abort
+         // with error.
+         Err = IOStream::read(StreamName);
+         if (Err.isFail()) {
+            LOG_INFO("VertCoord: Error while reading {} stream", StreamName);
+            I4 Sum1 = 0;
+            parallelReduce(
+                {MinLayerCell.extent_int(0)},
+                KOKKOS_LAMBDA(int I, int &Accum) {
+                   Accum += LocMinLayerCell(I);
+                },
+                Sum1);
+            if (Sum1 < 0) {
+               LOG_INFO("VertCoord: Error reading MinLayerCell from {}, "
+                        "using MinLayerCell = 0",
+                        StreamName);
+               deepCopy(MinLayerCell, 1);
+            }
+            I4 Sum2 = 0;
+            parallelReduce(
+                {MaxLayerCell.extent_int(0)},
+                KOKKOS_LAMBDA(int I, int &Accum) {
+                   Accum += LocMaxLayerCell(I);
+                },
+                Sum2);
+            if (Sum2 < 0) {
+               LOG_INFO("VertCoord: Error reading MaxLayerCell from {}, "
+                        "using MaxLayerCell = NVertLayers - 1",
+                        StreamName);
+               deepCopy(MaxLayerCell, NVertLayers);
+            }
+            Real Sum3 = 0.;
+            parallelReduce(
+                {BottomDepth.extent_int(0)},
+                KOKKOS_LAMBDA(int I, Real &Accum) {
+                   Accum += LocBottomDepth(I);
+                },
+                Sum3);
+            if (Sum3 < 0.) {
+               ABORT_ERROR("VertCoord: Error reading bottomDepth from {}",
+                           StreamName);
+            }
+         }
+      } else {
+         ABORT_ERROR("Error validating IO stream {}", StreamName);
+      }
+   } else {
+      deepCopy(MinLayerCell, 1);
+      deepCopy(MaxLayerCell, NVertLayers);
+   }
+
+   // Subtract 1 to convert to zero-based indexing
+   parallelFor(
+       {NCellsAll}, KOKKOS_LAMBDA(int ICell) {
+          LocMinLayerCell(ICell) -= 1;
+          LocMaxLayerCell(ICell) -= 1;
+       });
+
+   // Make host copies for device arrays read from mesh file
+   MaxLayerCellH = createHostMirrorCopy(MaxLayerCell);
+   MinLayerCellH = createHostMirrorCopy(MinLayerCell);
+   BottomDepthH  = createHostMirrorCopy(BottomDepth);
+
+}
 
 //------------------------------------------------------------------------------
 // Compute min and max layer indices for edges based on MinLayerCell and
