@@ -719,6 +719,30 @@ void VertCoord::setMasks() {
 
    CellMaskH = createHostMirrorCopy(CellMask);
 
+   VertexMask = Array2DReal("VertexMask", NVerticesSize, NVertLayers);
+
+   OMEGA_SCOPE(LocVrtxMask, VertexMask);
+   OMEGA_SCOPE(LocMinLyrVrtxTop, MinLayerVertexTop);
+   OMEGA_SCOPE(LocMaxLyrVrtxBot, MaxLayerVertexBot);
+
+   // VertexMask = 1 if at least 1 surrounding cell layer is active,
+   // 0 otherwise.
+   deepCopy(VertexMask, 0.);
+   parallelForOuter(
+       {NVerticesAll}, KOKKOS_LAMBDA(int IVertex, const TeamMember &Team) {
+          const I4 KMin = LocMinLyrVrtxTop(IVertex);
+          const I4 KMax = LocMaxLyrVrtxBot(IVertex);
+
+          parallelForInner(
+              Team, KMax - KMin + 1, INNER_LAMBDA(int K) {
+                 I4 KLyr = KMin + K;
+
+                 LocVrtxMask(IVertex, KLyr) = 1._Real;
+              });
+       });
+
+   VertexMaskH = createHostMirrorCopy(VertexMask);
+
 } // end setMasks()
 
 //------------------------------------------------------------------------------

@@ -652,6 +652,20 @@ int main(int argc, char *argv[]) {
          }
       }
 
+      for (int IVertex = 0; IVertex < NVerticesAll; ++IVertex) {
+         Real Expected = DefVertCoord->MaxLayerVertexBotH(IVertex) -
+                         DefVertCoord->MinLayerVertexTopH(IVertex) + 1._Real;
+
+         Real Sum = 0.;
+         for (int K = 0; K < NVertLayers; ++K) {
+            Sum += DefVertCoord->VertexMaskH(IVertex, K);
+         }
+         Real Diff = std::abs(Sum - Expected);
+         if (Diff > 1e-10) {
+            Err += 1;
+         }
+      }
+
       /// Determine test pass/fail
       if (Err == 0) {
          LOG_INFO("VertCoordTest: setMasks PASS");

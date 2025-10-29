@@ -124,14 +124,18 @@ class VertCoord {
    HostArray2DReal RefLayerThicknessH;
 
    // Masks
-   Array2DReal EdgeMask;      ///< Mask to determine if computations should be
-                              ///  done on edge
-   HostArray2DReal EdgeMaskH; ///< Mask to determine if computations should be
-                              ///  done on edge
-   Array2DReal CellMask;      ///< Mask to determine if computations should be
-                              ///  done on cell
-   HostArray2DReal CellMaskH; ///< Mask to determine if computations should be
-                              ///  done on cell
+   Array2DReal EdgeMask;        ///< Mask to determine if computations should be
+                                ///  done on edge
+   HostArray2DReal EdgeMaskH;   ///< Mask to determine if computations should be
+                                ///  done on edge
+   Array2DReal CellMask;        ///< Mask to determine if computations should be
+                                ///  done on cell
+   HostArray2DReal CellMaskH;   ///< Mask to determine if computations should be
+                                ///  done on cell
+   Array2DReal VertexMask;      ///< Mask to determine if computations should be
+                                ///  done on vertex
+   HostArray2DReal VertexMaskH; ///< Mask to determine if computations should be
+                                ///  done on vertex
 
    // BottomDepth read from mesh file
    Array1DReal BottomDepth;
