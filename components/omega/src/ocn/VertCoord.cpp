@@ -29,8 +29,10 @@ std::map<std::string, std::unique_ptr<VertCoord>> VertCoord::AllVertCoords;
 // read during construction. If a value for NVertLayers is passed as argument,
 // the dimension will not be read from the mesh file.
 void VertCoord::init(
-    bool ReadStream,  //< [in] optional argument to read stream, true by default
-    int InNVertLayers //< [in] optional argument to set NVertLayers explicitly
+    const bool
+        ReadStream, //< [in] optional argument to read stream, true by default
+    const int
+        InNVertLayers //< [in] optional argument to set NVertLayers explicitly
                       //< instead of reading dimension from mesh file
 ) {
 
@@ -48,8 +50,8 @@ void VertCoord::init(
 VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
                      const Decomp *Decomp,     //< [in] associated Decomp
                      Config *Options,          //< [in] configuration options
-                     bool ReadStream,          //< [in] logical to read stream
-                     int InNVertLayers         //< [in] int to set vertical dim
+                     const bool ReadStream,    //< [in] logical to read stream
+                     const int InNVertLayers   //< [in] int to set vertical dim
 ) {
    Error Err; // Error code
 
@@ -283,12 +285,12 @@ VertCoord::VertCoord(const std::string &Name_, //< [in] Name for new VertCoord
 
 //------------------------------------------------------------------------------
 // Calls the VertCoord constructor and places it in the AllVertCoords map
-VertCoord *
-VertCoord::create(const std::string &Name, // [in] name for new VertCoord
-                  const Decomp *Decomp,    // [in] associated Decomp
-                  Config *Options,         // [in] configuration options
-                  bool ReadStream,  // [in] optional logical to read stream
-                  int InNVertLayers // [in] optional int to set vertical dim
+VertCoord *VertCoord::create(
+    const std::string &Name, // [in] name for new VertCoord
+    const Decomp *Decomp,    // [in] associated Decomp
+    Config *Options,         // [in] configuration options
+    const bool ReadStream,   // [in] optional logical to read stream
+    const int InNVertLayers  // [in] optional int to set vertical dim
 ) {
    // Check to see if a VertCoord of the same name already exists and, if so,
    // exit with an error
