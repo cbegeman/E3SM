@@ -23,7 +23,7 @@ AuxiliaryState::AuxiliaryState(const std::string &Name, const HorzMesh *Mesh,
     : Mesh(Mesh), VCoord(VCoord), MeshHalo(MeshHalo), Name(stripDefault(Name)),
       KineticAux(stripDefault(Name), Mesh, NVertLayers),
       LayerThicknessAux(stripDefault(Name), Mesh, NVertLayers),
-      VorticityAux(stripDefault(Name), Mesh, NVertLayers),
+      VorticityAux(stripDefault(Name), Mesh, VCoord, NVertLayers),
       VelocityDel2Aux(stripDefault(Name), Mesh, VCoord, NVertLayers),
       WindForcingAux(stripDefault(Name), Mesh),
       TracerAux(stripDefault(Name), Mesh, VCoord, NVertLayers, NTracers) {

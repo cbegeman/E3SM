@@ -7,7 +7,8 @@
 namespace OMEGA {
 
 VorticityAuxVars::VorticityAuxVars(const std::string &AuxStateSuffix,
-                                   const HorzMesh *Mesh, int NVertLayers)
+                                   const HorzMesh *Mesh, , const VertCoord *VCoord,
+                                   int NVertLayers)
     : RelVortVertex("RelVortVertex" + AuxStateSuffix, Mesh->NVerticesSize,
                     NVertLayers),
       NormRelVortVertex("NormRelVortVertex" + AuxStateSuffix,
@@ -23,7 +24,8 @@ VorticityAuxVars::VorticityAuxVars(const std::string &AuxStateSuffix,
       EdgeSignOnVertex(Mesh->EdgeSignOnVertex), DcEdge(Mesh->DcEdge),
       KiteAreasOnVertex(Mesh->KiteAreasOnVertex),
       AreaTriangle(Mesh->AreaTriangle), FVertex(Mesh->FVertex),
-      VerticesOnEdge(Mesh->VerticesOnEdge) {}
+      VerticesOnEdge(Mesh->VerticesOnEdge),
+      EdgeMask(VCoord->EdgeMask) {}
 
 void VorticityAuxVars::registerFields(const std::string &AuxGroupName,
                                       const std::string &MeshName) const {

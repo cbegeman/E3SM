@@ -4,6 +4,7 @@
 #include "DataTypes.h"
 #include "HorzMesh.h"
 #include "OmegaKokkos.h"
+#include "VertCoord.h"
 
 #include <string>
 
@@ -19,7 +20,7 @@ class VorticityAuxVars {
    Array2DReal NormPlanetVortEdge;
 
    VorticityAuxVars(const std::string &AuxStateSuffix, const HorzMesh *Mesh,
-                    int NVertLayers);
+                    const VertCoord *VCoord, int NVertLayers);
 
    KOKKOS_FUNCTION void
    computeVarsOnVertex(int IVertex, int KChunk,
@@ -40,11 +41,12 @@ class VorticityAuxVars {
          for (int J = 0; J < VertexDegree; ++J) {
             const int JCell = CellsOnVertex(IVertex, J);
             const int JEdge = EdgesOnVertex(IVertex, J);
-            if (KVec > MaxLayerCell(JCell) or KVec < MinLayerCell(JCell))
-               BoundaryVertex = 1;
 
-            if (KVec <= MaxLayerCell(JCell) or KVec >= MinLayerCell(JCell))
-               AreaDual += KiteAreasOnVertex(IVertex, J);
+            // BoundaryVertex = 1 if at least 1 surrounding cell layer is inactive,
+            // 0 otherwise.
+            BoundaryVertex = Kokkos::max(BoundaryVertex, 1 - EdgeMask(JEdge, K))
+
+            AreaDual += KiteAreasOnVertex(IVertex, J);
 
             LayerThickVertex[KVec] += KiteAreasOnVertex(IVertex, J) *
                                       LayerThickCell(JCell, K);
@@ -52,10 +54,14 @@ class VorticityAuxVars {
                                       EdgeSignOnVertex(IVertex, J) *
                                       NormalVelEdge(JEdge, K);
          }
-         LayerThickVertex[KVec] = LayerThickVertex[KVec] /
+         // VertexMask = 1 if at least 1 surrounding cell layer is active,
+         // 0 otherwise.
+         LayerThickVertex[KVec] = VertexMask(IVertex,J) *
+                                  LayerThickVertex[KVec] /
                                   AreaDual;
-         RelVortVertexTmp[KVec] = InvAreaTriangle *
-                                  (1 - BoundaryVertex) *
+         RelVortVertexTmp[KVec] = VertexMask(IVertex,J) *
+                                  InvAreaTriangle *
+                                  (1._Real - BoundaryVertex) *
                                   RelVortVertexTmp[KVec];
       }
 
