@@ -1578,11 +1578,19 @@ Error IOStream::readFieldData(
    // lower case
    std::string OldFieldName = FieldName;
    OldFieldName[0]          = std::tolower(OldFieldName[0]);
-   bool OnHost              = FieldPtr->isOnHost();
-   bool IsDistributed       = FieldPtr->isDistributed();
-   bool IsTimeDependent     = FieldPtr->isTimeDependent();
-   ArrayDataType MyType     = FieldPtr->getType();
-   int NDims                = FieldPtr->getNumDims();
+   // Check for "Layer" in field name, backwards compatibility requires
+   // replacing "Layer" with "Level"
+   std::string OmegaSubStr = "Layer";
+   std::string MPASSubStr  = "Level";
+   size_t pos              = OldFieldName.find(OmegaSubStr);
+   if (pos != std::string::npos) {
+      OldFieldName.replace(pos, OmegaSubStr.length(), MPASSubStr);
+   }
+   bool OnHost          = FieldPtr->isOnHost();
+   bool IsDistributed   = FieldPtr->isDistributed();
+   bool IsTimeDependent = FieldPtr->isTimeDependent();
+   ArrayDataType MyType = FieldPtr->getType();
+   int NDims            = FieldPtr->getNumDims();
    if (NDims < 0)
       ABORT_ERROR("IOStream readFieldData: "
                   "Invalid number of dimensions for Field {}",
@@ -1645,15 +1653,6 @@ Error IOStream::readFieldData(
    }
    // For back compatibility, try to read again with old field name
    if (Err.isFail()) {
-      // Check for "Layer" in string, backwards compatibility requires replacing
-      // "Layer" with "Level"
-      std::string OmegaSubStr = "Layer";
-      std::string MPASSubStr  = "Level";
-      size_t pos              = OldFieldName.find(OmegaSubStr);
-      if (pos != std::string::npos) {
-         OldFieldName.replace(pos, OmegaSubStr.length(), MPASSubStr);
-         LOG_INFO("IOStream:: replaced Layer with Level");
-      }
       if (IsDistributed) {
          Err = IO::readArray(DataPtr, LocSize, OldFieldName, FileID, DecompID,
                              FieldID);
