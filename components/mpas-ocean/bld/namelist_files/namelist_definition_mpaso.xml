@@ -713,6 +713,25 @@ Default: Defined in namelist_defaults.xml
 </entry>
 
 
+<!-- brine_rejection -->
+
+<entry id="config_use_brine_rejection_parameterization" type="logical"
+	category="brine_rejection" group="brine_rejection">
+if true use brine rejection parameterization of Nguyen et al 2009
+
+Valid values: .true. or .false.
+Default: Defined in namelist_defaults.xml
+</entry>
+
+<entry id="config_brine_param_n" type="integer"
+	category="brine_rejection" group="brine_rejection">
+power in the parameterization for distribution of the salinity flux
+
+Valid values: small integers (0-5)
+Default: Defined in namelist_defaults.xml
+</entry>
+
+
 <!-- cvmix -->
 
 <entry id="config_use_cvmix" type="logical"

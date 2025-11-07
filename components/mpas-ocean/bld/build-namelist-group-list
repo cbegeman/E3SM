@@ -11,6 +11,7 @@ my @groups = qw(run_modes
                 submesoscale_eddy_parameterization
                 gm_eddy_parameterization
                 eddy_parameterization
+                brine_rejection
                 cvmix
                 wave_coupling
                 gotm

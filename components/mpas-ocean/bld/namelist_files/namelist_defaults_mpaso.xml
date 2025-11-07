@@ -297,6 +297,10 @@
 <config_eddyMLD_reference_pressure>1.0e5</config_eddyMLD_reference_pressure>
 <config_eddyMLD_use_old>.true.</config_eddyMLD_use_old>
 
+<!-- brine_rejection -->
+<config_use_brine_rejection_parameterization>.true.</config_use_brine_rejection_parameterization>
+<config_brine_param_n>5</config_brine_param_n>
+
 <!-- cvmix -->
 <config_use_cvmix>.true.</config_use_cvmix>
 <config_cvmix_prandtl_number>1.0</config_cvmix_prandtl_number>
