@@ -1646,9 +1646,6 @@ Default: Defined in namelist_defaults.xml
 
 <!-- land_ice -->
 
-<<<<<<< HEAD
-<entry id="config_land_ice_draft_mode" type="character"
-=======
 <entry id="config_use_land_ice_pressure" type="logical"
 	category="land_ice" group="land_ice">
 If .true. then applies landIcePressure field
@@ -1658,7 +1655,6 @@ Default: Defined in namelist_defaults.xml
 </entry>
 
 <entry id="config_land_ice_draft_mode" type="char*1024"
->>>>>>> 7522e56222 (Modify land ice flux mode config options and move enable land ice pressure to new config option)
 	category="land_ice" group="land_ice">
 Selects the mode in which land-ice draft is computed.
 
@@ -1668,7 +1664,7 @@ Default: Defined in namelist_defaults.xml
 
 <entry id="config_land_ice_rho_ocean" type="real"
 	category="land_ice" group="land_ice">
-ocean density used to calculate landIceDraft at floatation (assumed constant and uniform). Should be consistent with MALI's config_ocean_density when used to determine grounding line location. This is an alternative to the coupler variable effectiveDensityInLandIce which is not currently used.
+ocean density used to calculate landIceDraft at floatation (assumed constant and uniform). Should be consistent with MALI's config_ocean_density when used to determine grounding line location.
 
 Valid values: Any positive real number
 Default: Defined in namelist_defaults.xml
