@@ -277,8 +277,12 @@ contains
          do iCell = 1, nCells
             do k = 1, nVertLevelsP1
                vertViscTopOfCell(k, iCell) = vertViscTopOfCell(k, iCell) + config_cvmix_background_viscosity
-               vertDiffTopOfCell(k, iCell) = vertDiffTopOfCell(k, iCell) + config_cvmix_background_diffusion
             end do
+            if (latCell(iCell) < -50 * pi / 180.) then
+               do k = 1, nVertLevelsP1
+                  vertDiffTopOfCell(k, iCell) = vertDiffTopOfCell(k, iCell) + config_cvmix_background_diffusion
+               end do
+            end if
          end do
          !$omp end do
          !$omp end parallel
