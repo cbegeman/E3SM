@@ -3219,7 +3219,7 @@ contains
      end if
 
      ! Cryo fields
-     if (trim(config_land_ice_flux_mode) == 'prognostic' .or. trim(config_land_ice_flux_mode) == 'data') then
+     if (trim(config_land_ice_flux_mode) == 'active' .or. trim(config_land_ice_flux_mode) == 'data') then
         call mpas_pool_get_array(forcingPool, 'avgLandIceFreshwaterFlux', avgLandIceFreshwaterFlux)
         call mpas_pool_get_array(forcingPool, 'avgLandIceHeatFlux', avgLandIceHeatFlux)
      endif
@@ -3288,7 +3288,7 @@ contains
        o2x_o(index_o2x_Faoo_h2otemp, n) = avgTotalFreshWaterTemperatureFlux(i) * rho_sw * cp_sw
 
        ! Cryo fields
-       if (trim(config_land_ice_flux_mode) == 'prognostic' .or. trim(config_land_ice_flux_mode) == 'data') then
+       if (trim(config_land_ice_flux_mode) == 'active' .or. trim(config_land_ice_flux_mode) == 'data') then
           o2x_o % rAttr(index_o2x_Foxo_ismw, n)  = avgLandIceFreshwaterFlux(i)
           o2x_o % rAttr(index_o2x_Foxo_ismh, n)  = avgLandIceHeatFlux(i)
        endif
@@ -3340,7 +3340,7 @@ contains
 
              o2x_o % rAttr(index_o2x_Fioo_q, n)  = 0.0_RKIND
              o2x_o % rAttr(index_o2x_Fioo_frazil, n) = 0.0_RKIND
-             if (trim(config_land_ice_flux_mode) == 'prognostic' .or. trim(config_land_ice_flux_mode) == 'data') then
+             if (trim(config_land_ice_flux_mode) == 'active' .or. trim(config_land_ice_flux_mode) == 'data') then
                 o2x_o % rAttr(index_o2x_Foxo_q_li, n) = accumulatedFrazilIceMass(i) * config_frazil_heat_of_fusion / ocn_cpl_dt
                 o2x_o % rAttr(index_o2x_Foxo_frazil_li, n) = accumulatedFrazilIceMass(i) / ocn_cpl_dt
              endif
@@ -3393,7 +3393,7 @@ contains
 !JW       o2x_o(index_o2x_So_htv, n) = landIceHeatTransferVelocity(i)
 !JW       o2x_o(index_o2x_So_stv, n) = landIceSaltTransferVelocity(i)
 
-       if ( trim(config_land_ice_flux_mode) .eq. 'prognostic' ) then
+       if ( trim(config_land_ice_flux_mode) .eq. 'active' ) then
           o2x_o % rAttr(index_o2x_So_blt, n) = landIceBoundaryLayerTracers(indexBLT,i)
           o2x_o % rAttr(index_o2x_So_bls, n) = landIceBoundaryLayerTracers(indexBLS,i)
           o2x_o % rAttr(index_o2x_So_htv, n) = landIceTracerTransferVelocities(indexHeatTrans,i)
