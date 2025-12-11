@@ -712,6 +712,10 @@
 					description="The length scale of exponential decay of river runoff. Fluxes are multiplied by $e^{z/\gamma}$, where this coefficient is $\gamma$."
 					possible_values="Any positive real number."
 		/>
+		<nml_option name="config_iceberg_flux_max_depth" type="real" default_value="200.0" units="m"
+					description="The distance below the surface over which to evenly distribute iceberg fluxes. Zero corresponds to surface layer input only."
+					possible_values="Any positive real number."
+		/>
 		<nml_option name="config_subglacial_runoff_mode" type="character" default_value="off"
 					description="Selects the mode in which subglacial runoff fluxes are implemented."
 					possible_values="'off', 'data'"
@@ -3745,6 +3749,10 @@
 			 description="Flux of mass through the ocean surface due to river runoff. Positive into ocean."
 			 packages="forwardMode;analysisMode"
 		/>
+		<var name="surfaceThicknessFluxIceberg" type="real" dimensions="nCells Time" units="m s^-1"
+			 description="Flux of mass through the ocean surface due to icebergs. Positive into ocean."
+			 packages="forwardMode;analysisMode"
+		/>
 		<var name="surfaceThicknessFluxSubglacialRunoff" type="real" dimensions="nCells Time" units="m s^-1"
 			 description="Flux of mass through the ocean surface due to subglacial runoff. Positive into ocean."
 			 packages="dataSubglacialRunoffFluxPKG"
@@ -3794,6 +3802,10 @@
 		/>
 		<var name="fractionAbsorbedRunoff" type="real" dimensions="nVertLevels nCells Time" units="fractional"
 			 description="Divergence of transmission through interfaces of surface fluxes below the surface layer at cell centers. These are applied only to river runoff."
+			 packages="forwardMode;analysisMode"
+		/>
+		<var name="fractionAbsorbedIceberg" type="real" dimensions="nVertLevels nCells Time" units="fractional"
+			 description="Divergence of transmission through interfaces of surface fluxes below the surface layer at cell centers. These are applied only to iceberg fluxes."
 			 packages="forwardMode;analysisMode"
 		/>
 		<var name="fractionAbsorbedSubglacialRunoff" type="real" dimensions="nVertLevels nCells Time" units="fractional"

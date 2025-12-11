@@ -103,6 +103,14 @@
 			 description="Flux of salinity through the ocean surface due to river runoff. Positive into ocean."
 				/>
 			</var_array>
+			<var_array name="activeTracersSurfaceFluxIceberg" type="real" dimensions="nCells Time" packages="activeTracersPKG">
+				<var name="temperatureSurfaceFluxIceberg" array_group="activeRunoffFluxGRP" units="C m s^-1"
+			 description="Flux of temperature through the ocean surface due to icebergs. Positive into ocean."
+				/>
+				<var name="salinitySurfaceFluxIceberg" array_group="activeRunoffFluxGRP" units="1.e-3 m s^-1"
+			 description="Flux of salinity through the ocean surface due to icebergs. Positive into ocean."
+				/>
+			</var_array>
 			<var_array name="activeTracersSurfaceFluxSubglacialRunoff" type="real" dimensions="nCells Time" packages="dataSubglacialRunoffFluxPKG">
 				<var name="temperatureSurfaceFluxSubglacialRunoff" array_group="activeSubglacialRunoffFluxGRP" units="C m s^-1"
 			 description="Flux of temperature through the ocean surface due to subglacial runoff. Positive into ocean."

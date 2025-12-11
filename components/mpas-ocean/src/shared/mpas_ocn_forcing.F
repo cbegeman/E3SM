@@ -121,9 +121,10 @@ contains
         !
         !************************************************
 
-        real (kind=RKIND) :: zTop, zBot, transmissionCoeffTop, transmissionCoeffBot
+        real (kind=RKIND) :: zTop, zBot, transmissionCoeffTop, transmissionCoeffBot, fracSum
 
-        real (kind=RKIND), dimension(:,:), pointer :: layerThickness, fractionAbsorbed, fractionAbsorbedRunoff, fractionAbsorbedSubglacialRunoff
+        real (kind=RKIND), dimension(:), pointer :: bottomDepth
+        real (kind=RKIND), dimension(:,:), pointer :: layerThickness, fractionAbsorbed, fractionAbsorbedIceberg, fractionAbsorbedRunoff, fractionAbsorbedSubglacialRunoff
 
         integer :: iCell, k, timeLevel, nCells
 
@@ -143,11 +144,13 @@ contains
 
         call mpas_pool_get_array(meshPool, 'minLevelCell', minLevelCell)
         call mpas_pool_get_array(meshPool, 'maxLevelCell', maxLevelCell)
+        call mpas_pool_get_array(meshPool, 'bottomDepth', bottomDepth)
 
         call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel)
 
         call mpas_pool_get_array(forcingPool, 'fractionAbsorbed', fractionAbsorbed)
         call mpas_pool_get_array(forcingPool, 'fractionAbsorbedRunoff', fractionAbsorbedRunoff)
+        call mpas_pool_get_array(forcingPool, 'fractionAbsorbedIceberg', fractionAbsorbedIceberg)
         call mpas_pool_get_array(forcingPool, 'fractionAbsorbedSubglacialRunoff', fractionAbsorbedSubglacialRunoff)
 
         nCells = nCellsArray( 2 )
@@ -180,6 +183,33 @@ contains
               zTop = zBot
               transmissionCoeffTop = transmissionCoeffBot
            end do
+        end do
+
+!  now do icebergs separately
+
+        ! Distribute evenly down to config_iceberg_flux_max_depth
+        do iCell = 1, nCells
+           zTop = 0.0_RKIND
+           transmissionCoeffTop = 1.0_RKIND
+           do k = minLevelCell(iCell), maxLevelCell(iCell)
+              zBot = zTop - layerThickness(k,iCell)
+              ! Compute the fraction of each layer thickness that lies < config_iceberg_flux_max_depth
+              transmissionCoeffBot = ( &
+                 max(zBot, -config_iceberg_flux_max_depth) + config_iceberg_flux_max_depth &
+                 ) / max(1.0e-10_RKIND, config_iceberg_flux_max_depth)
+              fractionAbsorbedIceberg(k, iCell) = transmissionCoeffTop - transmissionCoeffBot
+              zTop = zBot
+              transmissionCoeffTop = transmissionCoeffBot
+           end do
+           fracSum = 0.0_RKIND
+           do k = minLevelCell(iCell), maxLevelCell(iCell)
+              fracSum = fracSum + fractionAbsorbedIceberg(k,iCell)
+           end do
+           ! if there's a discrepancy between (should be machine precision), correct the flux to the surface layer
+           !fractionAbsorbedIceberg(k, iCell) = fractionAbsorbedIceberg(k, iCell) + (1.0_RKIND - fracSum)
+           if (abs(1.0_RKIND - fracSum) > 1e-10) &
+              call mpas_log_write('Potential error in fractionAbsorbedIceberg; exceeds expected value by $r', &
+                 realArgs=(/1.0_RKIND - fracSum/))
         end do
 
 !  now do subglacial runoff separately

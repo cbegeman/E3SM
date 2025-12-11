@@ -129,12 +129,14 @@ contains
       real (kind=RKIND), dimension(:), pointer, contiguous :: &
          surfaceThicknessFlux,     &! surface thickness flux
          surfaceThicknessFluxRunoff, &! surface thickness flux from runoff
+         surfaceThicknessFluxIceberg, &! surface thickness flux from runoff
          surfaceThicknessFluxSubglacialRunoff ! surface thickness flux from runoff
 
       real (kind=RKIND), dimension(:,:), pointer, contiguous :: &
          tendThick,        &! accumulated layer thickness tendency
          fractionAbsorbed, &! fraction of sfc flux absorbed
          fractionAbsorbedRunoff, &! fraction of sfc flux absorbed
+         fractionAbsorbedIceberg, &! fraction of sfc flux absorbed
          fractionAbsorbedSubglacialRunoff ! fraction of subglacial runoff flux absorbed
 
       !-----------------------------------------------------------------
@@ -156,12 +158,16 @@ contains
                                              surfaceThicknessFlux)
       call mpas_pool_get_array(forcingPool, 'surfaceThicknessFluxRunoff', &
                                              surfaceThicknessFluxRunoff)
+      call mpas_pool_get_array(forcingPool, 'surfaceThicknessFluxIceberg', &
+                                             surfaceThicknessFluxIceberg)
       call mpas_pool_get_array(forcingPool, 'surfaceThicknessFluxSubglacialRunoff', &
                                              surfaceThicknessFluxSubglacialRunoff)
       call mpas_pool_get_array(forcingPool, 'fractionAbsorbed', &
                                              fractionAbsorbed)
       call mpas_pool_get_array(forcingPool, 'fractionAbsorbedRunoff', &
                                              fractionAbsorbedRunoff)
+      call mpas_pool_get_array(forcingPool, 'fractionAbsorbedIceberg', &
+                                             fractionAbsorbedIceberg)
       call mpas_pool_get_array(forcingPool, 'fractionAbsorbedSubglacialRunoff', &
                                              fractionAbsorbedSubglacialRunoff)
 
@@ -172,10 +178,10 @@ contains
       !    initialize to zero and start accumulating tendency terms
       !
 #ifdef MPAS_OPENACC
-      !$acc enter data create(tendThick, surfaceThicknessFlux, surfaceThicknessFluxRunoff)
+      !$acc enter data create(tendThick, surfaceThicknessFlux, surfaceThicknessFluxRunoff, surfaceThicknessFluxIceberg)
 
       !$acc parallel loop &
-      !$acc     present(tendThick, surfaceThicknessFlux, surfaceThicknessFluxRunoff) &
+      !$acc     present(tendThick, surfaceThicknessFlux, surfaceThicknessFluxRunoff, surfaceThicknessFluxIceberg) &
       !$acc     private(k)
 #else
       !$omp parallel
@@ -184,6 +190,7 @@ contains
       do iCell = 1, nCellsAll
          surfaceThicknessFlux(iCell) = 0.0_RKIND
          surfaceThicknessFluxRunoff(iCell) = 0.0_RKIND
+         surfaceThicknessFluxIceberg(iCell) = 0.0_RKIND
          do k=1,nVertLevels
             tendThick(k, iCell) = 0.0_RKIND
          end do
@@ -220,7 +227,8 @@ contains
       ! Compute surface mass flux array from bulk forcing
       call ocn_surface_bulk_forcing_thick(forcingPool, &
                                           surfaceThicknessFlux, &
-                                          surfaceThicknessFluxRunoff, err)
+                                          surfaceThicknessFluxRunoff, &
+                                          surfaceThicknessFluxIceberg, err)
 
       if (trim(config_subglacial_runoff_mode) == 'data') then
             call ocn_surface_bulk_forcing_thick_subglacial_runoff(forcingPool, &
@@ -246,8 +254,10 @@ contains
       ! Compute surface flux tendency
       call ocn_thick_surface_flux_tend(fractionAbsorbed, &
                                        fractionAbsorbedRunoff, &
+                                       fractionAbsorbedIceberg, &
                                        surfaceThicknessFlux, &
                                        surfaceThicknessFluxRunoff, &
+                                       surfaceThicknessFluxIceberg, &
                                        tendThick, err)
       if (trim(config_subglacial_runoff_mode) == 'data') then
             call ocn_thick_surface_flux_tend_subglacial_runoff(fractionAbsorbedSubglacialRunoff, &
@@ -640,15 +650,17 @@ contains
          tracerGroupTTDMask                 ! mask for TTD values
 
       real (kind=RKIND), dimension(:,:), pointer, contiguous :: &
-         layerThickness,               &! layer thickness
-         tracerGroupSurfaceFlux,       &! tracer flux at surface
-         fractionAbsorbed,             &! frac sfc flux absorbed
-         fractionAbsorbedRunoff,       &! frac runoff flux absorbed
-         fractionAbsorbedSubglacialRunoff,       &! frac subglacial runoff flux absorbed
-         tracerGroupSurfaceFluxRunoff, &! runoff flux
+         layerThickness,                  &! layer thickness
+         tracerGroupSurfaceFlux,          &! tracer flux at surface
+         fractionAbsorbed,                &! frac sfc flux absorbed
+         fractionAbsorbedRunoff,          &! frac runoff flux absorbed
+         fractionAbsorbedIceberg,         &! frac runoff flux absorbed
+         fractionAbsorbedSubglacialRunoff,&! frac subglacial runoff flux absorbed
+         tracerGroupSurfaceFluxRunoff,    &! runoff flux
+         tracerGroupSurfaceFluxIceberg,   &! iceberg flux
          tracerGroupSurfaceFluxSubglacialRunoff, &! subglacial runoff flux
-         tracerGroupSurfaceFluxRemoved,&! total sfc flux absorbed
-         nonLocalSurfaceTracerFlux      ! non-local fluxes (eg KPP)
+         tracerGroupSurfaceFluxRemoved,   &! total sfc flux absorbed
+         nonLocalSurfaceTracerFlux         ! non-local fluxes (eg KPP)
 
       real (kind=RKIND), dimension(:,:,:), pointer, contiguous :: &
          tracerGroup,     &! tracers in current tracer group
@@ -715,6 +727,8 @@ contains
                                              fractionAbsorbed)
       call mpas_pool_get_array(forcingPool, 'fractionAbsorbedRunoff', &
                                              fractionAbsorbedRunoff)
+      call mpas_pool_get_array(forcingPool, 'fractionAbsorbedIceberg', &
+                                             fractionAbsorbedIceberg)
       call mpas_pool_get_array(forcingPool, 'fractionAbsorbedSubglacialRunoff', &
                                              fractionAbsorbedSubglacialRunoff)
 
@@ -866,6 +880,11 @@ contains
                                   modifiedGroupName, &
                                   tracerGroupSurfaceFluxRunoff)
 
+         modifiedGroupName = groupName // "SurfaceFluxIceberg"
+         call mpas_pool_get_array(tracersSurfaceFluxPool, &
+                                  modifiedGroupName, &
+                                  tracerGroupSurfaceFluxIceberg)
+
          if (trim(config_subglacial_runoff_mode) == 'data') then
              ! Get surface flux due to subglacial runoff array
              modifiedGroupName = groupName // "SurfaceFluxSubglacialRunoff"
@@ -900,6 +919,7 @@ contains
          do n=1,nTracersGroup
             tracerGroupSurfaceFlux       (n,iCell) = 0.0_RKIND
             tracerGroupSurfaceFluxRunoff (n,iCell) = 0.0_RKIND
+            tracerGroupSurfaceFluxIceberg(n,iCell) = 0.0_RKIND
             tracerGroupSurfaceFluxRemoved(n,iCell) = 0.0_RKIND
          end do
          end do
@@ -927,6 +947,7 @@ contains
                                   forcingPool, tracerGroup, &
                                   tracerGroupSurfaceFlux, &
                                   tracerGroupSurfaceFluxRunoff, &
+                                  tracerGroupSurfaceFluxIceberg, &
                                   tracerGroupSurfaceFluxRemoved, &
                                   dt, layerThickness, err)
             if (trim(config_subglacial_runoff_mode) == 'data') then
@@ -1292,9 +1313,10 @@ contains
          endif ! compute budgets
 
          call ocn_tracer_surface_flux_tend(meshPool, fractionAbsorbed, &
-                               fractionAbsorbedRunoff, &
+                               fractionAbsorbedRunoff, fractionAbsorbedIceberg, &
                                layerThickness, tracerGroupSurfaceFlux, &
                                tracerGroupSurfaceFluxRunoff,  &
+                               tracerGroupSurfaceFluxIceberg, &
                                tracerGroupTend, err)
          if (trim(config_subglacial_runoff_mode) == 'data') then
                 call ocn_tracer_surface_flux_tend_subglacial_runoff(meshPool, fractionAbsorbedSubglacialRunoff, &

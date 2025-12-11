@@ -90,7 +90,8 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_surface_bulk_forcing_tracers(meshPool, groupName, forcingPool, tracerGroup,   &
-      tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxRemoved, dt, layerThickness, err)!{{{
+      tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxIceberg, &
+      tracersSurfaceFluxRemoved, dt, layerThickness, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -110,6 +111,8 @@ contains
       real (kind=RKIND), dimension(:,:), intent(inout) :: tracersSurfaceFlux !< Input/Output: Surface flux for tracer group
       real (kind=RKIND), dimension(:,:), intent(inout) ::   &
          tracersSurfaceFluxRunoff !< Input/Output: Surface flux for tracer group due to river runoff
+      real (kind=RKIND), dimension(:,:), intent(inout) ::   &
+         tracersSurfaceFluxIceberg !< Input/Output: Surface flux for tracer group due to icebergs
       real (kind=RKIND), dimension(:,:), intent(inout) ::   &
          tracersSurfaceFluxRemoved !< Input/Output: Accumulator for ignored Surface flux for tracer group
       real (kind=RKIND), dimension(:,:), intent(in) :: layerThickness
@@ -134,7 +137,8 @@ contains
       call mpas_timer_start("bulk_" // trim(groupName))
       if ( trim(groupName) == 'activeTracers' ) then
          call ocn_surface_bulk_forcing_active_tracers(meshPool, forcingPool, tracerGroup,  &
-            tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxRemoved, layerThickness, dt, err)
+            tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxIceberg, &
+            tracersSurfaceFluxRemoved, layerThickness, dt, err)
       elseif ( trim(groupName) == 'freshwaterTracers' .and. config_use_freshwaterTracers) then
          call ocn_surface_bulk_forcing_freshwater_tracers(meshPool, forcingPool, tracerGroup,  &
             tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxRemoved, err)
@@ -367,7 +371,7 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_surface_bulk_forcing_thick(forcingPool, surfaceThicknessFlux, surfaceThicknessFluxRunoff, err)!{{{
+   subroutine ocn_surface_bulk_forcing_thick(forcingPool, surfaceThicknessFlux, surfaceThicknessFluxRunoff, surfaceThicknessFluxIceberg, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -377,7 +381,8 @@ contains
       type (mpas_pool_type), intent(inout) :: forcingPool !< Input: Forcing information
       real (kind=RKIND), dimension(:), intent(inout) :: surfaceThicknessFlux !< Input/Output: Array for surface thickness flux
       real (kind=RKIND), dimension(:), intent(inout) ::  &
-         surfaceThicknessFluxRunoff !< Input/Output: Array for surface thickness flux due to river runoff
+         surfaceThicknessFluxRunoff, &!< Input/Output: Array for surface thickness flux due to river runoff
+         surfaceThicknessFluxIceberg  !< Input/Output: Array for surface thickness flux due to icebergs
 
       !-----------------------------------------------------------------
       !
@@ -421,7 +426,7 @@ contains
       !$acc     riverRunoffFlux, iceRunoffFlux, rainFlux)
 
       !$acc parallel loop &
-      !$acc     present(surfaceThicknessFlux, surfaceThicknessFluxRunoff, &
+      !$acc     present(surfaceThicknessFlux, surfaceThicknessFluxRunoff, surfaceThicknessFluxIceberg, &
       !$acc     evaporationFlux, snowFlux, &
       !$acc     seaIceFreshWaterFlux, icebergFreshWaterFlux, riverRunoffFlux, &
       !$acc     iceRunoffFlux, rainFlux)
@@ -431,8 +436,9 @@ contains
 #endif
       do iCell = 1, nCells
         surfaceThicknessFlux(iCell) = surfaceThicknessFlux(iCell) + ( snowFlux(iCell) + rainFlux(iCell) + evaporationFlux(iCell) &
-                                    + seaIceFreshWaterFlux(iCell) + icebergFreshWaterFlux(iCell) + iceRunoffFlux(iCell) ) / rho_sw
+                                    + seaIceFreshWaterFlux(iCell) + iceRunoffFlux(iCell) ) / rho_sw
         surfaceThicknessFluxRunoff(iCell) = riverRunoffFlux(iCell) / rho_sw
+        surfaceThicknessFluxIceberg(iCell) = icebergFreshWaterFlux(iCell) / rho_sw
       end do
 #ifndef MPAS_OPENACC
       !$omp end do
@@ -613,7 +619,8 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_surface_bulk_forcing_active_tracers(meshPool, forcingPool, tracerGroup,  &
-      tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxRemoved, layerThickness, dt, err)!{{{
+      tracersSurfaceFlux, tracersSurfaceFluxRunoff, tracersSurfaceFluxIceberg, &
+      tracersSurfaceFluxRemoved, layerThickness, dt, err)!{{{
 
       !-----------------------------------------------------------------
       !
@@ -630,6 +637,7 @@ contains
       type (mpas_pool_type), intent(inout) :: forcingPool !< Input: Forcing information
       real (kind=RKIND), dimension(:,:), intent(inout) :: tracersSurfaceFlux
       real (kind=RKIND), dimension(:,:), intent(inout) :: tracersSurfaceFluxRunoff
+      real (kind=RKIND), dimension(:,:), intent(inout) :: tracersSurfaceFluxIceberg
       real (kind=RKIND), dimension(:,:), intent(inout) :: tracersSurfaceFluxRemoved
       real (kind=RKIND), dimension(:,:,:), intent(inout) :: tracerGroup
       real (kind=RKIND), dimension(:,:), intent(in) :: layerThickness
@@ -716,7 +724,7 @@ contains
         tracersSurfaceFlux(index_temperature_flux, iCell) = tracersSurfaceFlux(index_temperature_flux, iCell) &
                                                            + (latentHeatFlux(iCell) + sensibleHeatFlux(iCell) &
                                                            + longWaveHeatFluxUp(iCell) + longWaveHeatFluxDown(iCell) &
-                                                           + seaIceHeatFlux(iCell) + icebergHeatFlux(iCell) &
+                                                           + seaIceHeatFlux(iCell) &
                                                            - (snowFlux(iCell) + iceRunoffFlux(iCell)) &
                                                            * latent_heat_fusion_mks) * hflux_factor
 
@@ -760,6 +768,8 @@ contains
            ! Runoff can only have a minimum temperature of 0.0C, since it is fresh water.
            tracersSurfaceFluxRunoff(index_temperature_flux,iCell) = riverRunoffFlux(iCell) &
                       * max(tracerGroup(index_temperature_flux,minLevelCell(iCell),iCell), 0.0_RKIND) / rho_sw
+
+           tracersSurfaceFluxIceberg(index_temperature_flux, iCell) = icebergHeatFlux(iCell) * hflux_factor
 
            ! Accumulate fluxes that use the freezing point
 ! mrp performance note: should call ocn_freezing_temperature just once here

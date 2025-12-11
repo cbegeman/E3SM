@@ -74,8 +74,8 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_thick_surface_flux_tend(transmissionCoefficients, transmissionCoefficientsRunoff, &
-      surfaceThicknessFlux, surfaceThicknessFluxRunoff, tend, err)!{{{
+   subroutine ocn_thick_surface_flux_tend(transmissionCoefficients, transmissionCoefficientsRunoff, transmissionCoefficientsIceberg, &
+      surfaceThicknessFlux, surfaceThicknessFluxRunoff, surfaceThicknessFluxIceberg, tend, err)!{{{
       !-----------------------------------------------------------------
       !
       ! input variables
@@ -83,12 +83,14 @@ contains
       !-----------------------------------------------------------------
 
       real (kind=RKIND), dimension(:,:), intent(in) :: &
-         transmissionCoefficients,     &!< Input: Coefficients for the transmission of surface fluxes
-         transmissionCoefficientsRunoff !< Input: Coefficients for the transmission of surface fluxes due to river runoff
+         transmissionCoefficients,       &!< Input: Coefficients for the transmission of surface fluxes
+         transmissionCoefficientsRunoff, &!< Input: Coefficients for the transmission of surface fluxes due to river runoff
+         transmissionCoefficientsIceberg  !< Input: Coefficients for the transmission of surface fluxes due to icebergs
 
       real (kind=RKIND), dimension(:), intent(in) :: &
-         surfaceThicknessFlux,      &!< Input: surface flux of thickness
-         surfaceThicknessFluxRunoff !< Input: surface flux of thickness due to river runoff
+         surfaceThicknessFlux,       &!< Input: surface flux of thickness
+         surfaceThicknessFluxIceberg,&!< Input: surface flux of thickness due to icebergs
+         surfaceThicknessFluxRunoff   !< Input: surface flux of thickness due to river runoff
 
 
       !-----------------------------------------------------------------
@@ -116,7 +118,7 @@ contains
 
       integer :: iCell, k
 
-      real (kind=RKIND) :: remainingFlux, remainingFluxRunoff
+      real (kind=RKIND) :: remainingFlux, remainingFluxRunoff, remainingFluxIceberg
 
       err = 0
 
@@ -125,15 +127,16 @@ contains
       call mpas_timer_start("thick surface flux")
 
 #ifdef MPAS_OPENACC
-      !$acc enter data copyin(transmissionCoefficients, transmissionCoefficientsRunoff)
+      !$acc enter data copyin(transmissionCoefficients, transmissionCoefficientsRunoff, transmissionCoefficientsIceberg)
 
       !$acc parallel loop &
-      !$acc     present(tend, surfaceThicknessFlux, surfaceThicknessFluxRunoff, &
-      !$acc     transmissionCoefficients, transmissionCoefficientsRunoff, minLevelCell, maxLevelCell) &
-      !$acc     private(k, remainingFlux, remainingFluxRunoff)
+      !$acc     present(tend, surfaceThicknessFlux, surfaceThicknessFluxRunoff, surfaceThicknessFluxIceberg, &
+      !$acc     transmissionCoefficients, transmissionCoefficientsRunoff, transmissionCoefficientsIceberg, &
+      !$acc     minLevelCell, maxLevelCell) &
+      !$acc     private(k, remainingFlux, remainingFluxRunoff, remainingFluxIceberg)
 #else
       !$omp parallel
-      !$omp do schedule(runtime) private(remainingFlux, remainingFluxRunoff, k)
+      !$omp do schedule(runtime) private(remainingFlux, remainingFluxRunoff, remainingFluxIceberg, k)
 #endif
       do iCell = 1, nCellsOwned
         remainingFlux = 1.0_RKIND
@@ -141,8 +144,10 @@ contains
         do k = minLevelCell(iCell), maxLevelCell(iCell)
           remainingFlux = remainingFlux - transmissionCoefficients(k, iCell)
           remainingFluxRunoff = remainingFluxRunoff - transmissionCoefficientsRunoff(k, iCell)
+          remainingFluxIceberg = remainingFluxIceberg - transmissionCoefficientsIceberg(k, iCell)
           tend(k, iCell) = tend(k, iCell) + surfaceThicknessFlux(iCell) * transmissionCoefficients(k, iCell)  &
-                                          + surfaceThicknessFluxRunoff(iCell) * transmissionCoefficientsRunoff(k, iCell)
+                                          + surfaceThicknessFluxRunoff(iCell) * transmissionCoefficientsRunoff(k, iCell) &
+                                          + surfaceThicknessFluxIceberg(iCell) * transmissionCoefficientsIceberg(k, iCell)
         end do
 
         if(maxLevelCell(iCell) > 0 .and. remainingFlux > 0.0_RKIND) then
@@ -152,6 +157,11 @@ contains
         if(maxLevelCell(iCell) > 0 .and. remainingFluxRunoff > 0.0_RKIND) then
           tend(maxLevelCell(iCell), iCell) = tend(maxLevelCell(iCell), iCell) &
              + remainingFluxRunoff * surfaceThicknessFluxRunoff(iCell)
+        end if
+
+        if(maxLevelCell(iCell) > 0 .and. remainingFluxIceberg > 0.0_RKIND) then
+          tend(maxLevelCell(iCell), iCell) = tend(maxLevelCell(iCell), iCell) &
+             + remainingFluxIceberg * surfaceThicknessFluxIceberg(iCell)
         end if
 
       end do

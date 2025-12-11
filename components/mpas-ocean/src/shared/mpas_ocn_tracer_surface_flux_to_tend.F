@@ -73,7 +73,8 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_tracer_surface_flux_tend(meshPool, fractionAbsorbed, fractionAbsorbedRunoff,  &
-      layerThickness, surfaceTracerFlux, surfaceTracerFluxRunoff, tend, err)!{{{
+      fractionAbsorbedIceberg, layerThickness, surfaceTracerFlux, surfaceTracerFluxRunoff, &
+      surfaceTracerFluxIceberg, tend, err)!{{{
       !-----------------------------------------------------------------
       !
       ! input variables
@@ -91,6 +92,12 @@ contains
 
       real (kind=RKIND), dimension(:,:), intent(in) :: &
         fractionAbsorbed !< Input: Coefficients for the application of surface fluxes
+
+      real (kind=RKIND), dimension(:,:), intent(in), pointer :: &
+        surfaceTracerFluxIceberg !< Input: surface tracer fluxes from icebergs
+
+      real (kind=RKIND), dimension(:,:), intent(in) :: &
+        fractionAbsorbedIceberg !< Input: Coefficients for the application of surface fluxes
 
       real (kind=RKIND), dimension(:,:), intent(in), pointer :: &
         surfaceTracerFluxRunoff !< Input: surface tracer fluxes from river runoff
@@ -196,6 +203,37 @@ contains
         !$omp end parallel
 
         call mpas_timer_stop("surface_tracer_runoff_flux")
+      end if
+
+      ! now do iceberg component
+
+      if (associated(surfaceTracerFluxIceberg)) then
+        call mpas_timer_start("surface_tracer_iceberg_flux")
+
+        !$omp parallel
+        !$omp do schedule(runtime) private(remainingFlux, k, iTracer)
+        do iCell = 1, nCells
+          remainingFlux = 1.0_RKIND
+          do k = minLevelCell(iCell), maxLevelCell(iCell)
+            remainingFlux = remainingFlux - fractionAbsorbedIceberg(k, iCell)
+
+            do iTracer = 1, nTracers
+              tend(iTracer, k, iCell) = tend(iTracer, k, iCell) +  &
+                 surfaceTracerFluxIceberg(iTracer, iCell) * fractionAbsorbedIceberg(k, iCell)
+            end do
+          end do
+
+          if(maxLevelCell(iCell) > 0 .and. remainingFlux > 0.0_RKIND) then
+            do iTracer = 1, nTracers
+              tend(iTracer, maxLevelCell(iCell), iCell) = tend(iTracer, maxLevelCell(iCell), iCell) &
+                                                        + surfaceTracerFluxIceberg(iTracer, iCell) * remainingFlux
+            end do
+          end if
+        end do
+        !$omp end do
+        !$omp end parallel
+
+        call mpas_timer_stop("surface_tracer_iceberg_flux")
       end if
 
    !--------------------------------------------------------------------
