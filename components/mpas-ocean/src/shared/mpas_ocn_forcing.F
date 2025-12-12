@@ -124,7 +124,8 @@ contains
         real (kind=RKIND) :: zTop, zBot, transmissionCoeffTop, transmissionCoeffBot, fracSum
 
         real (kind=RKIND), dimension(:), pointer :: bottomDepth
-        real (kind=RKIND), dimension(:,:), pointer :: layerThickness, fractionAbsorbed, fractionAbsorbedIceberg, fractionAbsorbedRunoff, fractionAbsorbedSubglacialRunoff
+        real (kind=RKIND), dimension(:,:), pointer :: layerThickness, &
+           fractionAbsorbed, fractionAbsorbedIceberg, fractionAbsorbedRunoff, fractionAbsorbedSubglacialRunoff
 
         integer :: iCell, k, timeLevel, nCells
 
@@ -201,15 +202,6 @@ contains
               zTop = zBot
               transmissionCoeffTop = transmissionCoeffBot
            end do
-           fracSum = 0.0_RKIND
-           do k = minLevelCell(iCell), maxLevelCell(iCell)
-              fracSum = fracSum + fractionAbsorbedIceberg(k,iCell)
-           end do
-           ! if there's a discrepancy between (should be machine precision), correct the flux to the surface layer
-           !fractionAbsorbedIceberg(k, iCell) = fractionAbsorbedIceberg(k, iCell) + (1.0_RKIND - fracSum)
-           if (abs(1.0_RKIND - fracSum) > 1e-10) &
-              call mpas_log_write('Potential error in fractionAbsorbedIceberg; exceeds expected value by $r', &
-                 realArgs=(/1.0_RKIND - fracSum/))
         end do
 
 !  now do subglacial runoff separately
