@@ -1196,6 +1196,14 @@ Valid values: Any positive real number.
 Default: Defined in namelist_defaults.xml
 </entry>
 
+<entry id="config_iceberg_flux_max_depth" type="real"
+	category="forcing" group="forcing">
+The distance below the surface over which to evenly distribute iceberg fluxes. Zero corresponds to surface layer input only.
+
+Valid values: Any positive real number.
+Default: Defined in namelist_defaults.xml
+</entry>
+
 <entry id="config_subglacial_runoff_mode" type="char*1024"
 	category="forcing" group="forcing">
 Selects the mode in which subglacial runoff fluxes are implemented.

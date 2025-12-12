@@ -715,6 +715,7 @@ add_default($nl, 'config_bulk_wind_stress_interp_isotropic');
 add_default($nl, 'config_use_bulk_thickness_flux');
 add_default($nl, 'config_flux_attenuation_coefficient');
 add_default($nl, 'config_flux_attenuation_coefficient_runoff');
+add_default($nl, 'config_iceberg_flux_max_depth');
 if ($OCN_SGR eq 'data') {
 	add_default($nl, 'config_subglacial_runoff_mode', 'val'=>"data");
 } else {

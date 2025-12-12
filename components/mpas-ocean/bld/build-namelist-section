@@ -225,6 +225,7 @@ add_default($nl, 'config_bulk_wind_stress_interp_isotropic');
 add_default($nl, 'config_use_bulk_thickness_flux');
 add_default($nl, 'config_flux_attenuation_coefficient');
 add_default($nl, 'config_flux_attenuation_coefficient_runoff');
+add_default($nl, 'config_iceberg_flux_max_depth');
 add_default($nl, 'config_subglacial_runoff_mode');
 add_default($nl, 'config_flux_attenuation_coefficient_subglacial_runoff');
 add_default($nl, 'config_sgr_flux_vertical_location');
