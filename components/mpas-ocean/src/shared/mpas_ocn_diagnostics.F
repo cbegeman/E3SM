@@ -1668,8 +1668,8 @@ contains
                   ( tangentialVelocity(k-1,iEdge) - tangentialVelocity(k,iEdge))**2
 
                dz_edge = 0.5_RKIND * ( &
-                  zMid(k-1,iCell) + zMid(k-1,jCell) - &
-                  zMid(k-0,iCell) - zMid(k-0,jCell) )
+                  (zMid(k-1,iCell) + zMid(k-1,jCell)) - &
+                  (zMid(k-0,iCell) + zMid(k-0,jCell)) )
 
                shear = delU2 / dz_edge**2
 
@@ -1684,9 +1684,10 @@ contains
                RiTopOfCell(k,iCell) + 0.25_RKIND * dcEdge(iEdge) * dvEdge(iEdge) * Ri_edge
            enddo
            enddo
-         do k = minLevelCell(iCell), maxLevelCell(iCell)
+         do k = minLevelCell(iCell)+1, maxLevelCell(iCell)
             RiTopOfCell(k,iCell) = RiTopOfCell(k,iCell) / RiTopOfCellNorm(k)
           end do
+          RiTopOfCell(minLevelCell(iCell),iCell) = RiTopOfCell(minLevelCell(iCell)+1,iCell)
       end do
 #ifndef MPAS_OPENACC
       !$omp end do
