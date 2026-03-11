@@ -23,6 +23,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AuxiliaryState.h"
+#include "Config.h"
 #include "OceanState.h"
 #include "TimeMgr.h"
 
@@ -82,6 +83,27 @@ class ManufacturedSolution {
    void init();
 
 }; // end class ManufacturedSolution
+
+//===-----------------------------------------------------------------------===/
+
+// Face-normal velocities that reproduce the MPAS transport test flows
+//===-----------------------------------------------------------------------===/
+class TransportTestVelocityTendency {
+
+ public:
+    TransportTestVelocityTendency();
+
+    bool init(Config *OmegaConfig);
+    bool isEnabled() const;
+
+    void operator()(Array2DReal NormalVelTend, const OceanState *State,
+                            const AuxiliaryState *AuxState, int ThickTimeLevel,
+                            int VelTimeLevel, TimeInstant Time) const;
+
+ private:
+    int FlowID;
+    TimeInstant ReferenceTime;
+};
 
 } // end namespace OMEGA
 

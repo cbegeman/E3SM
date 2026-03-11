@@ -39,30 +39,33 @@ void Tendencies::init() {
 
    // Check if use the customized tendencies. If it is not found in the
    // config, we assume it is not used (false)
-   bool UseCustomTendency = false;
-   Err += TendConfig.get("UseCustomTendency", UseCustomTendency);
+   bool ManufactureSolutionTendencyEnable = false;
+   Err += TendConfig.get("ManufactureSolutionTendencyEnable",
+                         ManufactureSolutionTendencyEnable);
 
    /// Instances of custom tendencies - empty by default
    CustomTendencyType CustomThickTend;
    CustomTendencyType CustomVelTend;
 
-   if (UseCustomTendency) {
-      // Check if use manufactured tendency terms if it is not found in
-      // the config file, we will assume it is not used (false)
-      bool ManufacturedTend = false;
-      Error ManufacturedTendErr =
-          TendConfig.get("ManufacturedSolutionTendency", ManufacturedTend);
+   bool TransportTestTendencyEnable = false;
+   Err += TendConfig.get("TransportTestTendencyEnable", TransportTestTendencyEnable);
 
-      if (ManufacturedTend) {
-         ManufacturedSolution ManufacturedSol;
-         ManufacturedSol.init();
+   if (ManufactureSolutionTendencyEnable) {
+      ManufacturedSolution ManufacturedSol;
+      ManufacturedSol.init();
 
-         CustomThickTend = ManufacturedSol.ManufacturedThickTend;
-         CustomVelTend   = ManufacturedSol.ManufacturedVelTend;
+      CustomThickTend = ManufacturedSol.ManufacturedThickTend;
+      ManufacturedVelTendencyEnable = true;
+      ManufacturedVelTend = ManufacturedSol.ManufacturedVelTend;
+   } else {
+      ManufacturedVelTendencyEnable = false;
+   }
 
-      } // if ManufacturedTend
-
-   } // end if UseCustomTendency
+   if (TransportTestTendencyEnable) {
+      TransportTestVelTendencyEnable = TransportVelTend.init(OmegaConfig);
+   } else {
+      TransportTestVelTendencyEnable = false;
+   }
 
    // Ceate default tendencies
    Tendencies::DefaultTendencies =
@@ -237,20 +240,24 @@ void Tendencies::readConfig(Config *OmegaConfig ///< [in] Omega config
 //------------------------------------------------------------------------------
 // Construct a new group of tendencies
 Tendencies::Tendencies(const std::string &Name, ///< [in] Name for tendencies
-                       const HorzMesh *Mesh,    ///< [in] Horizontal mesh
-                       const VertCoord *VCoord, ///< [in] Vertical coordinate
-                       int NTracersIn,          ///< [in] Number of tracers
-                       Config *Options,         ///< [in] Configuration options
-                       CustomTendencyType InCustomThicknessTend,
-                       CustomTendencyType InCustomVelocityTend)
-    : Mesh(Mesh), VCoord(VCoord), ThicknessFluxDiv(Mesh, VCoord),
-      PotientialVortHAdv(Mesh, VCoord), KEGrad(Mesh, VCoord),
-      SSHGrad(Mesh, VCoord), VelocityDiffusion(Mesh, VCoord),
-      VelocityHyperDiff(Mesh, VCoord), WindForcing(Mesh, VCoord),
-      BottomDrag(Mesh, VCoord), TracerDiffusion(Mesh, VCoord),
-      TracerHyperDiff(Mesh, VCoord), TracerHorzAdv(Mesh, VCoord),
-      CustomThicknessTend(InCustomThicknessTend),
-      CustomVelocityTend(InCustomVelocityTend) {
+                                  const HorzMesh *Mesh,    ///< [in] Horizontal mesh
+                                  const VertCoord *VCoord, ///< [in] Vertical coordinate
+                                  int NTracersIn,          ///< [in] Number of tracers
+                                  Config *Options,         ///< [in] Configuration options
+                                  CustomTendencyType InCustomThicknessTend,
+                                  CustomTendencyType InCustomVelocityTend)
+      : Mesh(Mesh), VCoord(VCoord), ThicknessFluxDiv(Mesh, VCoord),
+         PotientialVortHAdv(Mesh, VCoord), KEGrad(Mesh, VCoord),
+         SSHGrad(Mesh, VCoord), VelocityDiffusion(Mesh, VCoord),
+         VelocityHyperDiff(Mesh, VCoord), WindForcing(Mesh, VCoord),
+         BottomDrag(Mesh, VCoord), TracerDiffusion(Mesh, VCoord),
+         TracerHyperDiff(Mesh, VCoord), TracerHorzAdv(Mesh, VCoord),
+         CustomThicknessTend(InCustomThicknessTend),
+         CustomVelocityTend(InCustomVelocityTend),
+         ManufacturedVelTendencyEnable(false),
+         ManufacturedVelTend(),
+         TransportTestVelTendencyEnable(false),
+         TransportVelTend() {
 
    // Tendency arrays
    LayerThicknessTend =
@@ -505,6 +512,20 @@ void Tendencies::computeVelocityTendenciesOnly(
       CustomVelocityTend(LocNormalVelocityTend, State, AuxState, ThickTimeLevel,
                          VelTimeLevel, Time);
       Pacer::stop("Tend:customVelocityTend", 2);
+   }
+
+   if (ManufacturedVelTendencyEnable) {
+      Pacer::start("Tend:manufacturedVelocityTend", 2);
+      ManufacturedVelTend(LocNormalVelocityTend, State, AuxState, ThickTimeLevel,
+                         VelTimeLevel, Time);
+      Pacer::stop("Tend:manufacturedVelocityTend", 2);
+   }
+
+   if (TransportTestVelTendencyEnable) {
+      Pacer::start("Tend:transportTestVelocityTend", 2);
+      TransportVelTend(LocNormalVelocityTend, State, AuxState, ThickTimeLevel,
+                       VelTimeLevel, Time);
+      Pacer::stop("Tend:transportTestVelocityTend", 2);
    }
 
    Pacer::stop("Tend:computeVelocityTendenciesOnly", 1);

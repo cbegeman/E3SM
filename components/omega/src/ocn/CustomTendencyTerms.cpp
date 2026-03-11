@@ -9,7 +9,11 @@
 #include "CustomTendencyTerms.h"
 #include "Config.h"
 #include "GlobalConstants.h"
+#include "HorzMesh.h"
 #include "TimeStepper.h"
+
+#include <Kokkos_Core.hpp>
+#include <cmath>
 
 namespace OMEGA {
 
@@ -207,6 +211,208 @@ void ManufacturedSolution::ManufacturedVelocityTendency::operator()(
        });
 
 } // end void ManufacturedVelocityTendency
+
+namespace {
+constexpr Real kTwelveDays = 12.0 * CDay;
+constexpr Real kOmegaScaler = 0.2 * 0.2 + 0.7 * 0.7 + 1.0 * 1.0;
+const Real kOmegaMag = sqrt(kOmegaScaler);
+constexpr Real kOmegaBase[3] = {0.2, 0.7, 1.0};
+
+KOKKOS_INLINE_FUNCTION Real vectorNorm(const Real v[3]) {
+    return sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+KOKKOS_INLINE_FUNCTION void crossProduct(const Real a[3], const Real b[3],
+                                                      Real c[3]) {
+    c[0] = a[1] * b[2] - a[2] * b[1];
+    c[1] = a[2] * b[0] - a[0] * b[2];
+    c[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+KOKKOS_INLINE_FUNCTION void lonlat2xyz(Real lon, Real lat, Real &x, Real &y,
+                                                     Real &z) {
+    Real cosLat = cos(lat);
+    x = cos(lon) * cosLat;
+    y = sin(lon) * cosLat;
+    z = sin(lat);
+}
+
+KOKKOS_INLINE_FUNCTION void calcLocalEastNorth(const Real r[3], Real east[3],
+                                                              Real north[3]) {
+    constexpr Real kAxis[3] = {0.0, 0.0, 1.0};
+    Real temp[3];
+    crossProduct(kAxis, r, temp);
+    Real normEast = vectorNorm(temp);
+    if (normEast > 0) {
+        east[0] = temp[0] / normEast;
+        east[1] = temp[1] / normEast;
+        east[2] = temp[2] / normEast;
+    } else {
+        east[0] = 1.0;
+        east[1] = 0.0;
+        east[2] = 0.0;
+    }
+    crossProduct(r, east, north);
+    Real normNorth = vectorNorm(north);
+    if (normNorth > 0) {
+        north[0] /= normNorth;
+        north[1] /= normNorth;
+        north[2] /= normNorth;
+    }
+}
+
+KOKKOS_INLINE_FUNCTION void flowRotation(Real lon, Real lat, Real &u, Real &v) {
+    Real r[3];
+    lonlat2xyz(lon, lat, r[0], r[1], r[2]);
+    Real omegaScaled[3];
+    Real scaleFactor = (TwoPi / kTwelveDays) / kOmegaMag;
+    omegaScaled[0] = kOmegaBase[0] * scaleFactor;
+    omegaScaled[1] = kOmegaBase[1] * scaleFactor;
+    omegaScaled[2] = kOmegaBase[2] * scaleFactor;
+    Real vel[3];
+    crossProduct(omegaScaled, r, vel);
+    Real east[3];
+    Real north[3];
+    calcLocalEastNorth(r, east, north);
+    u = vel[0] * east[0] + vel[1] * east[1] + vel[2] * east[2];
+    v = vel[0] * north[0] + vel[1] * north[1] + vel[2] * north[2];
+}
+
+KOKKOS_INLINE_FUNCTION void flowNondivergent(Real timeSec, Real lon, Real lat,
+                                                             Real &u, Real &v) {
+    Real lonP = lon - TwoPi * timeSec / kTwelveDays;
+    Real cosLat = cos(lat);
+    Real cost = cos(Pi * timeSec / kTwelveDays);
+    Real sinLonP = sin(lonP);
+    Real sinLonPSq = sinLonP * sinLonP;
+    Real sin2LonP = sin(2.0_Real * lonP);
+    Real sin2Lat = sin(2.0_Real * lat);
+    Real factor = 1.0 / kTwelveDays;
+    u = factor * (10.0_Real * sinLonPSq * sin2Lat * cost + TwoPi * cosLat);
+    v = (10.0_Real * factor) * sin2LonP * cosLat * cost;
+}
+
+KOKKOS_INLINE_FUNCTION void flowDivergent(Real timeSec, Real lon, Real lat,
+                                                         Real &u, Real &v) {
+    Real lonP = lon - TwoPi * timeSec / kTwelveDays;
+    Real cosLat = cos(lat);
+    Real cost = cos(Pi * timeSec / kTwelveDays);
+    Real sinLonP = sin(lonP);
+    Real sinLonPHalf = sin(lonP * 0.5_Real);
+    Real sinLonPHalfSq = sinLonPHalf * sinLonPHalf;
+    Real sin2Lat = sin(2.0_Real * lat);
+    Real cosLatSq = cosLat * cosLat;
+    Real cosLatCubed = cosLatSq * cosLat;
+    Real factor = 1.0 / kTwelveDays;
+    u = factor * (-5.0_Real * sinLonPHalfSq * sin2Lat * cosLatSq * cost +
+                      TwoPi * cosLat);
+    v = (2.5_Real * factor) * sinLonP * cosLatCubed * cost;
+}
+
+KOKKOS_INLINE_FUNCTION void evaluateTransportFlow(int flowID, Real timeSec,
+                                                                    Real lon, Real lat, Real &u,
+                                                                    Real &v) {
+    switch (flowID) {
+    case 1:
+        flowRotation(lon, lat, u, v);
+        break;
+    case 2:
+    case 4:
+        flowNondivergent(timeSec, lon, lat, u, v);
+        break;
+    case 3:
+        flowDivergent(timeSec, lon, lat, u, v);
+        break;
+    default:
+        u = 0.0;
+        v = 0.0;
+        break;
+    }
+}
+
+KOKKOS_INLINE_FUNCTION Real computeTransportNormal(int flowID, Real timeSec,
+                                                                    Real lon, Real lat,
+                                                                    Real angle,
+                                                                    Real sphereRadius) {
+    Real u = 0.0;
+    Real v = 0.0;
+    evaluateTransportFlow(flowID, timeSec, lon, lat, u, v);
+    return sphereRadius * (cos(angle) * u + sin(angle) * v);
+}
+} // namespace
+
+TransportTestVelocityTendency::TransportTestVelocityTendency()
+     : FlowID(0), ReferenceTime() {}
+
+bool TransportTestVelocityTendency::init(Config *OmegaConfig) {
+    Config TransportConfig("TransportTests");
+    Error Err = OmegaConfig->get(TransportConfig);
+    if (Err.isFail()) {
+        FlowID = 0;
+        return false;
+    }
+
+    int FlowIdValue = 0;
+    Err = TransportConfig.get("FlowID", FlowIdValue);
+    if (Err.isFail() || FlowIdValue <= 0) {
+        FlowID = 0;
+        return false;
+    }
+
+    FlowID = FlowIdValue;
+    TimeStepper *DefStepper = TimeStepper::getDefault();
+    Clock *ModelClock = DefStepper->getClock();
+    ReferenceTime = ModelClock->getCurrentTime();
+    return true;
+}
+
+bool TransportTestVelocityTendency::isEnabled() const { return FlowID > 0; }
+
+void TransportTestVelocityTendency::operator()(
+     Array2DReal NormalVelTend, const OceanState *State,
+     const AuxiliaryState *AuxState, int ThickTimeLevel, int VelTimeLevel,
+     TimeInstant Time) const {
+
+    if (FlowID <= 0) {
+        return;
+    }
+
+    R8 ElapsedTimeSec;
+    TimeInterval ElapsedTimeInterval = Time - ReferenceTime;
+    ElapsedTimeInterval.get(ElapsedTimeSec, TimeUnits::Seconds);
+
+    auto *Mesh       = HorzMesh::getDefault();
+    auto NVertLayers = NormalVelTend.extent_int(1);
+
+    Array1DReal LonEdge = Mesh->LonEdge;
+    Array1DReal LatEdge = Mesh->LatEdge;
+    Array1DReal AngleEdge = Mesh->AngleEdge;
+    const int LocFlowID = FlowID;
+    const R8 LocTimeSec = ElapsedTimeSec;
+    const R8 SphereRadius = REarth;
+
+    State->copyToHost(VelTimeLevel);
+    HostArray2DReal NormalVelHost = State->getNormalVelocityH(VelTimeLevel);
+    HostArray1DReal LonEdgeH = Mesh->LonEdgeH;
+    HostArray1DReal LatEdgeH = Mesh->LatEdgeH;
+    HostArray1DReal AngleEdgeH = Mesh->AngleEdgeH;
+    auto NormalVelTendH = createHostMirrorCopy(NormalVelTend);
+    deepCopy(NormalVelTendH, NormalVelTend);
+
+    for (int IEdge = 0; IEdge < Mesh->NEdgesAll; ++IEdge) {
+        R8 Lon = LonEdgeH(IEdge);
+        R8 Lat = LatEdgeH(IEdge);
+        R8 Angle = AngleEdgeH(IEdge);
+        for (int KLevel = 0; KLevel < NVertLayers; ++KLevel) {
+            R8 Source = computeTransportNormal(LocFlowID, LocTimeSec, Lon,
+                                              Lat, Angle, SphereRadius);
+            NormalVelTendH(IEdge, KLevel) +=
+                Source - NormalVelHost(IEdge, KLevel);
+        }
+    }
+
+    deepCopy(NormalVelTend, NormalVelTendH);
+}
 
 } // end namespace OMEGA
 
