@@ -33,13 +33,13 @@
 
 #include "AuxiliaryState.h"
 #include "Config.h"
+#include "CustomTendencyTerms.h"
 #include "HorzMesh.h"
 #include "OceanState.h"
 #include "TendencyTerms.h"
 #include "TimeMgr.h"
 #include "VertCoord.h"
 
-#include <functional>
 #include <memory>
 
 namespace OMEGA {
@@ -48,9 +48,6 @@ namespace OMEGA {
 /// velocity, and tracer tendencies within the timestepping algorithm.
 class Tendencies {
  public:
-   using CustomTendencyType =
-       std::function<void(Array2DReal, const OceanState *,
-                          const AuxiliaryState *, int, int, TimeInstant)>;
    // Arrays for accumulating tendencies
    Array2DReal LayerThicknessTend;
    Array2DReal NormalVelocityTend;
@@ -152,14 +149,6 @@ class Tendencies {
               const HorzMesh *Mesh,    ///< [in] Horizontal mesh
               const VertCoord *VCoord, ///< [in] Vertical coordinate
               int NTracersIn,          ///< [in] Number of tracers
-              Config *Options,         ///< [in] Configuration options
-              CustomTendencyType InCustomThicknessTend,
-              CustomTendencyType InCustomVelocityTend);
-
-   Tendencies(const std::string &Name, ///< [in] Name for tendencies
-              const HorzMesh *Mesh,    ///< [in] Horizontal mesh
-              const VertCoord *VCoord, ///< [in] Vertical coordinate
-              int NTracersIn,          ///< [in] Number of tracers
               Config *Options          ///< [in] Configuration options
    );
 
@@ -177,8 +166,12 @@ class Tendencies {
    // Map of all tendency objects
    static std::map<std::string, std::unique_ptr<Tendencies>> AllTendencies;
 
-   CustomTendencyType CustomThicknessTend;
-   CustomTendencyType CustomVelocityTend;
+   bool ManufacturedThickTendencyEnable;
+   ManufacturedSolution::ManufacturedThicknessTendency ManufacturedThickTend;
+   bool ManufacturedVelTendencyEnable;
+   ManufacturedSolution::ManufacturedVelocityTendency ManufacturedVelTend;
+   bool TransportTestVelTendencyEnable;
+   TransportTestVelocityTendency TransportVelTend;
 
 }; // end class Tendencies
 

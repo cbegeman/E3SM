@@ -33,6 +33,7 @@
 #include "TimeMgr.h"
 #include "Tracers.h"
 #include "VertCoord.h"
+#include "CustomTendencyTerms.h"
 #include "mpi.h"
 
 #include <cmath>
@@ -43,36 +44,61 @@ using namespace OMEGA;
 // Only one vertical layer is needed
 constexpr int NVertLayers = 1;
 
-// Custom tendency for normal velocity
-// du/dt = -coeff * u
-struct DecayVelocityTendency {
-   Real Coeff = 0.5;
+namespace {
+ManufacturedSolution gManufacturedSolution;
 
-   // exact solution assumes that this is the only tendency active
-   // the solution is exponential decay
-   Real exactSolution(Real Time) { return std::exp(-Coeff * Time); }
+// Produce the manufactured solution normal velocity at a given time
+Array2DReal manufacturedNormalVelocity(
+    const ManufacturedSolution::ManufacturedVelocityTendency &VelTend,
+    const HorzMesh *Mesh, TimeInstant Time) {
+   Array2DReal AnalyticVel("ManufacturedNormalVel", Mesh->NEdgesSize,
+                            Mesh->NVertLayers);
 
-   void operator()(Array2DReal NormalVelTend, const OceanState *State,
-                   const AuxiliaryState *AuxState, int ThickTimeLevel,
-                   int VelTimeLevel, TimeInstant Time) const {
+   TimeInterval ElapsedInterval = Time - VelTend.ReferenceTime;
+   R8 ElapsedTimeSec;
+   ElapsedInterval.get(ElapsedTimeSec, TimeUnits::Seconds);
 
-      auto *Mesh                = HorzMesh::getDefault();
-      auto NVertLayers          = NormalVelTend.extent_int(1);
-      Array2DReal NormalVelEdge = State->getNormalVelocity(VelTimeLevel);
+   const auto FEdge     = Mesh->FEdge;
+   const auto AngleEdge = Mesh->AngleEdge;
+   const auto XEdge     = Mesh->XEdge;
+   const auto YEdge     = Mesh->YEdge;
+   const R8 LocGrav     = VelTend.Grav;
+   const R8 LocEta0     = VelTend.Eta0;
+   const R8 LocKx       = VelTend.Kx;
+   const R8 LocKy       = VelTend.Ky;
+   const R8 LocAngFreq  = VelTend.AngFreq;
+   const int NLevels     = Mesh->NVertLayers;
 
-      OMEGA_SCOPE(LocCoeff, Coeff);
+   Kokkos::parallel_for(
+       "ManufacturedNormalVel", {Mesh->NEdgesAll},
+       KOKKOS_LAMBDA(int IEdge) {
+          R8 X     = XEdge(IEdge);
+          R8 Y     = YEdge(IEdge);
+          R8 Phase = LocKx * X + LocKy * Y - LocAngFreq * ElapsedTimeSec;
+          R8 SourceTerm0 = LocAngFreq * sin(Phase) -
+                           0.5_Real * LocEta0 * (LocKx + LocKy) *
+                               sin(2.0_Real * Phase);
+          R8 U = LocEta0 *
+                 ((-FEdge(IEdge) + LocGrav * LocKx) * cos(Phase) +
+                  SourceTerm0);
+          R8 V = LocEta0 *
+                 ((FEdge(IEdge) + LocGrav * LocKy) * cos(Phase) +
+                  SourceTerm0);
+          R8 NormalComp = cos(AngleEdge(IEdge)) * U +
+                          sin(AngleEdge(IEdge)) * V;
+          for (int K = 0; K < NLevels; ++K) {
+             AnalyticVel(IEdge, K) = NormalComp;
+          }
+       });
 
-      parallelFor(
-          {Mesh->NEdgesAll, NVertLayers}, KOKKOS_LAMBDA(int IEdge, int K) {
-             NormalVelTend(IEdge, K) -= LocCoeff * NormalVelEdge(IEdge, K);
-          });
-   }
-};
+   return AnalyticVel;
+}
+} // namespace
 
-int initState() {
+int initState(TimeInstant Time,
+              const ManufacturedSolution::ManufacturedVelocityTendency &VelTend,
+              const HorzMesh *Mesh) {
    int Err = 0;
-
-   auto *Mesh              = HorzMesh::getDefault();
    auto *State             = OceanState::get("TestState");
    Array3DReal TracerArray = Tracers::getAll(0);
 
@@ -81,50 +107,11 @@ int initState() {
 
    // Initially set thickness and velocity and tracers to 1
    deepCopy(LayerThickCell, 1);
-   deepCopy(NormalVelEdge, 1);
+   Array2DReal AnalyticVel = manufacturedNormalVelocity(VelTend, Mesh, Time);
+   deepCopy(NormalVelEdge, AnalyticVel);
    deepCopy(TracerArray, 1);
 
    return Err;
-}
-
-int createExactSolution(Real TimeEnd) {
-   int Err = 0;
-
-   auto *DefHalo           = Halo::getDefault();
-   auto *DefMesh           = HorzMesh::getDefault();
-   Array3DReal TracerArray = Tracers::getAll(0);
-
-   auto *ExactState =
-       OceanState::create("Exact", DefMesh, DefHalo, NVertLayers, 1);
-
-   Array2DReal LayerThickCell = ExactState->getLayerThickness(0);
-   Array2DReal NormalVelEdge  = ExactState->getNormalVelocity(0);
-
-   // There are no thickness tendencies in this test, so exact thickness ==
-   // initial thickness
-   deepCopy(LayerThickCell, 1);
-   // Normal velocity decays exponentially
-   deepCopy(NormalVelEdge, DecayVelocityTendency{}.exactSolution(TimeEnd));
-   // No tracer tendenciesk, final tracers == initial tracers
-   deepCopy(TracerArray, 1);
-
-   return Err;
-}
-
-ErrorMeasures computeErrors() {
-   const auto *DefMesh = HorzMesh::getDefault();
-
-   const auto *State      = OceanState::get("TestState");
-   const auto *ExactState = OceanState::get("Exact");
-
-   Array2DReal NormalVelEdge      = State->getNormalVelocity(0);
-   Array2DReal ExactNormalVelEdge = ExactState->getNormalVelocity(0);
-
-   // Only velocity errors matters, because thickness remains constant
-   ErrorMeasures VelErrors;
-   computeErrors(VelErrors, NormalVelEdge, ExactNormalVelEdge, DefMesh, OnEdge);
-
-   return VelErrors;
 }
 
 //------------------------------------------------------------------------------
@@ -144,6 +131,12 @@ int initTimeStepperTest(const std::string &mesh) {
    // Open config file
    Config("Omega");
    Config::readAll("omega.yml");
+
+   Config *OmegaConfig = Config::getOmegaConfig();
+   Config TendConfig("Tendencies");
+   Err += OmegaConfig->get(TendConfig);
+   TendConfig.set("UseCustomTendency", true);
+   TendConfig.set("ManufacturedSolutionTendency", true);
 
    // Note that the default time stepper is not used in subsequent tests
    // but is initialized here because the number of time levels is needed
@@ -170,6 +163,7 @@ int initTimeStepperTest(const std::string &mesh) {
    Tracers::init();
    AuxiliaryState::init();
    Tendencies::init();
+   gManufacturedSolution.init();
 
    // finish initializing default time stepper
    TimeStepper::init2();
@@ -210,8 +204,7 @@ int initTimeStepperTest(const std::string &mesh) {
 
    // Creating non-default tendencies with custom velocity tendencies
    auto *TestTendencies = Tendencies::create(
-       "TestTendencies", DefMesh, DefVertCoord, NTracers, &Options,
-       Tendencies::CustomTendencyType{}, DecayVelocityTendency{});
+      "TestTendencies", DefMesh, DefVertCoord, NTracers, &Options);
    if (!TestTendencies) {
       Err++;
       LOG_ERROR("TimeStepperTest: error creating test tendencies");
@@ -311,11 +304,6 @@ int testTimeStepper(const std::string &Name, TimeStepperType Type,
    std::vector<ErrorMeasures> Errors(NRefinements);
 
    // This creates global exact solution and needs to be done only once
-   const static bool CallOnlyOnce = [=]() {
-      createExactSolution(TimeEnd);
-      return true;
-   }();
-
    R8 TimeStepSeconds = BaseTimeStepSeconds;
 
    // Convergence loop
@@ -323,11 +311,19 @@ int testTimeStepper(const std::string &Name, TimeStepperType Type,
       TestTimeStepper->changeTimeStep(
           TimeInterval(TimeStepSeconds, TimeUnits::Seconds));
 
-      Err += initState();
+      Err += initState(TimeStart, gManufacturedSolution.ManufacturedVelTend,
+                       DefMesh);
 
       timeLoop(TimeStart, TimeEnd);
 
-      Errors[RefLevel] = computeErrors();
+      auto *State = OceanState::get("TestState");
+      Array2DReal NormalVelEdge = State->getNormalVelocity(0);
+      Array2DReal ExactNormalVelEdge = manufacturedNormalVelocity(
+          gManufacturedSolution.ManufacturedVelTend, DefMesh, TimeEndTI);
+      ErrorMeasures VelErrors;
+      computeErrors(VelErrors, NormalVelEdge, ExactNormalVelEdge, DefMesh,
+                    OnEdge);
+      Errors[RefLevel] = VelErrors;
 
       TimeStepSeconds /= 2;
    }

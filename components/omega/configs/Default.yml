@@ -49,7 +49,8 @@ Omega:
     EddyDiff2: 10.0
     TracerHyperDiffTendencyEnable: true
     EddyDiff4: 0.0
-  ManufactureSolutionTendencyEnable: false
+    ManufacturedSolutionTendencyEnable: false
+    TransportTestTendencyEnable: false
   Tracers:
     Base: [Temperature, Salinity]
     Debug: [Debug1, Debug2, Debug3]
