@@ -1203,8 +1203,12 @@ module ocn_time_integration_split
                      if (splitDragOff) then
                         dragTerm = 0.0_RKIND
                      else
-                        ! Compute the relative ice-ocean velocity
-                        normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
+                        if (config_use_drag_from_sea_ice_velocity) then
+                           ! Compute the relative ice-ocean velocity
+                           normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
+                        else
+                           normalVelocityIceOcn = 0.0_RKIND
+                        endif
                         dragTerm = 2.0_RKIND * &
                              ( (dragCoeff + landIceDragCoeff * landIceEdgeFraction(iEdge)) * &
                                abs(normalBarotropicVelocitySubcycleCur(iEdge)) * &
