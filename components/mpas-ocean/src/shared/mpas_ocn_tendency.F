@@ -390,8 +390,8 @@ contains
       call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', &
                                              sfcStressMag)
 
-      call mpas_pool_get_array(statePool, 'barotropicDrag', &
-                                           barotropicDrag, timeLevelIn)
+      call mpas_pool_get_array(forcingPool, 'barotropicDragEdge', &
+                                           barotropicDrag)
 
       !*** Transfer data to device
       !$acc update device(zMid, divergence, relativeVorticity, normPlanetVortEdge, &
