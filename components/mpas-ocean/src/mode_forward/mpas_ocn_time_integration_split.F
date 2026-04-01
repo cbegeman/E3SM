@@ -210,7 +210,6 @@ module ocn_time_integration_split
          sshTemp,          &
          deltaSSH,         &
          wctEdge,          &! flux water column thickness at edge
-         barotropicDragEdge, &! barotropic drag
          dragTermCorMean, &! u^2/H mean over coriolis iter
          dragTermSubcycleMean, &! u^2/H mean over coriolis iter
          normalVelocityIce, &
@@ -297,7 +296,7 @@ module ocn_time_integration_split
       real (kind=RKIND), dimension(:,:), pointer :: restingThickness
 
       real (kind=RKIND), dimension(:), pointer :: &
-        seaIcePressure, atmosphericPressure
+        barotropicDragEdge, seaIcePressure, atmosphericPressure
 
       real (kind=RKIND), dimension(:), pointer :: &
         frazilSurfacePressure, landIcePressure, landIceDraft, landIceFraction, seaIceFraction
@@ -321,7 +320,7 @@ module ocn_time_integration_split
       ! velocityZonal, velocityMeridional
       ! gradSSH, gradSSHX, gradSSHY, gradSSHZ
       ! gradSSHZonal, gradSSHMeridional
-      ! surfaceVelocity, barotropicDrag, SSHGradient
+      ! surfaceVelocity, SSHGradient
       ! temperatureShortWaveTendency
       ! activeTracerHorizontalAdvectionTendency
       ! activeTracerVerticalAdvectionTendency
@@ -423,7 +422,6 @@ module ocn_time_integration_split
       call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracersNew, 2)
 
       allocate(baroclinicThickness(nEdgesAll+1))
-      allocate(barotropicDragEdge(nEdgesAll+1))
       allocate(dragTermCorMean(nEdgesAll+1))
       allocate(dragTermSubcycleMean(nEdgesAll+1))
       allocate(landIceEdgeFraction(nEdgesAll+1))
@@ -668,6 +666,7 @@ module ocn_time_integration_split
       ! BEGIN large outer timestep iteration loop
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+      call mpas_pool_get_array(forcingPool, 'barotropicDragEdge', barotropicDragEdge)
       barotropicDragEdge(:) = 0.0_RKIND
       do splitExplicitStep = 1, numTSIterations
 
@@ -2897,7 +2896,7 @@ module ocn_time_integration_split
       !$acc enter data create(velocityZonal, velocityMeridional)
       !$acc enter data create(gradSSHX, gradSSHY, gradSSHZ)
       !$acc enter data create(gradSSHZonal, gradSSHMeridional)
-      !$acc enter data create(surfaceVelocity, barotropicDrag, SSHGradient)
+      !$acc enter data create(surfaceVelocity, SSHGradient)
 #endif
 
       call mpas_log_write('Start Reconstruct btrDrag')
@@ -2926,12 +2925,11 @@ module ocn_time_integration_split
       !call mpas_log_write('velocityZonal = $r', realArgs=(/velocityZonal(1,1)/))
       call mpas_log_write('btrDragEdge= $r', realArgs=(/barotropicDragEdge(1)/))
       call mpas_log_write('btrDragZonal = $r', realArgs=(/btrDragZonal(1)/))
-      call mpas_log_write('btrDrag(Zonal) = $r', realArgs=(/barotropicDrag(1,1)/))
       call mpas_log_write('SSHGrad = $r', realArgs=(/gradSSH(1)/))
       call mpas_log_write('gradSSHZonal = $r', realArgs=(/gradSSHZonal(1)/))
 #ifdef MPAS_OPENACC
       !$acc parallel loop present(surfaceVelocity, velocityZonal, velocityMeridional, &
-      !$acc   barotropicDrag, btrDragZonal, btrDragMeridional, &
+      !$acc   btrDragZonal, btrDragMeridional, &
       !$acc   SSHGradient, gradSSHZonal, gradSSHMeridional)
 #else
       !$omp parallel
@@ -2942,8 +2940,6 @@ module ocn_time_integration_split
                                    velocityZonal(minLevelCell(iCell),iCell)
          surfaceVelocity(indexSurfaceVelocityMeridional,iCell) = &
                                    velocityMeridional(minLevelCell(iCell),iCell)
-         barotropicDrag(indexSurfaceVelocityZonal,iCell) = btrDragZonal(iCell)
-         barotropicDrag(indexSurfaceVelocityMeridional,iCell) = btrDragMeridional(iCell)
 
          SSHGradient(indexSSHGradientZonal,iCell) = gradSSHZonal(iCell)
          SSHGradient(indexSSHGradientMeridional,iCell) = &
@@ -2954,7 +2950,7 @@ module ocn_time_integration_split
       !$omp end parallel
 #endif
       call mpas_log_write('End reassign btrDrag')
-      deallocate(barotropicDragEdge, btrDragX, btrDragY, btrDragZ, &
+      deallocate(btrDragX, btrDragY, btrDragZ, &
                  btrDragZonal, btrDragMeridional)
 
 #ifdef MPAS_OPENACC
