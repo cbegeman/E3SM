@@ -1020,6 +1020,7 @@ module ocn_time_integration_split
             ! BEGIN Barotropic subcycle loop
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+            call mpas_log_write('Allocations')
             ! Allocate subcycled scratch fields before starting
             ! subcycle loop
             allocate(btrvel_temp(nEdgesAll+1))
@@ -1512,7 +1513,12 @@ module ocn_time_integration_split
                      if (splitDragOff) then
                         dragTerm = 0.0_RKIND
                      else
-                        normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
+                        if (config_use_drag_from_sea_ice_velocity) then
+                           ! Compute the relative ice-ocean velocity
+                           normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
+                        else
+                           normalVelocityIceOcn = 0.0_RKIND
+                        endif
                         dragTerm = 2.0_RKIND * &
                              ( (dragCoeff + landIceDragCoeff * landIceEdgeFraction(iEdge)) * &
                                abs(normalBarotropicVelocitySubcycleCur(iEdge)) * &
@@ -1735,6 +1741,8 @@ module ocn_time_integration_split
             deallocate(deltaSSH)
             deallocate(surfaceVelocityZonal)
             deallocate(surfaceVelocityMeridional)
+            deallocate(iceVelocityZonalNew)
+            deallocate(iceVelocityMeridionalNew)
 
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             ! END Barotropic subcycle loop
@@ -1742,6 +1750,7 @@ module ocn_time_integration_split
 
             ! Normalize Barotropic subcycle sums: ssh,
             ! normalBarotropicVelocity, and F
+            call mpas_log_write('btr se norm')
             call mpas_timer_start('btr se norm')
 
             !$omp parallel
@@ -2189,6 +2198,7 @@ module ocn_time_integration_split
             call ocn_diagnostic_solve(dt, statePool, forcingPool, &
                                       meshPool, verticalMeshPool, scratchPool, &
                                       tracersPool, 2, full=.false.)
+            call mpas_log_write('Finished ocn_diagnostic_solve')
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          ! If large iteration complete, compute all variables at
@@ -2620,6 +2630,7 @@ module ocn_time_integration_split
          endif
 #endif
 
+         call mpas_log_write('se loop fini')
          call mpas_timer_stop('se loop fini')
          call mpas_timer_stop('se loop')
 
@@ -2630,6 +2641,7 @@ module ocn_time_integration_split
       ! END large iteration loop
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+      call mpas_log_write("se implicit vert mix")
       call mpas_timer_start("se implicit vert mix")
 
       ! Call ocean diagnostic solve in preparation for vertical mixing.
@@ -2869,6 +2881,7 @@ module ocn_time_integration_split
         end do
       end if
 
+      call mpas_log_write("ocn_diagnostic_solve timelevel2")
       call ocn_diagnostic_solve(dt, statePool, forcingPool, meshPool, verticalMeshPool, &
                                 scratchPool, tracersPool, 2)
 
@@ -2884,7 +2897,7 @@ module ocn_time_integration_split
       !$acc enter data create(velocityZonal, velocityMeridional)
       !$acc enter data create(gradSSHX, gradSSHY, gradSSHZ)
       !$acc enter data create(gradSSHZonal, gradSSHMeridional)
-      !$acc enter data create(surfaceVelocity, barotropicDragEdge, SSHGradient)
+      !$acc enter data create(surfaceVelocity, barotropicDrag, SSHGradient)
 #endif
 
       call mpas_log_write('Start Reconstruct btrDrag')
@@ -2910,6 +2923,12 @@ module ocn_time_integration_split
       call mpas_timer_stop('se final mpas reconstruct')
 
       call mpas_log_write('Start reassign btrDrag')
+      !call mpas_log_write('velocityZonal = $r', realArgs=(/velocityZonal(1,1)/))
+      call mpas_log_write('btrDragEdge= $r', realArgs=(/barotropicDragEdge(1)/))
+      call mpas_log_write('btrDragZonal = $r', realArgs=(/btrDragZonal(1)/))
+      call mpas_log_write('btrDrag(Zonal) = $r', realArgs=(/barotropicDrag(1,1)/))
+      call mpas_log_write('SSHGrad = $r', realArgs=(/gradSSH(1)/))
+      call mpas_log_write('gradSSHZonal = $r', realArgs=(/gradSSHZonal(1)/))
 #ifdef MPAS_OPENACC
       !$acc parallel loop present(surfaceVelocity, velocityZonal, velocityMeridional, &
       !$acc   barotropicDrag, btrDragZonal, btrDragMeridional, &
