@@ -2962,15 +2962,6 @@
 				 description="Meridional surface velocity reconstructed at cell centers"
 			/>
 		</var_array>
-		<var_array name="barotropicDrag" type="real" dimensions="nCells Time" packages="forwardMode;analysisMode">
-			<var name="barotropicDragZonal" array_group="drag_zonal" units="m s^-1"
-				 description="Zonal surface velocity reconstructed at cell centers"
-
-			/>
-			<var name="barotropicDragMeridional" array_group="drag_meridional" units="m s^-1"
-				 description="Meridional surface velocity reconstructed at cell centers"
-			/>
-		</var_array>
 		<var name="surfacePressure" type="real" dimensions="nCells Time" units="Pa"
 			description="Pressure at the sea surface due to atmosphere, sea ice, frazil and land ice"
 		/>
@@ -3735,6 +3726,10 @@
 		<var name="surfaceStressMagnitude" type="real" dimensions="nCells Time" units="N m^-2"
 			 description="Magnitude of surface stress, at cell centers."
 			 packages="forwardMode;analysisMode"
+		/>
+		<var name="barotropicDragEdge" type="real" dimensions="nEdges Time" units="N m^-2"
+			 description="Zonal surface velocity reconstructed at cell centers"
+
 		/>
 		<var name="surfaceThicknessFlux" type="real" dimensions="nCells Time" units="m s^-1"
 			 description="Flux of mass through the ocean surface. Positive into ocean."
