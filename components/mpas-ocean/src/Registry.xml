@@ -3148,6 +3148,16 @@
 			 missing_value="FILLVAL" missing_value_mask="cellMask"
 			 packages="forwardMode;analysisMode"
 		/>
+		<var name="iceOcnStressZonal" type="real" dimensions="nCells Time" units="m s^-1"
+			 description="component of horizontal stress in the eastward direction"
+			 missing_value="FILLVAL" missing_value_mask="cellMask"
+			 packages="forwardMode"
+		/>
+		<var name="iceOcnStressMeridional" type="real" dimensions="nCells Time" units="m s^-1"
+			 description="component of horizontal stress in the northward direction"
+			 missing_value="FILLVAL" missing_value_mask="cellMask"
+			 packages="forwardMode"
+		/>
 		<var name="velocityZonal" type="real" dimensions="nVertLevels nCells Time" units="m s^-1"
 			 description="component of horizontal velocity in the eastward direction"
 			 missing_value="FILLVAL" missing_value_mask="cellMask"
