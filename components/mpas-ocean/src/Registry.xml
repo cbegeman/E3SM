@@ -3846,6 +3846,15 @@
 			 packages="dataSubglacialRunoffFluxPKG"
 		/>
 
+		<var name="seaIceStressZonal" type="real" dimensions="nCells Time" units="N m^-2"
+			 description="Zonal (eastward) component of wind stress at cell centers from coupler. Positive eastward."
+			 packages="windStressBulkPKG"
+		/>
+		<var name="seaIceStressMeridional" type="real" dimensions="nCells Time" units="N m^-2"
+			 description="Meridional (northward) component of wind stress at cell centers from coupler. Positive northward."
+			 packages="windStressBulkPKG"
+		/>
+
 		<var name="windStressZonal" type="real" dimensions="nCells Time" units="N m^-2"
 			 description="Zonal (eastward) component of wind stress at cell centers from coupler. Positive eastward."
 			 packages="windStressBulkPKG"
