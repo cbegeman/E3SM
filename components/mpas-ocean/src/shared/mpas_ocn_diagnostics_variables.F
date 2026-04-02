@@ -190,14 +190,12 @@ module ocn_diagnostics_variables
 
    real (kind=RKIND), dimension(:), pointer :: salinitySurfaceRestoringTendency
 
-   real (kind=RKIND), dimension(:,:), pointer :: surfaceVelocity, barotropicDrag
+   real (kind=RKIND), dimension(:,:), pointer :: surfaceVelocity
    real (kind=RKIND), dimension(:), pointer :: gradSSHZonal, gradSSHMeridional
    real (kind=RKIND), dimension(:), pointer :: gradSSHX
    real (kind=RKIND), dimension(:), pointer :: gradSSHY
    real (kind=RKIND), dimension(:), pointer :: gradSSHZ
-   real (kind=RKIND), dimension(:), pointer :: btrVelocityX
-   real (kind=RKIND), dimension(:), pointer :: btrVelocityY
-   real (kind=RKIND), dimension(:), pointer :: btrVelocityZ
+   real (kind=RKIND), dimension(:), pointer :: iceOcnStressZonal, iceOcnStressMeridional
 
    real (kind=RKIND), dimension(:), pointer :: barotropicForcing
    real (kind=RKIND), dimension(:), pointer :: barotropicCoriolisTerm
@@ -462,6 +460,10 @@ contains
                    gradSSHZonal)
          call mpas_pool_get_array(diagnosticsPool, 'gradSSHMeridional', &
                    gradSSHMeridional)
+         call mpas_pool_get_array(diagnosticsPool, 'iceOcnStressZonal', &
+                   iceOcnStressZonal)
+         call mpas_pool_get_array(diagnosticsPool, 'iceOcnStressMeridional', &
+                   iceOcnStressMeridional)
          call mpas_pool_get_array(diagnosticsPool, 'SSHGradient', SSHGradient)
 
          call mpas_pool_get_array(diagnosticsPool, 'viscosity', viscosity)
@@ -546,8 +548,6 @@ contains
 
          call mpas_pool_get_array(diagnosticsPool, 'surfaceVelocity', &
                    surfaceVelocity)
-         call mpas_pool_get_array(diagnosticsPool, 'barotropicDrag', &
-                   barotropicDrag)
 
          call mpas_pool_get_array(diagnosticsPool, 'vertVelocityTop', &
                    vertVelocityTop)
@@ -1291,7 +1291,6 @@ contains
                  slopeTriadDown,                  &
                  normRelVortEdge,                 &
                  surfaceVelocity,                 &
-                 barotropicDrag,                  &
                  vertVelocityTop,                 &
                  eddyVelocityX,                   &
                  eddyVelocityY,                   &
