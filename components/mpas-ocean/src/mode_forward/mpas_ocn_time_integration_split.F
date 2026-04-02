@@ -187,7 +187,6 @@ module ocn_time_integration_split
       real (kind=RKIND) :: &
          dtBtr,            &! time since the start of the barotropic subcycles
          normalThicknessFluxSum, &! sum of thickness flux in column
-         normalVelocityIceOcn, &! temp for the relative ice-ocean velocity
          thicknessSum,     &! sum of thicknesses in column
          flux,             &! temp for computing flux for barotropic
          sshEdge,          &! sea surface height at edge
@@ -206,6 +205,8 @@ module ocn_time_integration_split
          uTemp
 
       real (kind=RKIND), dimension(:), allocatable :: &
+         normalVelocityIceOcn, &! temp for the relative ice-ocean velocity
+         tempX, tempY, tempZ, &
          btrvel_temp,      &
          sshTemp,          &
          deltaSSH,         &
@@ -213,6 +214,8 @@ module ocn_time_integration_split
          dragTermCorMean, &! u^2/H mean over coriolis iter
          dragTermSubcycleMean, &! u^2/H mean over coriolis iter
          normalVelocityIce, &
+         iceOcnStressCorMean, &
+         iceOcnStressSubcycleMean, &
          landIceEdgeFraction, &
          seaIceFractionEdge, &
          iceVelocityMeridionalNew, &
@@ -424,6 +427,8 @@ module ocn_time_integration_split
       allocate(baroclinicThickness(nEdgesAll+1))
       allocate(dragTermCorMean(nEdgesAll+1))
       allocate(dragTermSubcycleMean(nEdgesAll+1))
+      allocate(iceOcnStressCorMean(nEdgesAll+1))
+      allocate(iceOcnStressSubcycleMean(nEdgesAll+1))
       allocate(landIceEdgeFraction(nEdgesAll+1))
       allocate(seaIceFractionEdge(nEdgesAll+1))
 
@@ -1037,6 +1042,11 @@ module ocn_time_integration_split
             iceVelocityZonalNew(:) = 0.0_RKIND
             allocate(iceVelocityMeridionalNew(nCellsAll))
             iceVelocityMeridionalNew(:) = 0.0_RKIND
+            allocate(normalVelocityIceOcn(nEdgesAll+1))
+            normalVelocityIceOcn(:) = 0.0_RKIND
+            allocate(tempX(nCellsAll))
+            allocate(tempY(nCellsAll))
+            allocate(tempZ(nCellsAll))
             if (.not. splitDragOff .and. config_use_drag_from_sea_ice_velocity) then
                call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', iceVelocityZonalCur)
                call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', iceVelocityMeridionalCur)
@@ -1205,17 +1215,17 @@ module ocn_time_integration_split
                      else
                         if (config_use_drag_from_sea_ice_velocity) then
                            ! Compute the relative ice-ocean velocity
-                           normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
+                           normalVelocityIceOcn(iEdge) = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
                         else
-                           normalVelocityIceOcn = 0.0_RKIND
+                           normalVelocityIceOcn(iEdge) = 0.0_RKIND
                         endif
                         dragTerm = 2.0_RKIND * &
                              ( (dragCoeff + landIceDragCoeff * landIceEdgeFraction(iEdge)) * &
                                abs(normalBarotropicVelocitySubcycleCur(iEdge)) * &
                                normalBarotropicVelocitySubcycleCur(iEdge) + &
                                seaIceDragCoeff * seaIceFractionEdge(iEdge) * &
-                               abs(normalVelocityIceOcn) * &
-                               normalVelocityIceOcn &
+                               abs(normalVelocityIceOcn(iEdge)) * &
+                               normalVelocityIceOcn(iEdge) &
                              ) / &
                              ( bottomDepth(cell1) + bottomDepth(cell2) + &
                                sshSubcycleCur(cell1) + sshSubcycleCur(cell2) )
@@ -1514,17 +1524,17 @@ module ocn_time_integration_split
                      else
                         if (config_use_drag_from_sea_ice_velocity) then
                            ! Compute the relative ice-ocean velocity
-                           normalVelocityIceOcn = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
+                           normalVelocityIceOcn(iEdge) = normalSurfaceVelocity(iEdge) - normalVelocityIce(iEdge)
                         else
-                           normalVelocityIceOcn = 0.0_RKIND
+                           normalVelocityIceOcn(iEdge) = 0.0_RKIND
                         endif
                         dragTerm = 2.0_RKIND * &
                              ( (dragCoeff + landIceDragCoeff * landIceEdgeFraction(iEdge)) * &
                                abs(normalBarotropicVelocitySubcycleCur(iEdge)) * &
                                normalBarotropicVelocitySubcycleCur(iEdge) + &
                                seaIceDragCoeff * seaIceFractionEdge(iEdge) * &
-                               abs(normalVelocityIceOcn) * &
-                               normalVelocityIceOcn &
+                               abs(normalVelocityIceOcn(iEdge)) * &
+                               normalVelocityIceOcn(iEdge) &
                              ) / &
                              ( bottomDepth(cell1) + bottomDepth(cell2) + &
                                sshCell1 + sshCell2)
@@ -1542,6 +1552,12 @@ module ocn_time_integration_split
                            + barotropicForcing(iEdge)))
 
                      dragTermCorMean(iEdge) = dragTermCorMean(iEdge) + dragTerm
+                     iceOcnStressCorMean(iEdge) = iceOcnStressCorMean(iEdge) + &
+                        2.0_RKIND * &
+                        ( seaIceDragCoeff * seaIceFractionEdge(iEdge) * &
+                          abs(normalVelocityIceOcn(iEdge)) * &
+                          normalVelocityIceOcn(iEdge) &
+                        )
 
                   end do
                   !$omp end do
@@ -1555,7 +1571,8 @@ module ocn_time_integration_split
 
                end do !do BtrCorIter=1,config_n_btr_cor_iter
                do iEdge = 1, nEdges
-                 dragTermCorMean(iEdge) = dragTermCorMean(iEdge) / config_n_btr_cor_iter
+                  dragTermCorMean(iEdge) = dragTermCorMean(iEdge) / config_n_btr_cor_iter
+                  iceOcnStressCorMean(iEdge) = iceOcnStressCorMean(iEdge) / config_n_btr_cor_iter
                enddo
                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                ! Barotropic subcycle: SSH CORRECTOR STEP
@@ -1723,6 +1740,7 @@ module ocn_time_integration_split
                !$omp do schedule(runtime)
                do iEdge = 1, nEdges
                   dragTermSubcycleMean(iEdge) = dragTermSubcycleMean(iEdge) + dragTermCorMean(iEdge)
+                  iceOcnStressSubcycleMean(iEdge) = iceOcnStressSubcycleMean(iEdge) + iceOcnStressCorMean(iEdge)
                end do
                !$omp end do
                !$omp end parallel
@@ -1742,6 +1760,7 @@ module ocn_time_integration_split
             deallocate(surfaceVelocityMeridional)
             deallocate(iceVelocityZonalNew)
             deallocate(iceVelocityMeridionalNew)
+            deallocate(normalVelocityIceOcn)
 
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             ! END Barotropic subcycle loop
@@ -1765,6 +1784,10 @@ module ocn_time_integration_split
 
                dragTermSubcycleMean(iEdge) = &
                dragTermSubcycleMean(iEdge) &
+                     / (nBtrSubcycles*config_btr_subcycle_loop_factor + 1)
+
+               iceOcnStressSubcycleMean(iEdge) = &
+               iceOcnStressSubcycleMean(iEdge) &
                      / (nBtrSubcycles*config_btr_subcycle_loop_factor + 1)
             end do
             !$omp end do
@@ -2899,15 +2922,6 @@ module ocn_time_integration_split
       !$acc enter data create(surfaceVelocity, SSHGradient)
 #endif
 
-      call mpas_log_write('Start Reconstruct btrDrag')
-      allocate(btrDragX(nCellsAll), btrDragY(nCellsAll), btrDragZ(nCellsAll), &
-               btrDragZonal(nCellsAll), btrDragMeridional(nCellsAll))
-      call mpas_reconstruct_gpu(meshPool, barotropicDragEdge,       &
-                                btrDragX, btrDragY, btrDragZ,    &
-                                btrDragZonal, btrDragMeridional, &
-                                includeHalos = .true.)
-      call mpas_log_write('End Reconstruct btrDrag')
-
       call mpas_reconstruct_gpu(meshPool, normalVelocityNew,       &
                                 velocityX, velocityY, velocityZ,   &
                                 velocityZonal, velocityMeridional, &
@@ -2916,6 +2930,10 @@ module ocn_time_integration_split
       call mpas_reconstruct_gpu(meshPool, gradSSH,               &
                                 gradSSHX, gradSSHY, gradSSHZ,    &
                                 gradSSHZonal, gradSSHMeridional, &
+                                includeHalos = .true.)
+      call mpas_reconstruct_gpu(meshPool, iceOcnStressSubcycleMean, &
+                                tempX, tempY, tempZ,    &
+                                iceOcnStressZonal, iceOcnStressMeridional, &
                                 includeHalos = .true.)
       call mpas_log_write('End All Reconstruct')
 
