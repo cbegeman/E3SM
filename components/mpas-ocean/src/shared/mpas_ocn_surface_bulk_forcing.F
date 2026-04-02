@@ -207,7 +207,7 @@ contains
 !-----------------------------------------------------------------------
 
    subroutine ocn_surface_bulk_forcing_vel( &
-                               statePool, forcingPool, &
+                               meshPool, statePool, forcingPool, &
                                sfcStress, sfcStressMag, err)!{{{
 
       !-----------------------------------------------------------------
@@ -250,6 +250,7 @@ contains
       real (kind=RKIND), dimension(:), pointer :: &
          iceFraction, &
          ssh, &
+         barotropicDragEdge, &
          iceVelocityZonal, &! zonal wind stress from forcing
          iceVelocityMeridional, &! meridional wind stress from forcing
          windStressZonal, &! zonal wind stress from forcing
@@ -277,6 +278,7 @@ contains
       !call mpas_pool_get_array(diagnosticsPool, 'velocityZonal', velocityZonal)
       !call mpas_pool_get_array(diagnosticsPool, 'velocityMeridional', velocityMeridional)
       call mpas_pool_get_array(forcingPool, 'iceFraction', iceFraction)
+      call mpas_pool_get_array(forcingPool, 'barotropicDragEdge', barotropicDragEdge)
       call mpas_pool_get_array(forcingPool, 'windStressZonal', windStressZonal)
       call mpas_pool_get_array(forcingPool, 'windStressMeridional', windStressMeridional)
       call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', iceVelocityZonal)
@@ -293,15 +295,6 @@ contains
 
       if (splitSeaIce) then ! Split the surface stress into sea ice and atm components
 
-        allocate(iceOcnStressZonal(nCells), iceOcnStressMeridional(nCells))
-        ! Use the relative velocity between sea ice at the last coupling interval and the barotropic ocean velocity at the last time step
-        call ocn_surface_stress_modify_for_split_sea_ice( &
-                         ssh, layerThickness, &
-                         !iceVelocityZonal, iceVelocityMeridional, &
-                         !velocityZonal, velocityMeridional, &
-                         !iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional,  &
-                         iceOcnStressZonal, iceOcnStressMeridional)
-
         ! Store temporary variable for comparison
         allocate(airOcnStressZonal(nCells), airOcnStressMeridional(nCells))
         allocate(iceOcnStressZonalOld(nCells), iceOcnStressMeridionalOld(nCells))
@@ -311,7 +304,7 @@ contains
           surfaceVelocityZonal(iCell) = surfaceVelocity(indexSurfaceVelocityZonal,iCell)
           surfaceVelocityMeridional(iCell) = surfaceVelocity(indexSurfaceVelocityMeridional,iCell)
 
-          ! Calculate relative velocities
+          ! Calculate relative velocities assumed in the coupler
           ! TODO this is only correct for use in ocn_surface_bulk_forcing_split if
           ! surfaceVelocity* has stayed the same since the last time windStress* was defined
           ! i.e., the ocn-atm coupling interval
@@ -640,98 +633,6 @@ contains
       !-----------------------------------------------------------------
 
    end subroutine ocn_surface_bulk_forcing_init!}}}
-
-!***********************************************************************
-!
-!  routine ocn_surface_stress_modify_for_split_sea_ice
-!
-!> \brief   Separate the total surface stress from the coupler into the
-!>          air-ocean component and the sea ice-ocean component.
-!> \author
-!> \date
-!> \details
-!>  This routine is currently only needed for diagnostics.
-!
-!-----------------------------------------------------------------------
-
-subroutine ocn_surface_stress_modify_for_split_sea_ice( &
-     ssh, layerThickness, &
-     !iceVelocityZonal, iceVelocityMeridional, &
-     !velocityZonal, velocityMeridional, &
-     !iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional, &
-     iceOcnStressZonal, iceOcnStressMeridional)
-
-   ! Arguments
-   real(kind=RKIND), dimension(:), intent(in) :: ssh
-   real(kind=RKIND), dimension(:,:), intent(in) :: layerThickness
-   !real(kind=RKIND), dimension(:), intent(in) :: iceVelocityZonal, iceVelocityMeridional
-   !real(kind=RKIND), dimension(:, :), intent(in) :: velocityZonal, velocityMeridional
-   !real(kind=RKIND), dimension(:), intent(inout) :: iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional
-   real(kind=RKIND), dimension(:), intent(inout) :: iceOcnStressZonal, iceOcnStressMeridional
-
-   ! Locals
-   integer :: iCell, nCells, k
-   !real(kind=RKIND), dimension(:), allocatable :: surfaceVelocityZonal, surfaceVelocityMeridional
-   !real(kind=RKIND), dimension(:), allocatable :: btrVelocityZonal, btrVelocityMeridional
-   real(kind=RKIND), dimension(:), allocatable :: btrDragZonal, btrDragMeridional
-   real(kind=RKIND) :: intBtrDragZonal, intBtrDragMeridional
-   !real(kind=RKIND) :: momRatioZonal, momRatioMeridional
-   !real(kind=RKIND) :: iceOcnRelBtrVelZonal, iceOcnRelBtrVelMeridional
-
-   nCells = nCellsHalo(2)
-
-   !allocate(surfaceVelocityZonal(nCells), surfaceVelocityMeridional(nCells))
-   !allocate(btrVelocityZonal(nCells), btrVelocityMeridional(nCells))
-   allocate(btrDragZonal(nCells), btrDragMeridional(nCells))
-
-   !do iCell = 1, nCells
-   !  surfaceVelocityZonal(iCell) = velocityZonal(1,iCell)
-   !  surfaceVelocityMeridional(iCell) = velocityMeridional(1,iCell)
-   !  ! Compute the barotropic velocity weighted by layer thickness
-   !  do k = minLevelCell(iCell), maxLevelCell(iCell)
-   !    btrVelocityZonal(iCell) = btrVelocityZonal(iCell) + &
-   !           velocityZonal(k,iCell) * layerThickness(k,iCell)
-   !    btrVelocityMeridional(iCell) = btrVelocityMeridional(iCell) + &
-   !           velocityMeridional(k,iCell) * layerThickness(k,iCell)
-   !  enddo
-   !  btrVelocityZonal(iCell) = btrVelocityZonal(iCell) / (ssh(iCell) + bottomDepth(iCell))
-   !  btrVelocityMeridional(iCell) = btrVelocityMeridional(iCell) / (ssh(iCell) + bottomDepth(iCell))
-   !enddo
-
-   do iCell = 1, nCells
-
-      ! Calculate relative velocities
-      !iceOcnRelBtrVelZonal = iceVelocityZonal(iCell) - btrVelocityZonal(iCell)
-      !iceOcnRelBtrVelMeridional = iceVelocityMeridional(iCell) - btrVelocityMeridional(iCell)
-      !iceOcnRelVelocityZonal(iCell) = iceVelocityZonal(iCell) - surfaceVelocityZonal(iCell)
-      !iceOcnRelVelocityMeridional(iCell) = iceVelocityMeridional(iCell) - surfaceVelocityMeridional(iCell)
-
-      ! Integrate bottom drag
-      btrDragZonal(iCell) = barotropicDrag(indexSurfaceVelocityZonal, iCell)
-      btrDragMeridional(iCell) = barotropicDrag(indexSurfaceVelocityMeridional, iCell)
-      intBtrDragZonal = btrDragZonal(iCell) * (ssh(iCell) + bottomDepth(iCell))
-      intBtrDragMeridional = btrDragMeridional(iCell) * (ssh(iCell) + bottomDepth(iCell))
-
-      ! The barotropic drag is already based on the rotated surface velocity so we don't need to apply any scaling
-      ! Avoid division by zero
-      !if (abs(iceOcnRelBtrVelZonal) > 1.0e-12_RKIND) then
-      !   momRatioZonal = iceOcnRelVelocityZonal(iCell) / iceOcnRelBtrVelZonal
-      !else
-      !   momRatioZonal = 0.0_RKIND
-      !end if
-      !if (abs(iceOcnRelBtrVelMeridional) > 1.0e-12_RKIND) then
-      !   momRatioMeridional = iceOcnRelVelocityMeridional(iCell) / iceOcnRelBtrVelMeridional
-      !else
-      !   momRatioMeridional = 0.0_RKIND
-      !end if
-
-      ! Compute new ice-ocean stress
-      iceOcnStressZonal(iCell) = intBtrDragZonal / layerThickness(1,iCell)
-      iceOcnStressMeridional(iCell) = intBtrDragMeridional / layerThickness(1,iCell)
-
-   end do
-
-end subroutine ocn_surface_stress_modify_for_split_sea_ice
 
 !***********************************************************************
 !
