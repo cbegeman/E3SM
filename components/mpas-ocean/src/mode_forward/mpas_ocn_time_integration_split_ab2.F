@@ -930,6 +930,10 @@ module ocn_time_integration_split_ab2
             enddo
             ! TODO reconstruct surfaceVelocity
             ! TODO rotate iceVelocity
+            call ocn_surface_forcing_rotate_velocity( &
+                     iceVelocityZonalCur, iceVelocityMeridionalCur, &
+                     dt/2., &
+                     iceVelocityZonalNew, iceVelocityMeridionalNew)
             ! TODO get relative velocity from iceVelocityZonal, Merid and reconstructed surfaceVelocity
             ! TODO assign dragCoeff
             do iCell = 1, nCellsOwned
