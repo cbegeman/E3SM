@@ -49,6 +49,7 @@ module ocn_surface_bulk_forcing
 
    public :: ocn_surface_bulk_forcing_tracers, &
              ocn_surface_bulk_forcing_vel, &
+             ocn_surface_bulk_forcing_split_vel, &
              ocn_surface_bulk_forcing_thick, &
              ocn_surface_bulk_forcing_init, &
              ocn_surface_bulk_forcing_split, &
@@ -65,6 +66,7 @@ module ocn_surface_bulk_forcing
    logical ::              &
       bulkWindStressOff,   &! on/off switch for bulk wind stress
       bulkThicknessFluxOff, &  ! on/off switch for bulk thickness flux
+      splitSeaIce,          &! on/off switch for splitting wind stress into air-ocean and ice-ocean components
       rainFluxTracerOn, &
       snowFluxTracerOn, &
       riverRunoffFluxTracerOn, &
@@ -216,6 +218,141 @@ contains
 !>  based on bulk flux formulae.
 !
 !-----------------------------------------------------------------------
+
+   subroutine ocn_surface_bulk_forcing_split_vel( &
+                               sfcStressZonal, sfcStressMerid, sfcStress, &
+                               sfcStressMag, err)!{{{
+
+      !-----------------------------------------------------------------
+      ! input variables
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), intent(in) :: &
+         sfcStressZonal, sfcStressMerid
+
+      !-----------------------------------------------------------------
+      ! input/output variables
+      !-----------------------------------------------------------------
+
+      real (kind=RKIND), dimension(:), intent(inout) :: &
+         sfcStress, & !< [inout] Array for surface stress
+         sfcStressMag !< [inout] Array for magnitude of surface stress
+
+      !-----------------------------------------------------------------
+      ! output variables
+      !-----------------------------------------------------------------
+
+      integer, intent(out) :: err !< [out] Error flag
+
+      !-----------------------------------------------------------------
+      ! local variables
+      !-----------------------------------------------------------------
+
+      integer ::         &
+         iEdge, iCell,   &! loop indices for edge, cell loops
+         nCells, nEdges, &! number of cells, edges participating
+         cell1, cell2
+
+      real (kind=RKIND), dimension(:), pointer :: &
+         meridWSEdge,   &! meridional wind stress avg to edge
+         zonalWSEdge     ! zonal wind stress averaged to edge
+
+      ! End preamble
+      !-----------------------------------------------------------------
+      ! Begin code
+
+      !*** Set error code and exit early if bulk wind stress not on
+      !*** Otherwise start timer
+
+      err = 0
+      if (bulkWindStressOff) return
+
+      call mpas_timer_start("bulk_ws", .false.)
+
+      !*** Transfer data to device
+      !$acc enter data &
+      !$acc    copyin(sfcStressZonal, sfcStressMerid)
+
+      !*** Forcing needed over halo regions
+
+      nEdges = nEdgesHalo(3)
+      nCells = nCellsHalo(2)
+
+      !*** Convert coupled climate model wind stress to internal
+      !*** ocean model wind stress by averaging cell-centered wind
+      !*** stress to edges and then rotating vectors
+
+      allocate(meridWSEdge(nEdges), &
+               zonalWSEdge(nEdges))
+
+#ifdef MPAS_OPENACC
+      !$acc enter data create(meridWSEdge, zonalWSEdge)
+#endif
+
+      if (config_bulk_wind_stress_interp_isotropic) then
+
+        call mpas_vector_cell_to_edge_isotropic(sfcStressZonal, sfcStressMerid, &
+          nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
+          zonalWSEdge, meridWSEdge)
+
+      else
+
+        call mpas_vector_cell_to_edge_anisotropic(sfcStressZonal, sfcStressMerid, &
+          nEdges, cellsOnEdge, zonalWSEdge, meridWSEdge)
+
+      end if
+
+#ifdef MPAS_OPENACC
+      !$acc parallel loop &
+      !$acc    present(angleEdge, sfcStress, &
+      !$acc            zonalWSEdge, meridWSEdge)
+#else
+      !$omp parallel
+      !$omp do schedule(runtime)
+#endif
+      do iEdge = 1, nEdges
+        sfcStress(iEdge) = sfcStress(iEdge) + &
+                           cos(angleEdge(iEdge))*zonalWSEdge(iEdge) + &
+                           sin(angleEdge(iEdge))*meridWSEdge(iEdge)
+      end do
+#ifndef MPAS_OPENACC
+      !$omp end do
+      !$omp end parallel
+#endif
+
+#ifdef MPAS_OPENACC
+      !$acc parallel loop &
+      !$acc    present(sfcStressMag, sfcStressZonal, sfcStressMerid)
+#else
+      !$omp parallel
+      !$omp do schedule(runtime)
+#endif
+      do iCell = 1, nCells
+        sfcStressMag(iCell) = sfcStressMag(iCell) + &
+                              sqrt( sfcStressZonal(iCell)**2 &
+                                  + sfcStressMerid(iCell)**2 )
+      end do
+#ifndef MPAS_OPENACC
+      !$omp end do
+      !$omp end parallel
+#endif
+      end if
+
+#ifdef MPAS_OPENACC
+      !$acc exit data delete(zonalWSEdge, meridWSEdge)
+      !*** Transfer any needed data back to host and delete inputs
+      !$acc exit data &
+      !$acc    delete(sfcStressZonal, sfcStressMerid)
+#endif
+
+
+      deallocate(zonalWSEdge, meridWSEdge)
+
+      call mpas_timer_stop("bulk_ws")
+
+      !-----------------------------------------------------------------
+
+   end subroutine ocn_surface_bulk_forcing_split_vel!}}}
 
    subroutine ocn_surface_bulk_forcing_vel( &
                                forcingPool, sfcStress, &
