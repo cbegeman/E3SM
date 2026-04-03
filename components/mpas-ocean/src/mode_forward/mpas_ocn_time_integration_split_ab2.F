@@ -203,7 +203,8 @@ module ocn_time_integration_split_ab2
          sshGrad            ! temp for holding ssh gradient
 
       real (kind=RKIND), dimension(:,:), allocatable:: &
-         uTemp
+         uTemp,
+         iceOcnVelocityTend
 
       real (kind=RKIND), dimension(:), allocatable :: &
          btrvel_temp,      &
@@ -730,9 +731,19 @@ module ocn_time_integration_split_ab2
          endif
 #endif
 
+         ! ocn_tend_vel now populates sfcStress and seaIceSfcStress but only applies sfcStress
          call ocn_tend_vel(domain, tendPool, statePool, forcingPool, &
                            stage1_tend_time, domain % dminfo, dt)
-
+         allocate(iceOcnVelocityTend(nVertLevels,nEdgesAll+1))
+         ! TODO initialize to starting ice stress at surface, rest 0
+         call mpas_pool_get_array(forcingPool, 'seaIceSfcStress', &
+                                  seaIceSfcStress)
+         iceOcnVelocityTend = 0.0_RKIND
+         do iEdge = 1, nEdgesOwned
+            kTop = minLevelEdgeBot(iEdge)
+            iceOcnVelocityTend(kTop,iEdge) = &
+               seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
+         enddo
          call mpas_timer_stop('se bcl vel tend')
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -776,6 +787,7 @@ module ocn_time_integration_split_ab2
                      !  -fEdge(iEdge)*normalBaroclinicVelocityPerp(k,iEdge)
                      uTemp(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge) &
                               + dt * (normalVelocityTend(k,iEdge) &
+                              + iceOcnVelocityTend(k,iEdge) &
                               + normalVelocityNew(k,iEdge) &
                               + sshGrad )
                   enddo ! vertical
@@ -784,7 +796,8 @@ module ocn_time_integration_split_ab2
                      do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
                         normalVelocityTendOld(k,iEdge)  = &
                                    normalVelocityTend(k,iEdge) &
-                                 + sshGrad
+                                   + iceOcnVelocityTend(k,iEdge) &
+                                   + sshGrad
                         CoriolisTermOld(k,iEdge) = normalVelocityNew(k,iEdge)
                      enddo ! vertical
                   end if
@@ -817,6 +830,7 @@ module ocn_time_integration_split_ab2
                         !  -fEdge(iEdge)*normalBaroclinicVelocityPerp(k,iEdge)
                         uTemp(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge) &
                                  + 1.5_RKIND * dt * (normalVelocityTend(k,iEdge) &
+                                 + iceOcnVelocityTend(k,iEdge) &
                                  + normalVelocityNew(k,iEdge) &
                                  + sshGrad) &
                                  - 0.5_RKIND * dt * ( normalVelocityTendOld(k,iEdge) &
@@ -854,6 +868,7 @@ module ocn_time_integration_split_ab2
                         !  -fEdge(iEdge)*normalBaroclinicVelocityPerp(k,iEdge)
                         uTemp(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge) &
                                  + 1.5_RKIND * dt * (normalVelocityTend(k,iEdge) &
+                                 + iceOcnVelocityTend(k,iEdge) &
                                  + sshGrad) &
                                  - 0.5_RKIND * dt * normalVelocityTendOld(k,iEdge) &
                                  +             dt * normalVelocityNew(k,iEdge)
@@ -861,6 +876,7 @@ module ocn_time_integration_split_ab2
 
                      do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
                         normalVelocityTendOld(k,iEdge)  = normalVelocityTend(k,iEdge) &
+                                                        + iceOcnVelocityTend(k,iEdge) &
                                                         + sshGrad
                      enddo ! vertical
 
@@ -907,7 +923,31 @@ module ocn_time_integration_split_ab2
             enddo ! iEdge
             !$omp end do
             !$omp end parallel
-
+            do iEdge = 1, nEdgesOwned
+               kTop = minLevelEdgeBot(iEdge)
+               surfaceVelocityNew = normalBarotropicVelocityCur(iEdge) &
+                  + normalBaroclinicVelocityNew(kTop,iEdge)
+            enddo
+            ! TODO reconstruct surfaceVelocity
+            ! TODO rotate iceVelocity
+            ! TODO get relative velocity from iceVelocityZonal, Merid and reconstructed surfaceVelocity
+            ! TODO assign dragCoeff
+            do iCell = 1, nCellsOwned
+               iceOcnRelVelocityZonal = iceVelocityZonal(iCell) - surfaceVelocityZonal(iCell)
+               iceOcnRelVelocityMeridional = iceVelocityMeridional(iCell) - surfaceVelocityMeridional(iCell)
+               iceOcnRelVelocityAbs = sqrt(iceOcnRelVelocityZonal**2 + &
+                                           iceOcnRelVelocityMeridional**2)
+               iceOcnStressZonal(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal
+               iceOcnStressMeridional(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional
+            enddo
+            call ocn_surface_bulk_forcing_split_vel( &
+                                   seaIceStressZonal, seaIceStressMeridional, &
+                                   seaIceSfcStress, seaIceSfcStressMag, err)
+            do iEdge = 1, nEdgesOwned
+               kTop = minLevelEdgeBot(iEdge)
+               iceOcnVelocityTend(kTop,iEdge) = &
+                  seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
+            enddo
             bottomDepthEdge(:) = 0.0_RKIND
             !$omp parallel
             !$omp do schedule(runtime) &
