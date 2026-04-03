@@ -321,6 +321,8 @@ contains
          tendVel             !< [out] normal velocity tendency at edges
 
       real (kind=RKIND), dimension(:), pointer, contiguous :: &
+         seaIceSfcStress,         &!< [out] surface stress at edges
+         seaIceSfcStressMag,         &!< [out] surface stress at edges
          sfcStress,         &!< [out] surface stress at edges
          sfcStressMag        !< [out] surface stress magnitude (on cell)
 
@@ -384,6 +386,12 @@ contains
 
       call mpas_pool_get_array(tendPool, 'normalVelocity', tendVel)
 
+      call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', iceVelocityZonal)
+      call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', iceVelocityMeridional)
+      call mpas_pool_get_array(forcingPool, 'SeaIceSurfaceStress', &
+                                             seaIceSfcStress)
+      call mpas_pool_get_array(forcingPool, 'SeaIceSurfaceStressMagnitude', &
+                                             seaIceSfcStressMag)
       call mpas_pool_get_array(forcingPool, 'surfaceStress', &
                                              sfcStress)
       call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', &
@@ -438,10 +446,44 @@ contains
       call mpas_timer_start("ocn_tend_vel")
 
       ! Compute bulk forcing surface stress
-      call ocn_surface_bulk_forcing_vel( &
-                                    forcingPool, sfcStress, &
-                                    sfcStressMag, velocityZonal, &
-                                    velocityMeridional, normalVelocity, err)
+      if (splitSeaIce) then ! Split the surface stress into sea ice and atm components
+
+        ! Store temporary variable for comparison
+        allocate(airOcnStressZonal(nCells), airOcnStressMeridional(nCells))
+        allocate(iceOcnStressZonalOld(nCells), iceOcnStressMeridionalOld(nCells))
+        do iCell = 1, nCells
+          surfaceVelocityZonal(iCell) = surfaceVelocity(indexSurfaceVelocityZonal,iCell)
+          surfaceVelocityMeridional(iCell) = surfaceVelocity(indexSurfaceVelocityMeridional,iCell)
+
+          ! Calculate relative velocities assumed in the coupler
+          ! TODO this is only correct for use in ocn_surface_bulk_forcing_split if
+          ! surfaceVelocity* has stayed the same since the last time windStress* was defined
+          ! i.e., the ocn-atm coupling interval
+          iceOcnRelVelocityZonal(iCell) = iceVelocityZonal(iCell) - surfaceVelocityZonal(iCell)
+          iceOcnRelVelocityMeridional(iCell) = iceVelocityMeridional(iCell) - surfaceVelocityMeridional(iCell)
+        enddo
+        iCell = 1
+        call mpas_log_write('Debug: iceVelocityZonal, iceVelocityMeridional: [$r, $r]', &
+             realArgs=(/iceVelocityZonal(iCell), iceVelocityMeridional(iCell)/))
+        call mpas_log_write('Debug: surfaceVelocityZonal, surfaceVelocityMeridional: [$r, $r]', &
+             realArgs=(/surfaceVelocityZonal(iCell), surfaceVelocityMeridional(iCell)/))
+        call ocn_surface_bulk_forcing_split( &
+             windStressZonal, windStressMeridional, iceFraction, &
+             iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional,  &
+             airOcnStressZonal, airOcnStressMeridional,            &
+             seaIceStressZonal, seaIceStressMeridional, err)
+        call ocn_surface_bulk_forcing_split_vel( &
+                                      airOcnStressZonal, airOcnStressMeridional, &
+                                      sfcStress, sfcStressMag, err)
+        call ocn_surface_bulk_forcing_split_vel( &
+                                      seaIceStressZonal, seaIceStressMeridional, &
+                                      seaIceSfcStress, seaIceSfcStressMag, err)
+      else
+        call ocn_surface_bulk_forcing_vel( &
+                                      forcingPool, sfcStress, &
+                                      sfcStressMag, velocityZonal, &
+                                      velocityMeridional, normalVelocity, err)
+      endif
 
       ! Add top drag to surface stress
       call ocn_surface_land_ice_fluxes_vel( &
