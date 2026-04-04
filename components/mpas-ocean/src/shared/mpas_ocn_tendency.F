@@ -98,6 +98,7 @@ module ocn_tendency
    !--------------------------------------------------------------------
 
    integer :: apply_Dhf_to_hhf, use_highFreqThick_restore
+   logical, pointer :: splitSeaIce
 
 !***********************************************************************
 
@@ -344,6 +345,11 @@ contains
       type (dm_info), intent(in) :: dminfo
 
       real (kind=RKIND), dimension(:), pointer, contiguous :: &
+         iceFraction, &
+         windStressZonal, &
+         windStressMeridional, &
+         iceVelocityZonal, &
+         iceVelocityMeridional, &
          ssh               ! sea surface height
 
       real (kind=RKIND), dimension(:,:), pointer, contiguous :: &
@@ -352,6 +358,13 @@ contains
 
       real (kind=RKIND), dimension(:,:,:), pointer, contiguous :: &
          activeTracers
+
+      real (kind=RKIND), dimension(:), allocatable ::&
+         seaIceStressZonal, seaIceStressMeridional, &
+         airOcnStressZonal, airOcnStressMeridional, &
+         iceOcnStressZonal, iceOcnStressMeridional, &
+         surfaceVelocityZonal, surfaceVelocityMeridional, &
+         iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional
 
       ! End preamble
       !-----------------------------------------------------------------
@@ -386,6 +399,9 @@ contains
 
       call mpas_pool_get_array(tendPool, 'normalVelocity', tendVel)
 
+      call mpas_pool_get_array(forcingPool, 'iceFraction', iceFraction)
+      call mpas_pool_get_array(forcingPool, 'windStressZonal', windStressZonal)
+      call mpas_pool_get_array(forcingPool, 'windStressMeridional', windStressMeridional)
       call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', iceVelocityZonal)
       call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', iceVelocityMeridional)
       call mpas_pool_get_array(forcingPool, 'SeaIceSurfaceStress', &
@@ -449,9 +465,9 @@ contains
       if (splitSeaIce) then ! Split the surface stress into sea ice and atm components
 
         ! Store temporary variable for comparison
-        allocate(airOcnStressZonal(nCells), airOcnStressMeridional(nCells))
-        allocate(iceOcnStressZonalOld(nCells), iceOcnStressMeridionalOld(nCells))
-        do iCell = 1, nCells
+        allocate(iceOcnRelVelocityZonal(nCellsAll), iceOcnRelVelocityMeridional(nCellsAll))
+        allocate(surfaceVelocityZonal(nCellsAll), surfaceVelocityMeridional(nCellsAll))
+        do iCell = 1, nCellsAll
           surfaceVelocityZonal(iCell) = surfaceVelocity(indexSurfaceVelocityZonal,iCell)
           surfaceVelocityMeridional(iCell) = surfaceVelocity(indexSurfaceVelocityMeridional,iCell)
 
@@ -467,6 +483,9 @@ contains
              realArgs=(/iceVelocityZonal(iCell), iceVelocityMeridional(iCell)/))
         call mpas_log_write('Debug: surfaceVelocityZonal, surfaceVelocityMeridional: [$r, $r]', &
              realArgs=(/surfaceVelocityZonal(iCell), surfaceVelocityMeridional(iCell)/))
+
+        allocate(airOcnStressZonal(nCellsAll), airOcnStressMeridional(nCellsAll))
+        allocate(seaIceStressZonal(nCellsAll), seaIceStressMeridional(nCellsAll))
         call ocn_surface_bulk_forcing_split( &
              windStressZonal, windStressMeridional, iceFraction, &
              iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional,  &
@@ -1655,6 +1674,7 @@ contains
         err = 0
 
         call mpas_pool_get_config(ocnConfigs, 'config_use_highFreqThick_restore', config_use_highFreqThick_restore)
+        call mpas_pool_get_config(ocnConfigs, 'config_use_drag_from_sea_ice_velocity', splitSeaIce)
 
         if (config_use_highFreqThick_restore) then
            use_highFreqThick_restore = 1
