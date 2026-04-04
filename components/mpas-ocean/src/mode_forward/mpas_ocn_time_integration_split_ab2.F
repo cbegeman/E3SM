@@ -39,6 +39,8 @@ module ocn_time_integration_split_ab2
    use ocn_mesh
    use ocn_tendency
    use ocn_diagnostics_variables
+   use ocn_vel_forcing_surface_stress
+   use ocn_surface_bulk_forcing
    use ocn_diagnostics
    use ocn_gm
    use ocn_submesoscale_eddies
@@ -100,6 +102,7 @@ module ocn_time_integration_split_ab2
       thickEdgeFluxUpwind   = 2   ! use upwind cell thickness at edge
 
    real (kind=RKIND) :: &
+      dragCoeff, &
       useVelocityCorrection,&! mask for velocity correction
       splitFact, &! mask for terms in split cases
       self_attraction_and_loading_beta
@@ -172,7 +175,7 @@ module ocn_time_integration_split_ab2
          config_use_tracerGroup  ! flag for using each tracer group
 
       integer :: &
-         iCell, iEdge, k, &! loop iterators for cell, edge, vert loops
+         iCell, iEdge, k, kTop, &! loop iterators for cell, edge, vert loops
          nCells, nEdges,  &! number of cells or edges (incl halos)
          i,j,             &! generic loop iterators
          cell1, cell2,    &! neighbor cell addresses
@@ -188,12 +191,14 @@ module ocn_time_integration_split_ab2
          cellHaloComputeCounter   ! halo updates during cycling
 
       real (kind=RKIND) :: &
+         dragCoeff, &
          normalThicknessFluxSum, &! sum of thickness flux in column
          thicknessSum,     &! sum of thicknesses in column
          flux,             &! temp for computing flux for barotropic
          sshEdge,          &! sea surface height at edge
          CoriolisTerm,     &! temp for computing coriolis term (fuperp)
          normalVelocityCorrection, &! velocity correction
+         iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional, iceOcnRelVelocityAbs, &
          temp,             &! temp for holding vars at new time
          temp_h,           &! temporary for phi
          temp_mask,        &! temporary mask (edgeMask)
@@ -203,13 +208,18 @@ module ocn_time_integration_split_ab2
          sshGrad            ! temp for holding ssh gradient
 
       real (kind=RKIND), dimension(:,:), allocatable:: &
-         uTemp,
+         uTemp, &
          iceOcnVelocityTend
 
       real (kind=RKIND), dimension(:), allocatable :: &
-         btrvel_temp,      &
-         sshTemp,          &
-         wctEdge,          &! flux water column thickness at edge
+         btrvel_temp,        &
+         sshTemp,            &
+         tempX, tempY, tempZ,&
+         iceVelocityZonalNew, iceVelocityMeridionalNew, &
+         seaIceStressZonal, seaIceStressMeridional, &
+         surfaceVelocityZonal, surfaceVelocityMeridional, &
+         surfaceVelocityNew, &
+         wctEdge,            &! flux water column thickness at edge
          bottomDepthEdge
 
       ! State Array Pointers
@@ -278,7 +288,8 @@ module ocn_time_integration_split_ab2
       real (kind=RKIND), dimension(:), pointer :: tidalPotentialEta
 
       real (kind=RKIND), dimension(:), pointer :: &
-        seaIcePressure, atmosphericPressure
+        iceVelocityZonalCur, iceVelocityMeridionalCur, &
+        seaIcePressure, atmosphericPressure, iceFraction, seaIceSfcStress, seaIceSfcStressMag
 
       real (kind=RKIND), dimension(:), pointer :: &
         frazilSurfacePressure, landIcePressure, landIceDraft
@@ -735,9 +746,17 @@ module ocn_time_integration_split_ab2
          call ocn_tend_vel(domain, tendPool, statePool, forcingPool, &
                            stage1_tend_time, domain % dminfo, dt)
          allocate(iceOcnVelocityTend(nVertLevels,nEdgesAll+1))
-         ! TODO initialize to starting ice stress at surface, rest 0
+         ! initialize to starting ice stress at surface, rest 0
+         call mpas_pool_get_array(forcingPool, 'iceFraction', &
+                                  iceFraction)
+         call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', &
+                                  iceVelocityZonalCur)
+         call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', &
+                                  iceVelocityMeridionalCur)
          call mpas_pool_get_array(forcingPool, 'seaIceSfcStress', &
                                   seaIceSfcStress)
+         call mpas_pool_get_array(forcingPool, 'seaIceSfcStressMag', &
+                                  seaIceSfcStressMag)
          iceOcnVelocityTend = 0.0_RKIND
          do iEdge = 1, nEdgesOwned
             kTop = minLevelEdgeBot(iEdge)
@@ -923,30 +942,42 @@ module ocn_time_integration_split_ab2
             enddo ! iEdge
             !$omp end do
             !$omp end parallel
+            allocate(surfaceVelocityNew(nEdgesOwned))
+            allocate(tempX(nCellsAll+1), tempY(nCellsAll+1), tempZ(nCellsAll+1))
+            allocate(surfaceVelocityZonal(nCellsAll+1), surfaceVelocityMeridional(nCellsAll+1))
             do iEdge = 1, nEdgesOwned
                kTop = minLevelEdgeBot(iEdge)
-               surfaceVelocityNew = normalBarotropicVelocityCur(iEdge) &
+               surfaceVelocityNew(iEdge) = normalBarotropicVelocityCur(iEdge) &
                   + normalBaroclinicVelocityNew(kTop,iEdge)
             enddo
-            ! TODO reconstruct surfaceVelocity
-            ! TODO rotate iceVelocity
+            ! reconstruct surfaceVelocity
+            call mpas_reconstruct_gpu(meshPool, surfaceVelocityNew, &
+                                      tempX, tempY, tempZ,   &
+                                      surfaceVelocityZonal, surfaceVelocityMeridional, &
+                                      includeHalos = .true.)
+            deallocate(surfaceVelocityNew, tempX, tempY, tempZ)
+            ! rotate iceVelocity
+            allocate(iceVelocityZonalNew(nCellsAll+1), iceVelocityMeridionalNew(nCellsAll+1))
             call ocn_surface_forcing_rotate_velocity( &
                      iceVelocityZonalCur, iceVelocityMeridionalCur, &
                      dt/2., &
                      iceVelocityZonalNew, iceVelocityMeridionalNew)
-            ! TODO get relative velocity from iceVelocityZonal, Merid and reconstructed surfaceVelocity
-            ! TODO assign dragCoeff
+            allocate(seaIceStressZonal(nCellsAll+1), seaIceStressMeridional(nCellsAll+1))
+            ! Compute relative velocity from iceVelocityZonal, Merid and reconstructed surfaceVelocity
+            dragCoeff = config_implicit_top_drag_coeff
             do iCell = 1, nCellsOwned
-               iceOcnRelVelocityZonal = iceVelocityZonal(iCell) - surfaceVelocityZonal(iCell)
-               iceOcnRelVelocityMeridional = iceVelocityMeridional(iCell) - surfaceVelocityMeridional(iCell)
+               iceOcnRelVelocityZonal = iceVelocityZonalNew(iCell) - surfaceVelocityZonal(iCell)
+               iceOcnRelVelocityMeridional = iceVelocityMeridionalNew(iCell) - surfaceVelocityMeridional(iCell)
                iceOcnRelVelocityAbs = sqrt(iceOcnRelVelocityZonal**2 + &
                                            iceOcnRelVelocityMeridional**2)
-               iceOcnStressZonal(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal
-               iceOcnStressMeridional(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional
+               seaIceStressZonal(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal
+               seaIceStressMeridional(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional
             enddo
+            deallocate(surfaceVelocityZonal, surfaceVelocityMeridional, iceVelocityZonalNew, iceVelocityMeridionalNew)
             call ocn_surface_bulk_forcing_split_vel( &
                                    seaIceStressZonal, seaIceStressMeridional, &
                                    seaIceSfcStress, seaIceSfcStressMag, err)
+            deallocate(seaIceStressZonal, seaIceStressMeridional)
             do iEdge = 1, nEdgesOwned
                kTop = minLevelEdgeBot(iEdge)
                iceOcnVelocityTend(kTop,iEdge) = &
@@ -3134,6 +3165,7 @@ module ocn_time_integration_split_ab2
       !*** time step iteration (number can be different on the
       !*** first and last time step iteration)
 
+      dragCoeff = 5.36e-3_RKIND ! default value given in sea ice namelist
       numTSIterations     = config_n_ts_iter
       allocate(numClinicIterations(numTSIterations))
 
