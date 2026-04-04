@@ -336,7 +336,6 @@ contains
       !$omp end do
       !$omp end parallel
 #endif
-      end if
 
 #ifdef MPAS_OPENACC
       !$acc exit data delete(zonalWSEdge, meridWSEdge)
