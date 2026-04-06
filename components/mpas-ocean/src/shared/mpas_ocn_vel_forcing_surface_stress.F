@@ -247,21 +247,23 @@ contains
       real(kind=RKIND), dimension(:), intent(out) :: iceVelocityZonalNew, &
                                                       iceVelocityMeridionalNew
 
-      integer :: iEdge
+      integer :: iCell
       real(kind=RKIND) :: theta
 
+      call mpas_log_write('ocn_vel_forcing_surface_stress: start rotate velocity')
       !$omp parallel
       !$omp do schedule(runtime) &
       !$omp    private(theta)
-      do iEdge = 1, nEdgesAll
-        theta = fEdge(iEdge) * dtBtr
-        iceVelocityZonalNew(iEdge) = iceVelocityZonalCur(iEdge) * cos(theta) &
-                                   + iceVelocityMeridionalCur(iEdge) * sin(theta)
-        iceVelocityMeridionalNew(iEdge) = - iceVelocityZonalCur(iEdge) * sin(theta) &
-                                          + iceVelocityMeridionalCur(iEdge) * cos(theta)
+      do iCell = 1, nCellsAll
+        theta = fCell(iCell) * dtBtr
+        iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell) * cos(theta) &
+                                   + iceVelocityMeridionalCur(iCell) * sin(theta)
+        iceVelocityMeridionalNew(iCell) = - iceVelocityZonalCur(iCell) * sin(theta) &
+                                          + iceVelocityMeridionalCur(iCell) * cos(theta)
       enddo
       !$omp end do
       !$omp end parallel
+      call mpas_log_write('ocn_vel_forcing_surface_stress: end rotate velocity')
 
    end subroutine ocn_surface_forcing_rotate_velocity
 
