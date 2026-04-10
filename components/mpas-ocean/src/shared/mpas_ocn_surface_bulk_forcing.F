@@ -264,14 +264,17 @@ contains
       !*** Set error code and exit early if bulk wind stress not on
       !*** Otherwise start timer
 
+      call mpas_log_write('ocn_surface_bulk_forcing_split_vel: start')
       err = 0
       if (bulkWindStressOff) return
 
-      call mpas_timer_start("bulk_ws", .false.)
 
       !*** Transfer data to device
       !$acc enter data &
       !$acc    copyin(sfcStressZonal, sfcStressMerid)
+
+      call mpas_log_write('sfcStressZonal, Merid = $r, $r', &
+         realArgs=(/sfcStressZonal(1), sfcStressMerid(1)/))
 
       !*** Forcing needed over halo regions
 
@@ -289,6 +292,7 @@ contains
       !$acc enter data create(meridWSEdge, zonalWSEdge)
 #endif
 
+      call mpas_log_write('Start stress interp')
       if (config_bulk_wind_stress_interp_isotropic) then
 
         call mpas_vector_cell_to_edge_isotropic(sfcStressZonal, sfcStressMerid, &
@@ -301,53 +305,35 @@ contains
           nEdges, cellsOnEdge, zonalWSEdge, meridWSEdge)
 
       end if
+      call mpas_log_write('End stress interp')
 
-#ifdef MPAS_OPENACC
-      !$acc parallel loop &
-      !$acc    present(angleEdge, sfcStress, &
-      !$acc            zonalWSEdge, meridWSEdge)
-#else
+      call mpas_log_write('sfcStress on edges $r', realArgs=(/sfcStress(1)/))
       !$omp parallel
       !$omp do schedule(runtime)
-#endif
       do iEdge = 1, nEdges
         sfcStress(iEdge) = sfcStress(iEdge) + &
                            cos(angleEdge(iEdge))*zonalWSEdge(iEdge) + &
                            sin(angleEdge(iEdge))*meridWSEdge(iEdge)
       end do
-#ifndef MPAS_OPENACC
       !$omp end do
       !$omp end parallel
-#endif
+      call mpas_log_write('End sfcStress on edges $r', realArgs=(/sfcStress(1)/))
 
-#ifdef MPAS_OPENACC
-      !$acc parallel loop &
-      !$acc    present(sfcStressMag, sfcStressZonal, sfcStressMerid)
-#else
+      call mpas_log_write('sfcStress on cells $r', realArgs=(/sfcStressMag(1)/))
       !$omp parallel
       !$omp do schedule(runtime)
-#endif
       do iCell = 1, nCells
         sfcStressMag(iCell) = sfcStressMag(iCell) + &
                               sqrt( sfcStressZonal(iCell)**2 &
                                   + sfcStressMerid(iCell)**2 )
       end do
-#ifndef MPAS_OPENACC
       !$omp end do
       !$omp end parallel
-#endif
-
-#ifdef MPAS_OPENACC
-      !$acc exit data delete(zonalWSEdge, meridWSEdge)
-      !*** Transfer any needed data back to host and delete inputs
-      !$acc exit data &
-      !$acc    delete(sfcStressZonal, sfcStressMerid)
-#endif
-
+      call mpas_log_write('end sfcStress on cells $r', realArgs=(/sfcStressMag(1)/))
 
       deallocate(zonalWSEdge, meridWSEdge)
 
-      call mpas_timer_stop("bulk_ws")
+      call mpas_log_write('ocn_surface_bulk_forcing_split_vel: end')
 
       !-----------------------------------------------------------------
 
@@ -844,7 +830,7 @@ contains
       !-----------------------------------------------------------------
 
       !real(kind=RKIND), dimension(:), allocatable, intent(out) :: &
-      real(kind=RKIND), dimension(:), intent(out) ::  &
+      real(kind=RKIND), dimension(:), intent(inout) ::  &
                   airOcnStressZonal, airOcnStressMeridional, &
                   iceOcnStressZonal, iceOcnStressMeridional
       integer, intent(out) :: err !< [out] error flag
@@ -867,17 +853,15 @@ contains
          return
       endif
 
-      ! TODO replace with mpas-seaice ice-ocn drag coeff 0.00536
-      dragCoeff = config_implicit_top_drag_coeff
+      ! hard-coded to mpas-seaice ice-ocn drag coeff 
+      dragCoeff = 0.00536
 
       !*** Set on/off flags based in user input configuration
 
-      !allocate(iceOcnStressZonal(nCellsAll))
-      !allocate(iceOcnStressMeridional(nCellsAll))
       if (.not. config_use_bulk_wind_stress) return
       !$omp parallel
       !$omp do schedule(runtime) private(iceOcnRelVelocityAbs)
-      do i = 1, nCellsAll
+      do i = 1, nCellsHalo(3)
         iceOcnRelVelocityAbs = sqrt(iceOcnRelVelocityZonal(iCell)**2 + &
                                     iceOcnRelVelocityMeridional(iCell)**2)
         iceOcnStressZonal(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal(iCell)
