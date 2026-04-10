@@ -322,8 +322,8 @@ contains
          tendVel             !< [out] normal velocity tendency at edges
 
       real (kind=RKIND), dimension(:), pointer, contiguous :: &
-         seaIceSfcStress,         &!< [out] surface stress at edges
-         seaIceSfcStressMag,         &!< [out] surface stress at edges
+         !seaIceSfcStress,         &!< [out] surface stress at edges
+         !seaIceSfcStressMag,         &!< [out] surface stress at edges
          sfcStress,         &!< [out] surface stress at edges
          sfcStressMag        !< [out] surface stress magnitude (on cell)
 
@@ -404,10 +404,10 @@ contains
       call mpas_pool_get_array(forcingPool, 'windStressMeridional', windStressMeridional)
       call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', iceVelocityZonal)
       call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', iceVelocityMeridional)
-      call mpas_pool_get_array(forcingPool, 'SeaIceSurfaceStress', &
-                                             seaIceSfcStress)
-      call mpas_pool_get_array(forcingPool, 'SeaIceSurfaceStressMagnitude', &
-                                             seaIceSfcStressMag)
+      !call mpas_pool_get_array(forcingPool, 'seaIceSurfaceStress', &
+      !                                       seaIceSfcStress)
+      !call mpas_pool_get_array(forcingPool, 'seaIceSurfaceStressMagnitude', &
+      !                                       seaIceSfcStressMag)
       call mpas_pool_get_array(forcingPool, 'surfaceStress', &
                                              sfcStress)
       call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', &
@@ -462,6 +462,12 @@ contains
       call mpas_timer_start("ocn_tend_vel")
 
       ! Compute bulk forcing surface stress
+      call ocn_surface_bulk_forcing_vel( &
+                                    forcingPool, windStressZonal, windStressMeridional, &
+                                    sfcStress, &
+                                    sfcStressMag, velocityZonal, &
+                                    velocityMeridional, normalVelocity, err)
+      call mpas_log_write('ocn_tendency wind only: sfcStress $r, $r', realArgs=(/sfcStress(1), sfcStressMag(1)/))
       if (splitSeaIce) then ! Split the surface stress into sea ice and atm components
 
         ! Store temporary variable for comparison
@@ -484,24 +490,23 @@ contains
         call mpas_log_write('Debug: surfaceVelocityZonal, surfaceVelocityMeridional: [$r, $r]', &
              realArgs=(/surfaceVelocityZonal(iCell), surfaceVelocityMeridional(iCell)/))
 
-        allocate(airOcnStressZonal(nCellsAll), airOcnStressMeridional(nCellsAll))
-        allocate(seaIceStressZonal(nCellsAll), seaIceStressMeridional(nCellsAll))
-        call ocn_surface_bulk_forcing_split( &
-             windStressZonal, windStressMeridional, iceFraction, &
+        allocate(seaIceStressZonal(nCellsHalo(3)), seaIceStressMeridional(nCellsHalo(3)))
+        call mpas_log_write('ocn_tendency: split airOcn and iceOcn stress')
+        call ocn_surface_bulk_forcing_sea_ice( &
+             iceFraction, &
              iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional,  &
-             airOcnStressZonal, airOcnStressMeridional,            &
              seaIceStressZonal, seaIceStressMeridional, err)
-        call ocn_surface_bulk_forcing_split_vel( &
-                                      airOcnStressZonal, airOcnStressMeridional, &
-                                      sfcStress, sfcStressMag, err)
-        call ocn_surface_bulk_forcing_split_vel( &
-                                      seaIceStressZonal, seaIceStressMeridional, &
-                                      seaIceSfcStress, seaIceSfcStressMag, err)
-      else
-        call ocn_surface_bulk_forcing_vel( &
-                                      forcingPool, sfcStress, &
-                                      sfcStressMag, velocityZonal, &
-                                      velocityMeridional, normalVelocity, err)
+        call mpas_log_write('Zonal: wind, seaIce: [$r, $r]', &
+             realArgs=(/windStressZonal(iCell), seaIceStressZonal(iCell)/))
+        call mpas_log_write('Meridional: wind, seaIce: [$r, $r]', &
+             realArgs=(/windStressMeridional(iCell), seaIceStressMeridional(iCell)/))
+        ! This adds the sea ice stress to sfcStress which now contains wind
+        !call ocn_surface_bulk_forcing_vel( &
+        !                              forcingPool, seaIceStressZonal, seaIceStressMeridional, &
+        !                              sfcStress, &
+        !                              sfcStressMag, velocityZonal, &
+        !                              velocityMeridional, normalVelocity, err)
+        !call mpas_log_write('ocn_tendency wind and sea ice: sfcStress $r, $r', realArgs=(/sfcStress(1), sfcStressMag(1)/))
       endif
 
       ! Add top drag to surface stress
@@ -550,6 +555,7 @@ contains
       call ocn_vel_hmix_tend(divergence, relativeVorticity, tendVel,err)
 
       ! Add forcing and bottom drag
+      call mpas_log_write('Add sfcStress to tend')
       call ocn_vel_forcing_tend(normalVelocity, sfcFlxAttCoeff, &
                                 sfcStress, kineticEnergyCell, &
                                 layerThickEdgeDrag, &
@@ -588,6 +594,7 @@ contains
 
       ! stop the timer and exit
 
+      call mpas_log_write("ocn_tend_vel")
       call mpas_timer_stop("ocn_tend_vel")
 
    !--------------------------------------------------------------------
