@@ -289,7 +289,8 @@ module ocn_time_integration_split_ab2
 
       real (kind=RKIND), dimension(:), pointer :: &
         iceVelocityZonalCur, iceVelocityMeridionalCur, &
-        seaIcePressure, atmosphericPressure, iceFraction, seaIceSfcStress, seaIceSfcStressMag
+        seaIcePressure, atmosphericPressure, iceFraction
+        !, seaIceSfcStress, seaIceSfcStressMag
 
       real (kind=RKIND), dimension(:), pointer :: &
         frazilSurfacePressure, landIcePressure, landIceDraft
@@ -742,27 +743,30 @@ module ocn_time_integration_split_ab2
          endif
 #endif
 
-         ! ocn_tend_vel now populates sfcStress and seaIceSfcStress but only applies sfcStress
+         call mpas_log_write('Start ocn_tend_vel')
          call ocn_tend_vel(domain, tendPool, statePool, forcingPool, &
                            stage1_tend_time, domain % dminfo, dt)
-         allocate(iceOcnVelocityTend(nVertLevels,nEdgesAll+1))
-         ! initialize to starting ice stress at surface, rest 0
-         call mpas_pool_get_array(forcingPool, 'iceFraction', &
-                                  iceFraction)
-         call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', &
-                                  iceVelocityZonalCur)
-         call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', &
-                                  iceVelocityMeridionalCur)
-         call mpas_pool_get_array(forcingPool, 'seaIceSfcStress', &
-                                  seaIceSfcStress)
-         call mpas_pool_get_array(forcingPool, 'seaIceSfcStressMag', &
-                                  seaIceSfcStressMag)
-         iceOcnVelocityTend = 0.0_RKIND
-         do iEdge = 1, nEdgesOwned
-            kTop = minLevelEdgeBot(iEdge)
-            iceOcnVelocityTend(kTop,iEdge) = &
-               seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
-         enddo
+         call mpas_log_write('End ocn_tend_vel')
+         !call mpas_log_write('Start iceOcnVelocityTend initialization')
+         allocate(iceOcnVelocityTend(nVertLevels,nEdgesOwned))
+         iceOcnVelocityTend(:,:) = 0.0_RKIND
+         !! initialize to starting ice stress at surface, rest 0
+         !call mpas_pool_get_array(forcingPool, 'iceFraction', &
+         !                         iceFraction)
+         !call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', &
+         !                         iceVelocityZonalCur)
+         !call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', &
+         !                         iceVelocityMeridionalCur)
+         !call mpas_pool_get_array(forcingPool, 'seaIceSurfaceStress', &
+         !                         seaIceSfcStress)
+         !call mpas_pool_get_array(forcingPool, 'seaIceSurfaceStressMag', &
+         !                         seaIceSfcStressMag)
+         !do iEdge = 1, nEdgesOwned
+         !   kTop = minLevelEdgeBot(iEdge)
+         !   iceOcnVelocityTend(kTop,iEdge) = &
+         !      seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
+         !enddo
+         call mpas_log_write('iceOcnVelocityTend = $r', realArgs=(/iceOcnVelocityTend(1,1)/))
          call mpas_timer_stop('se bcl vel tend')
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -942,47 +946,55 @@ module ocn_time_integration_split_ab2
             enddo ! iEdge
             !$omp end do
             !$omp end parallel
-            allocate(surfaceVelocityNew(nEdgesOwned))
-            allocate(tempX(nCellsAll+1), tempY(nCellsAll+1), tempZ(nCellsAll+1))
-            allocate(surfaceVelocityZonal(nCellsAll+1), surfaceVelocityMeridional(nCellsAll+1))
-            do iEdge = 1, nEdgesOwned
-               kTop = minLevelEdgeBot(iEdge)
-               surfaceVelocityNew(iEdge) = normalBarotropicVelocityCur(iEdge) &
-                  + normalBaroclinicVelocityNew(kTop,iEdge)
-            enddo
-            ! reconstruct surfaceVelocity
-            call mpas_reconstruct_gpu(meshPool, surfaceVelocityNew, &
-                                      tempX, tempY, tempZ,   &
-                                      surfaceVelocityZonal, surfaceVelocityMeridional, &
-                                      includeHalos = .true.)
-            deallocate(surfaceVelocityNew, tempX, tempY, tempZ)
             ! rotate iceVelocity
-            allocate(iceVelocityZonalNew(nCellsAll+1), iceVelocityMeridionalNew(nCellsAll+1))
-            call ocn_surface_forcing_rotate_velocity( &
-                     iceVelocityZonalCur, iceVelocityMeridionalCur, &
-                     dt/2., &
-                     iceVelocityZonalNew, iceVelocityMeridionalNew)
-            allocate(seaIceStressZonal(nCellsAll+1), seaIceStressMeridional(nCellsAll+1))
-            ! Compute relative velocity from iceVelocityZonal, Merid and reconstructed surfaceVelocity
-            dragCoeff = config_implicit_top_drag_coeff
-            do iCell = 1, nCellsOwned
-               iceOcnRelVelocityZonal = iceVelocityZonalNew(iCell) - surfaceVelocityZonal(iCell)
-               iceOcnRelVelocityMeridional = iceVelocityMeridionalNew(iCell) - surfaceVelocityMeridional(iCell)
-               iceOcnRelVelocityAbs = sqrt(iceOcnRelVelocityZonal**2 + &
-                                           iceOcnRelVelocityMeridional**2)
-               seaIceStressZonal(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal
-               seaIceStressMeridional(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional
-            enddo
-            deallocate(surfaceVelocityZonal, surfaceVelocityMeridional, iceVelocityZonalNew, iceVelocityMeridionalNew)
-            call ocn_surface_bulk_forcing_split_vel( &
-                                   seaIceStressZonal, seaIceStressMeridional, &
-                                   seaIceSfcStress, seaIceSfcStressMag, err)
-            deallocate(seaIceStressZonal, seaIceStressMeridional)
-            do iEdge = 1, nEdgesOwned
-               kTop = minLevelEdgeBot(iEdge)
-               iceOcnVelocityTend(kTop,iEdge) = &
-                  seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
-            enddo
+            if (config_use_drag_from_sea_ice_velocity) then
+               call mpas_log_write('Prep variables for new relative sea ice velocity')
+               allocate(surfaceVelocityNew(nEdgesOwned))
+               allocate(tempX(nCellsAll+1), tempY(nCellsAll+1), tempZ(nCellsAll+1))
+               allocate(surfaceVelocityZonal(nCellsAll+1), surfaceVelocityMeridional(nCellsAll+1))
+               call mpas_log_write('Compute new ocean surface velocity')
+               do iEdge = 1, nEdgesOwned
+                  kTop = minLevelEdgeBot(iEdge)
+                  surfaceVelocityNew(iEdge) = normalBarotropicVelocityCur(iEdge) &
+                     + normalBaroclinicVelocityNew(kTop,iEdge)
+               enddo
+               call mpas_log_write('Reconstruct new ocean surface velocity')
+               ! reconstruct surfaceVelocity
+               call mpas_reconstruct_gpu(meshPool, surfaceVelocityNew, &
+                                         tempX, tempY, tempZ,   &
+                                         surfaceVelocityZonal, surfaceVelocityMeridional, &
+                                         includeHalos = .true.)
+               deallocate(surfaceVelocityNew, tempX, tempY, tempZ)
+
+               call mpas_log_write('Start rotate iceVelocity')
+               allocate(iceVelocityZonalNew(nCellsAll+1), iceVelocityMeridionalNew(nCellsAll+1))
+               call ocn_surface_forcing_rotate_velocity( &
+                        iceVelocityZonalCur, iceVelocityMeridionalCur, &
+                        dt/2., &
+                        iceVelocityZonalNew, iceVelocityMeridionalNew)
+               call mpas_log_write('End rotate iceVelocity')
+               ! TODO This now has to be the CHANGE in sea ice ocn stress because ocn_tend_vel includes the full stress
+               !allocate(seaIceStressZonal(nCellsAll+1), seaIceStressMeridional(nCellsAll+1))
+               !! Compute relative velocity from iceVelocityZonal, Merid and reconstructed surfaceVelocity
+               !dragCoeff = config_implicit_top_drag_coeff
+               !do iCell = 1, nCellsOwned
+               !   iceOcnRelVelocityZonal = iceVelocityZonalNew(iCell) - surfaceVelocityZonal(iCell)
+               !   iceOcnRelVelocityMeridional = iceVelocityMeridionalNew(iCell) - surfaceVelocityMeridional(iCell)
+               !   iceOcnRelVelocityAbs = sqrt(iceOcnRelVelocityZonal**2 + &
+               !                               iceOcnRelVelocityMeridional**2)
+               !   seaIceStressZonal(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal
+               !   seaIceStressMeridional(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional
+               !enddo
+               !deallocate(surfaceVelocityZonal, surfaceVelocityMeridional, iceVelocityZonalNew, iceVelocityMeridionalNew)
+               !deallocate(seaIceStressZonal, seaIceStressMeridional)
+               !do iEdge = 1, nEdgesOwned
+               !   kTop = minLevelEdgeBot(iEdge)
+               !   iceOcnVelocityTend(kTop,iEdge) = &
+               !      seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
+               !enddo
+               !call mpas_log_write('End update iceOcnVelocityTend')
+            endif
+
             bottomDepthEdge(:) = 0.0_RKIND
             !$omp parallel
             !$omp do schedule(runtime) &
