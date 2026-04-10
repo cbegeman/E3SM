@@ -49,10 +49,9 @@ module ocn_surface_bulk_forcing
 
    public :: ocn_surface_bulk_forcing_tracers, &
              ocn_surface_bulk_forcing_vel, &
-             ocn_surface_bulk_forcing_split_vel, &
              ocn_surface_bulk_forcing_thick, &
              ocn_surface_bulk_forcing_init, &
-             ocn_surface_bulk_forcing_split, &
+             ocn_surface_bulk_forcing_sea_ice, &
              ocn_surface_bulk_forcing_tracers_subglacial_runoff, &
              ocn_surface_bulk_forcing_thick_subglacial_runoff
 
@@ -219,129 +218,9 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_surface_bulk_forcing_split_vel( &
-                               sfcStressZonal, sfcStressMerid, sfcStress, &
-                               sfcStressMag, err)!{{{
-
-      !-----------------------------------------------------------------
-      ! input variables
-      !-----------------------------------------------------------------
-
-      real (kind=RKIND), dimension(:), intent(in) :: &
-         sfcStressZonal, sfcStressMerid
-
-      !-----------------------------------------------------------------
-      ! input/output variables
-      !-----------------------------------------------------------------
-
-      real (kind=RKIND), dimension(:), intent(inout) :: &
-         sfcStress, & !< [inout] Array for surface stress
-         sfcStressMag !< [inout] Array for magnitude of surface stress
-
-      !-----------------------------------------------------------------
-      ! output variables
-      !-----------------------------------------------------------------
-
-      integer, intent(out) :: err !< [out] Error flag
-
-      !-----------------------------------------------------------------
-      ! local variables
-      !-----------------------------------------------------------------
-
-      integer ::         &
-         iEdge, iCell,   &! loop indices for edge, cell loops
-         nCells, nEdges, &! number of cells, edges participating
-         cell1, cell2
-
-      real (kind=RKIND), dimension(:), pointer :: &
-         meridWSEdge,   &! meridional wind stress avg to edge
-         zonalWSEdge     ! zonal wind stress averaged to edge
-
-      ! End preamble
-      !-----------------------------------------------------------------
-      ! Begin code
-
-      !*** Set error code and exit early if bulk wind stress not on
-      !*** Otherwise start timer
-
-      call mpas_log_write('ocn_surface_bulk_forcing_split_vel: start')
-      err = 0
-      if (bulkWindStressOff) return
-
-
-      !*** Transfer data to device
-      !$acc enter data &
-      !$acc    copyin(sfcStressZonal, sfcStressMerid)
-
-      call mpas_log_write('sfcStressZonal, Merid = $r, $r', &
-         realArgs=(/sfcStressZonal(1), sfcStressMerid(1)/))
-
-      !*** Forcing needed over halo regions
-
-      nEdges = nEdgesHalo(3)
-      nCells = nCellsHalo(2)
-
-      !*** Convert coupled climate model wind stress to internal
-      !*** ocean model wind stress by averaging cell-centered wind
-      !*** stress to edges and then rotating vectors
-
-      allocate(meridWSEdge(nEdges), &
-               zonalWSEdge(nEdges))
-
-#ifdef MPAS_OPENACC
-      !$acc enter data create(meridWSEdge, zonalWSEdge)
-#endif
-
-      call mpas_log_write('Start stress interp')
-      if (config_bulk_wind_stress_interp_isotropic) then
-
-        call mpas_vector_cell_to_edge_isotropic(sfcStressZonal, sfcStressMerid, &
-          nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
-          zonalWSEdge, meridWSEdge)
-
-      else
-
-        call mpas_vector_cell_to_edge_anisotropic(sfcStressZonal, sfcStressMerid, &
-          nEdges, cellsOnEdge, zonalWSEdge, meridWSEdge)
-
-      end if
-      call mpas_log_write('End stress interp')
-
-      call mpas_log_write('sfcStress on edges $r', realArgs=(/sfcStress(1)/))
-      !$omp parallel
-      !$omp do schedule(runtime)
-      do iEdge = 1, nEdges
-        sfcStress(iEdge) = sfcStress(iEdge) + &
-                           cos(angleEdge(iEdge))*zonalWSEdge(iEdge) + &
-                           sin(angleEdge(iEdge))*meridWSEdge(iEdge)
-      end do
-      !$omp end do
-      !$omp end parallel
-      call mpas_log_write('End sfcStress on edges $r', realArgs=(/sfcStress(1)/))
-
-      call mpas_log_write('sfcStress on cells $r', realArgs=(/sfcStressMag(1)/))
-      !$omp parallel
-      !$omp do schedule(runtime)
-      do iCell = 1, nCells
-        sfcStressMag(iCell) = sfcStressMag(iCell) + &
-                              sqrt( sfcStressZonal(iCell)**2 &
-                                  + sfcStressMerid(iCell)**2 )
-      end do
-      !$omp end do
-      !$omp end parallel
-      call mpas_log_write('end sfcStress on cells $r', realArgs=(/sfcStressMag(1)/))
-
-      deallocate(zonalWSEdge, meridWSEdge)
-
-      call mpas_log_write('ocn_surface_bulk_forcing_split_vel: end')
-
-      !-----------------------------------------------------------------
-
-   end subroutine ocn_surface_bulk_forcing_split_vel!}}}
-
    subroutine ocn_surface_bulk_forcing_vel( &
-                               forcingPool, sfcStress, &
-                               sfcStressMag, velocityZonal, &
+                               forcingPool, sfcStressZonal, sfcStressMerid, &
+                               sfcStress, sfcStressMag, velocityZonal, &
                                velocityMeridional, normalVelocity, err)!{{{
 
       !-----------------------------------------------------------------
@@ -351,6 +230,8 @@ contains
       type (mpas_pool_type), intent(in) :: &
          forcingPool         !< [in] Forcing structure w/ sfc stresses
 
+      real (kind=RKIND), dimension(:), intent(in) :: &
+         sfcStressZonal, sfcStressMerid
       real (kind=RKIND), dimension(:,:), intent(in) :: &
          velocityZonal, velocityMeridional, normalVelocity
 
@@ -410,7 +291,7 @@ contains
 
       !*** Transfer data to device
       !$acc enter data &
-      !$acc    copyin(windStressZonal, windStressMerid, windSpeed10m, iceFraction, & 
+      !$acc    copyin(sfcStressZonal, sfcStressMerid, windSpeed10m, iceFraction, & 
       !$acc           velocityZonal, velocityMeridional, normalVelocity, ekeCorrection)
 
       !*** Forcing needed over halo regions
@@ -431,13 +312,13 @@ contains
 
       if (config_bulk_wind_stress_interp_isotropic) then
 
-        call mpas_vector_cell_to_edge_isotropic(windStressZonal, windStressMerid, &
+        call mpas_vector_cell_to_edge_isotropic(sfcStressZonal, sfcStressMerid, &
           nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
           zonalWSEdge, meridWSEdge)
 
       else
 
-        call mpas_vector_cell_to_edge_anisotropic(windStressZonal, windStressMerid, &
+        call mpas_vector_cell_to_edge_anisotropic(sfcStressZonal, sfcStressMerid, &
           nEdges, cellsOnEdge, zonalWSEdge, meridWSEdge)
 
       end if
@@ -545,7 +426,7 @@ contains
       !*** Transfer any needed data back to host and delete inputs
       !$acc exit data &
       !$acc    copyout(ekeCorrection) &
-      !$acc    delete(windStressZonal, windStressMerid, windSpeed10m, iceFraction, &
+      !$acc    delete(sfcStressZonal, sfcStressMerid, windSpeed10m, iceFraction, &
       !$acc           velocityZonal, velocityMeridional, normalVelocity, ekeCorrection)
 #endif
 
@@ -809,10 +690,9 @@ contains
 !
 !-----------------------------------------------------------------------
 
-   subroutine ocn_surface_bulk_forcing_split( &
-                  totalStressZonal, totalStressMeridional, iceFraction, &
+   subroutine ocn_surface_bulk_forcing_sea_ice( &
+                  iceFraction, &
                   iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional,  &
-                  airOcnStressZonal, airOcnStressMeridional,            &
                   iceOcnStressZonal, iceOcnStressMeridional, err)!{{{
 
       !-----------------------------------------------------------------
@@ -820,7 +700,6 @@ contains
       !-----------------------------------------------------------------
 
       real(kind=RKIND), dimension(:), intent(in) :: &
-                  totalStressZonal, totalStressMeridional, &
                   iceOcnRelVelocityZonal, iceOcnRelVelocityMeridional
 
       real(kind=RKIND), dimension(:), intent(in) :: iceFraction
@@ -831,7 +710,6 @@ contains
 
       !real(kind=RKIND), dimension(:), allocatable, intent(out) :: &
       real(kind=RKIND), dimension(:), intent(inout) ::  &
-                  airOcnStressZonal, airOcnStressMeridional, &
                   iceOcnStressZonal, iceOcnStressMeridional
       integer, intent(out) :: err !< [out] error flag
 
@@ -846,8 +724,6 @@ contains
       err = 0
 
       if (.not. config_use_drag_from_sea_ice_velocity) then
-         airOcnStressZonal = totalStressZonal
-         airOcnStressMeridional = totalStressMeridional
          iceOcnStressZonal(:) = 0.0_RKIND
          iceOcnStressMeridional(:) = 0.0_RKIND
          return
@@ -866,14 +742,12 @@ contains
                                     iceOcnRelVelocityMeridional(iCell)**2)
         iceOcnStressZonal(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityZonal(iCell)
         iceOcnStressMeridional(iCell) = iceFraction(iCell) * dragCoeff * rho_sw * iceOcnRelVelocityAbs * iceOcnRelVelocityMeridional(iCell)
-        airOcnStressZonal(iCell) = totalStressZonal(iCell) - iceOcnStressZonal(iCell)
-        airOcnStressMeridional(iCell) = totalStressMeridional(iCell) - iceOcnStressMeridional(iCell)
       enddo
       !$omp end do
       !$omp end parallel
       !-----------------------------------------------------------------
 
-   end subroutine ocn_surface_bulk_forcing_split!}}}
+   end subroutine ocn_surface_bulk_forcing_sea_ice!}}}
 
 !***********************************************************************
 !
