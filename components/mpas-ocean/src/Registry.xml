@@ -3826,6 +3826,9 @@
 		<var name="seaIceSurfaceStress" type="real" dimensions="nEdges Time" units="N m^-2"
 			 description="The component of the total surface stress on the ocean defined at edge midpoints and pointing in the direction of the edge normal.  This field the sum of constituent stresses (e.g. wind stress and top drag) and is used to compute a tendency in the normal velocity."
 		/>
+		<var name="seaIceSurfaceStressMagnitude" type="real" dimensions="nCells Time" units="N m^-2"
+			 description="The magnitude of the total surface stress, at cell centers."
+		/>
 		<var name="surfaceStress" type="real" dimensions="nEdges Time" units="N m^-2"
 			 description="The component of the total surface stress on the ocean defined at edge midpoints and pointing in the direction of the edge normal.  This field the sum of constituent stresses (e.g. wind stress and top drag) and is used to compute a tendency in the normal velocity."
 		/>
