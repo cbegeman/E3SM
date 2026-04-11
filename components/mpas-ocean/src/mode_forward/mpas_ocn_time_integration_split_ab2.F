@@ -166,6 +166,7 @@ module ocn_time_integration_split_ab2
          tracersIdealAgeFieldsPool     ! structure holding idealAge-related fields
 
       logical :: &
+         seaIceDrag, &
          activeTracersOnly   ! only compute tendencies for active tracers
 
       logical, pointer :: &
@@ -960,26 +961,28 @@ module ocn_time_integration_split_ab2
                   + normalBaroclinicVelocityNew(kTop,iEdge)
             enddo
             call mpas_log_write('SurfaceVelocityNew = $r', realArgs=(/surfaceVelocityNew(1)/))
-            call mpas_log_write('Start rotate iceVelocity')
-            nCells = nCellsOwned
-            if (j == 1) then
-              dt_rotate = dt / 2
-            else
-              dt_rotate = dt
+            if ( seaIceDrag ) then
+               call mpas_log_write('Start rotate iceVelocity')
+               nCells = nCellsOwned
+               if (j == 1) then
+                 dt_rotate = dt / 2
+               else
+                 dt_rotate = dt
+               endif
+               !$omp parallel
+               !$omp do schedule(runtime) &
+               !$omp    private(theta)
+               do iCell = 1, nCellsAll
+                 theta = 2.0_RKIND * pi * fCell(iCell) * (daysSinceStartOfSim * 86400. + dt_rotate)
+                 iceVelocityZonalNew(iCell) = iceVelocityZonalInit(iCell) * cos(theta) &
+                                            + iceVelocityMeridionalInit(iCell) * sin(theta)
+                 iceVelocityMeridionalNew(iCell) = - iceVelocityZonalInit(iCell) * sin(theta) &
+                                                   + iceVelocityMeridionalInit(iCell) * cos(theta)
+               enddo
+               !$omp end do
+               !$omp end parallel
+               call mpas_log_write('iceVelocityZonal,Merid = $r, $r', realArgs=(/iceVelocityZonalNew(1), iceVelocityMeridionalNew(1)/))
             endif
-            !$omp parallel
-            !$omp do schedule(runtime) &
-            !$omp    private(theta)
-            do iCell = 1, nCellsAll
-              theta = 2.0_RKIND * pi * fCell(iCell) * (daysSinceStartOfSim * 86400. + dt_rotate)
-              iceVelocityZonalNew(iCell) = iceVelocityZonalInit(iCell) * cos(theta) &
-                                         + iceVelocityMeridionalInit(iCell) * sin(theta)
-              iceVelocityMeridionalNew(iCell) = - iceVelocityZonalInit(iCell) * sin(theta) &
-                                                + iceVelocityMeridionalInit(iCell) * cos(theta)
-            enddo
-            !$omp end do
-            !$omp end parallel
-            call mpas_log_write('iceVelocityZonal,Merid = $r, $r', realArgs=(/iceVelocityZonalNew(1), iceVelocityMeridionalNew(1)/))
 
             bottomDepthEdge(:) = 0.0_RKIND
             !$omp parallel
@@ -3218,6 +3221,8 @@ module ocn_time_integration_split_ab2
                layerThickness(minLevelCell(iCell),iCell) = refBottomDepth(minLevelCell(iCell))
             enddo
          endif
+
+         seaIceDrag = .true.
 
          do iEdge = 1, nEdges
             cell1 = cellsOnEdge(1,iEdge)
