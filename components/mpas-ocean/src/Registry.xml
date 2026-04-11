@@ -686,6 +686,10 @@
 					description="Controls if variable drag is enabled."
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_use_drag_from_sea_ice_velocity" type="logical" default_value=".false."
+					description="Controls if forcing variables seaIceVelocityZonal and seaIceVelocityMeridional are used to compute the drag term."
+					possible_values=".true. or .false."
+		/>
 		<nml_option name="config_use_bulk_wind_stress" type="logical" default_value=".false."
 					description="Controls if zonal and meridional components of windstress are used to build surface wind stress."
 					possible_values=".true. or .false."
