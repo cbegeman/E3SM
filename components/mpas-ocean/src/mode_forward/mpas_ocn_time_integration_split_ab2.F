@@ -29,6 +29,7 @@ module ocn_time_integration_split_ab2
    use mpas_constants
    use mpas_dmpar
    use mpas_vector_reconstruction
+   use mpas_vector_operations
    use mpas_spline_interpolation
    use mpas_timer
    use mpas_threading
@@ -193,6 +194,8 @@ module ocn_time_integration_split_ab2
          iceVelocityMeridionalInit = 0.01_RKIND
 
       real (kind=RKIND) :: &
+         iceFractionEdge, &
+         iceOcnRelVelocity, &
          theta, &
          dt_rotate, &
          normalThicknessFluxSum, &! sum of thickness flux in column
@@ -217,6 +220,7 @@ module ocn_time_integration_split_ab2
          btrvel_temp,      &
          sshTemp,          &
          wctEdge,          &! flux water column thickness at edge
+         seaIceSfcStress, &
          surfaceVelocityNew, &
          iceVelocityZonalCur, iceVelocityMeridionalCur, &
          iceVelocityZonalNew, iceVelocityMeridionalNew, &
@@ -982,6 +986,31 @@ module ocn_time_integration_split_ab2
                !$omp end do
                !$omp end parallel
                call mpas_log_write('iceVelocityZonal,Merid = $r, $r', realArgs=(/iceVelocityZonalNew(1), iceVelocityMeridionalNew(1)/))
+
+               nEdges = nEdgesHalo(3)
+               allocate(meridSIEdge(nEdges), zonalSIEdge(nEdges))
+               call mpas_vector_cell_to_edge_isotropic(iceVelocityZonalNew, iceVelocityMeridionalNew, &
+                 nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
+                 zonalSIEdge, meridSIEdge)
+
+               !$omp parallel
+               !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity, kTop)
+               do iEdge = 1, nEdges
+                 iceFractionEdge = 0.5_RKIND * &
+                        (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
+                 seaIceVelocity(iEdge) = cos(angleEdge(iEdge))*zonalSIEdge(iEdge) + &
+                                         sin(angleEdge(iEdge))*meridSIEdge(iEdge)
+                 iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
+                 seaIceSfcStress(iEdge) = iceFractionEdge * dragCoeff * &
+                        abs(iceOcnRelVelocity) * iceOcnRelVelocity
+                 kTop = minLevelEdgeBot(iEdge)
+                 iceOcnVelocityTend(kTop,iEdge) = &
+                    seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
+               end do
+               !$omp end do
+               !$omp end parallel
+               deallocate(meridSIEdge, zonalSIEdge)
+
             endif
 
             bottomDepthEdge(:) = 0.0_RKIND
