@@ -603,6 +603,8 @@ module ocn_time_integration_split_ab2
       call mpas_timer_stop("se prep")
 
       call mpas_pool_get_array(forcingPool, 'seaIcePressure', seaIcePressure)
+      !call mpas_pool_get_array(forcingPool, 'surfaceStress', sfcStress)
+      !call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', sfcStressMag)
       call mpas_pool_get_array(forcingPool, 'iceFraction', iceFraction)
       call mpas_pool_get_array(forcingPool, 'atmosphericPressure', atmosphericPressure)
       call mpas_pool_get_array(forcingPool, 'frazilSurfacePressure', frazilSurfacePressure)
@@ -778,6 +780,49 @@ module ocn_time_integration_split_ab2
                            stage1_tend_time, domain % dminfo, dt)
          call mpas_log_write('Start iceOcnVelocityTend initialization')
          allocate(iceOcnVelocityTend(nVertLevels,nEdgesOwned))
+         nEdges = nEdgesHalo(3)
+         allocate(seaIceSfcStress(nEdges), meridSIEdge(nEdges), zonalSIEdge(nEdges), seaIceVelocity(nEdges))
+         call mpas_vector_cell_to_edge_isotropic(iceVelocityZonalNew, iceVelocityMeridionalNew, &
+           nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
+           zonalSIEdge, meridSIEdge)
+         call mpas_log_write('zonalSIEdge, meridSIEdge = $r, $r', realArgs=(/zonalSIEdge(1), meridSIEdge(1)/))
+
+         !$omp parallel
+         !$omp do schedule(runtime)
+         do iEdge = 1, nEdges
+           seaIceVelocity(iEdge) = cos(angleEdge(iEdge))*zonalSIEdge(iEdge) + &
+                                   sin(angleEdge(iEdge))*meridSIEdge(iEdge)
+         end do
+         !$omp end do
+         !$omp end parallel
+
+         !$omp parallel
+         !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity)
+         do iEdge = 1, nEdges
+           iceFractionEdge = 1.0_RKIND
+           !iceFractionEdge = 0.5_RKIND * &
+           !       (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
+           iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
+           seaIceSfcStress(iEdge) = iceFractionEdge * dragCoeff * &
+                  abs(iceOcnRelVelocity) * iceOcnRelVelocity
+         end do
+         !$omp end do
+         !$omp end parallel
+         deallocate(meridSIEdge, zonalSIEdge)
+
+         !$omp parallel
+         !$omp do schedule(runtime) private(kTop)
+         do iEdge = 1, nEdges
+           kTop = minLevelEdgeBot(iEdge)
+           iceOcnVelocityTend(kTop,iEdge) = &
+              seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
+         end do
+         !$omp end do
+         !$omp end parallel
+
+         call mpas_log_write('DEBUG iEdge=1: iceOcnVelocityTend=$r, iceOcnRelVelocity=$r, seaIceSfcStress=$r', &
+           realArgs=(/iceOcnVelocityTend(1,1), seaIceVelocity(1) - surfaceVelocityNew(1), seaIceSfcStress(1)/))
+         deallocate(seaIceSfcStress, seaIceVelocity)
          iceOcnVelocityTend(:,:) = 0.0_RKIND
          allocate(surfaceVelocityNew(nEdgesOwned))
 
@@ -993,28 +1038,48 @@ module ocn_time_integration_split_ab2
                call mpas_log_write('iceVelocityZonal,Merid = $r, $r', realArgs=(/iceVelocityZonalNew(1), iceVelocityMeridionalNew(1)/))
 
                nEdges = nEdgesHalo(3)
-               allocate(meridSIEdge(nEdges), zonalSIEdge(nEdges), seaIceVelocity(nEdges))
+               allocate(seaIceSfcStress(nEdges), meridSIEdge(nEdges), zonalSIEdge(nEdges), seaIceVelocity(nEdges))
                call mpas_vector_cell_to_edge_isotropic(iceVelocityZonalNew, iceVelocityMeridionalNew, &
                  nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
                  zonalSIEdge, meridSIEdge)
+               call mpas_log_write('zonalSIEdge, meridSIEdge = $r, $r', realArgs=(/zonalSIEdge(1), meridSIEdge(1)/))
 
                !$omp parallel
-               !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity, kTop)
+               !$omp do schedule(runtime)
                do iEdge = 1, nEdges
-                 iceFractionEdge = 0.5_RKIND * &
-                        (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
                  seaIceVelocity(iEdge) = cos(angleEdge(iEdge))*zonalSIEdge(iEdge) + &
                                          sin(angleEdge(iEdge))*meridSIEdge(iEdge)
+               end do
+               !$omp end do
+               !$omp end parallel
+
+               !$omp parallel
+               !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity)
+               do iEdge = 1, nEdges
+                 iceFractionEdge = 1.0_RKIND
+                 !iceFractionEdge = 0.5_RKIND * &
+                 !       (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
                  iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
                  seaIceSfcStress(iEdge) = iceFractionEdge * dragCoeff * &
                         abs(iceOcnRelVelocity) * iceOcnRelVelocity
+               end do
+               !$omp end do
+               !$omp end parallel
+               deallocate(meridSIEdge, zonalSIEdge)
+
+               !$omp parallel
+               !$omp do schedule(runtime) private(kTop)
+               do iEdge = 1, nEdges
                  kTop = minLevelEdgeBot(iEdge)
                  iceOcnVelocityTend(kTop,iEdge) = &
                     seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
                end do
                !$omp end do
                !$omp end parallel
-               deallocate(meridSIEdge, zonalSIEdge, seaIceVelocity)
+
+               call mpas_log_write('DEBUG iEdge=1: iceOcnVelocityTend=$r, iceOcnRelVelocity=$r, seaIceSfcStress=$r', &
+                 realArgs=(/iceOcnVelocityTend(1,1), seaIceVelocity(1) - surfaceVelocityNew(1), seaIceSfcStress(1)/))
+               deallocate(seaIceSfcStress, seaIceVelocity)
 
             endif
 
@@ -3250,7 +3315,8 @@ module ocn_time_integration_split_ab2
             enddo
          endif
 
-         seaIceDrag = .true.
+         seaIceDrag = config_use_drag_from_sea_ice_velocity
+         dragCoeff = 5.36e-3_RKIND ! default value given in sea ice namelist
 
          do iEdge = 1, nEdges
             cell1 = cellsOnEdge(1,iEdge)
