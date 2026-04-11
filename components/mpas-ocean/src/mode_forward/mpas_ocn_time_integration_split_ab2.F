@@ -1041,11 +1041,13 @@ module ocn_time_integration_split_ab2
                !$omp do schedule(runtime) &
                !$omp    private(theta)
                do iCell = 1, nCellsAll
-                 theta = 2.0_RKIND * pi * fCell(iCell) * (daysSinceStartOfSim * 86400. + dt_rotate)
-                 iceVelocityZonalNew(iCell) = iceVelocityZonalInit * cos(theta) &
-                                            + iceVelocityMeridionalInit * sin(theta)
-                 iceVelocityMeridionalNew(iCell) = - iceVelocityZonalInit * sin(theta) &
-                                                   + iceVelocityMeridionalInit * cos(theta)
+                 theta = 2.0_RKIND * pi * fCell(iCell) * dt_rotate
+                 iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell) + ( &
+                                              iceVelocityZonalInit * cos(theta) &
+                                            + iceVelocityMeridionalInit * sin(theta) )
+                 iceVelocityMeridionalNew(iCell) = iceVelocityMeridionalCur(iCell) + ( &
+                                                   - iceVelocityZonalInit * sin(theta) &
+                                                   + iceVelocityMeridionalInit * cos(theta) )
                enddo
                !$omp end do
                !$omp end parallel
