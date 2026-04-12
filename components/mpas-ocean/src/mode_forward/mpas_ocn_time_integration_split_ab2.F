@@ -192,8 +192,12 @@ module ocn_time_integration_split_ab2
          cellHaloComputeCounter   ! halo updates during cycling
 
       real (kind=RKIND), parameter :: &
-         iceVelocityZonalInit = 0.01_RKIND, &
-         iceVelocityMeridionalInit = 0.01_RKIND
+         iceVelocityZonal0 = 0.1_RKIND, &
+         iceVelocityMeridional0 = 0.0_RKIND, &
+         iceVelocityZonalInit = 0.05_RKIND, &
+         iceVelocityMeridionalInit = 0.05_RKIND, &
+         iceVelocityZonalM2 = 0.02_RKIND, &    ! M2 semidiurnal amplitude (zonal)
+         iceVelocityMeridionalM2 = 0.02_RKIND  ! M2 semidiurnal amplitude (meridional)
 
       real (kind=RKIND) :: &
          iceFractionEdge, &
@@ -647,12 +651,15 @@ module ocn_time_integration_split_ab2
       !$omp    private(theta)
       do iCell = 1, nCellsAll
         theta = 2.0_RKIND * pi * fCell(iCell) * (daysSinceStartOfSim * 86400.)
-        iceVelocityZonalCur(iCell) = ( &
+        iceVelocityZonalCur(iCell) = iceVelocityZonal0 + ( &
                                    iceVelocityZonalInit * cos(theta) &
-                                 + iceVelocityMeridionalInit * sin(theta) )
-        iceVelocityMeridionalCur(iCell) = 0.01_RKIND * ( &
+                                 + iceVelocityMeridionalInit * sin(theta) ) &
+                                 + iceVelocityZonalM2 * cos(2.0_RKIND * pi * daysSinceStartOfSim / 0.5_RKIND)
+        iceVelocityMeridionalCur(iCell) = iceVelocityMeridional0 + ( &
                                  - iceVelocityZonalInit * sin(theta) &
-                                 + iceVelocityMeridionalInit * cos(theta) )
+                                 + iceVelocityMeridionalInit * cos(theta) ) &
+                                 + iceVelocityMeridionalM2 * sin(2.0_RKIND * pi * daysSinceStartOfSim / 0.5_RKIND)
+
       enddo
       !$omp end do
       !$omp end parallel
@@ -702,7 +709,7 @@ module ocn_time_integration_split_ab2
         iceOcnVelocityTend(:,iEdge) = 0.0_RKIND
         kTop = minLevelEdgeBot(iEdge)
         iceOcnVelocityTend(kTop,iEdge) = &
-           seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
+           seaIceSfcStress(iEdge)/layerThickEdgeMean(kTop,iEdge)
       end do
       !$omp end do
       !$omp end parallel
@@ -1091,7 +1098,7 @@ module ocn_time_integration_split_ab2
                do iEdge = 1, nEdges
                  kTop = minLevelEdgeBot(iEdge)
                  iceOcnVelocityTend(kTop,iEdge) = &
-                    seaIceSfcStress(iEdge)/rho_sw/layerThickEdgeMean(kTop,iEdge)
+                    seaIceSfcStress(iEdge)/layerThickEdgeMean(kTop,iEdge)
                end do
                !$omp end do
                !$omp end parallel
