@@ -1052,9 +1052,13 @@ module ocn_time_integration_split_ab2
                  iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell) + ( &
                                               iceVelocityZonalInit * cos(theta) &
                                             + iceVelocityMeridionalInit * sin(theta) )
+                 # Add this line for perfect submodel
+                 #                          + iceVelocityZonalM2 * cos(2.0_RKIND * pi * daysSinceStartOfSim / 0.5_RKIND)
                  iceVelocityMeridionalNew(iCell) = iceVelocityMeridionalCur(iCell) + ( &
                                                    - iceVelocityZonalInit * sin(theta) &
                                                    + iceVelocityMeridionalInit * cos(theta) )
+                 # Add this line for perfect submodel
+                 #                                 + iceVelocityMeridionalM2 * sin(2.0_RKIND * pi * daysSinceStartOfSim / 0.5_RKIND)
                enddo
                !$omp end do
                !$omp end parallel
