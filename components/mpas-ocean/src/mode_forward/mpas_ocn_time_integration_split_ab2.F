@@ -191,14 +191,6 @@ module ocn_time_integration_split_ab2
          edgeHaloComputeCounter, &! halo counters to reduce
          cellHaloComputeCounter   ! halo updates during cycling
 
-      real (kind=RKIND), parameter :: &
-         iceVelocityZonal0 = 0.1_RKIND, &
-         iceVelocityMeridional0 = 0.0_RKIND, &
-         iceVelocityZonalInit = 0.05_RKIND, &
-         iceVelocityMeridionalInit = 0.05_RKIND, &
-         iceVelocityZonalM2 = 0.02_RKIND, &    ! M2 semidiurnal amplitude (zonal)
-         iceVelocityMeridionalM2 = 0.02_RKIND  ! M2 semidiurnal amplitude (meridional)
-
       real (kind=RKIND) :: &
          iceFractionEdge, &
          iceOcnRelVelocity, &
@@ -229,12 +221,12 @@ module ocn_time_integration_split_ab2
          wctEdge,          &! flux water column thickness at edge
          seaIceSfcStress, &
          surfaceVelocityNew, &
-         iceVelocityZonalCur, iceVelocityMeridionalCur, &
          iceVelocityZonalNew, iceVelocityMeridionalNew, &
          bottomDepthEdge
 
       ! State Array Pointers
       real (kind=RKIND), dimension(:), pointer :: &
+         iceVelocityZonalCur, iceVelocityMeridionalCur, &
          sshSubcycleCur,              &! subcycl ssh    at current time
          sshSubcycleNew,              &! subcycl ssh    at new     time
          sshSubcycleCurWithTides,     &! subcycl ssh    at current time
@@ -607,6 +599,10 @@ module ocn_time_integration_split_ab2
 
       call mpas_timer_stop("se prep")
 
+      ! iceVelocity*Cur will hold the velocity at the beg of each coupling interval
+      call mpas_pool_get_array(forcingPool, 'seaIceVelocityZonal', iceVelocityZonalCur)
+      call mpas_pool_get_array(forcingPool, 'seaIceVelocityMeridional', iceVelocityMeridionalCur)
+
       call mpas_pool_get_array(forcingPool, 'seaIcePressure', seaIcePressure)
       !call mpas_pool_get_array(forcingPool, 'surfaceStress', sfcStress)
       !call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', sfcStressMag)
@@ -643,28 +639,9 @@ module ocn_time_integration_split_ab2
       !$omp end do
       !$omp end parallel
 
-      ! iceVelocity*Cur will hold the velocity at the beg of each time step
       nCells = nCellsOwned
-      allocate(iceVelocityZonalCur(nCells), iceVelocityMeridionalCur(nCells))
-      !$omp parallel
-      !$omp do schedule(runtime) &
-      !$omp    private(theta)
-      do iCell = 1, nCellsAll
-        theta = 2.0_RKIND * pi * fCell(iCell) * (daysSinceStartOfSim * 86400.)
-        iceVelocityZonalCur(iCell) = iceVelocityZonal0 + ( &
-                                   iceVelocityZonalInit * cos(theta) &
-                                 + iceVelocityMeridionalInit * sin(theta) ) &
-                                 + iceVelocityZonalM2 * cos(2.0_RKIND * pi * daysSinceStartOfSim / 0.5_RKIND)
-        iceVelocityMeridionalCur(iCell) = iceVelocityMeridional0 + ( &
-                                 - iceVelocityZonalInit * sin(theta) &
-                                 + iceVelocityMeridionalInit * cos(theta) ) &
-                                 + iceVelocityMeridionalM2 * sin(2.0_RKIND * pi * daysSinceStartOfSim / 0.5_RKIND)
-
-      enddo
-      !$omp end do
-      !$omp end parallel
-
-      ! iceVelocity*New will be updated each iteration
+      ! iceVelocity*New will initially hold the sea ice velocity from coupling and
+      ! be updated each iteration
       allocate(iceVelocityZonalNew(nCells), iceVelocityMeridionalNew(nCells))
       do iCell = 1, nCellsAll
         iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell)
@@ -1044,21 +1021,20 @@ module ocn_time_integration_split_ab2
                else
                  dt_rotate = dt
                endif
+
+               ! Assume that the inertial oscillations have an amplitude equal to the ice velocity
+
                !$omp parallel
                !$omp do schedule(runtime) &
                !$omp    private(theta)
                do iCell = 1, nCellsAll
                  theta = 2.0_RKIND * pi * fCell(iCell) * dt_rotate
                  iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell) + ( &
-                                              iceVelocityZonalInit * cos(theta) &
-                                            + iceVelocityMeridionalInit * sin(theta) )
-                 # Add this line for perfect submodel
-                 #                          + iceVelocityZonalM2 * cos(2.0_RKIND * pi * daysSinceStartOfSim / 0.5_RKIND)
+                                              iceVelocityZonalCur(iCell) * cos(theta) &
+                                            + iceVelocityMeridionalCur(iCell) * sin(theta) )
                  iceVelocityMeridionalNew(iCell) = iceVelocityMeridionalCur(iCell) + ( &
-                                                   - iceVelocityZonalInit * sin(theta) &
-                                                   + iceVelocityMeridionalInit * cos(theta) )
-                 # Add this line for perfect submodel
-                 #                                 + iceVelocityMeridionalM2 * sin(2.0_RKIND * pi * daysSinceStartOfSim / 0.5_RKIND)
+                                                   - iceVelocityZonalCur(iCell) * sin(theta) &
+                                                   + iceVelocityMeridionalCur(iCell) * cos(theta) )
                enddo
                !$omp end do
                !$omp end parallel
