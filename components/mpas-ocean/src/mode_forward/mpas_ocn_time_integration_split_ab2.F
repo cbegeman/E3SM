@@ -671,9 +671,8 @@ module ocn_time_integration_split_ab2
       !$omp parallel
       !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity)
       do iEdge = 1, nEdgesOwned
-        iceFractionEdge = 1.0_RKIND
-        !iceFractionEdge = 0.5_RKIND * &
-        !       (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
+        iceFractionEdge = 0.5_RKIND * &
+               (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
         iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
         seaIceSfcStress(iEdge) = iceFractionEdge * dragCoeff * &
                abs(iceOcnRelVelocity) * iceOcnRelVelocity
