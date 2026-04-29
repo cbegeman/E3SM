@@ -2092,11 +2092,22 @@ contains
 
       do i = 1, nCellsSolve
         n = n + 1
+        if ( iceFractionField % isActive ) then
+           iceFraction(i) = x2o_o(index_x2o_Si_ifrac, n)
+        end if
         if ( windStressZonalField % isActive ) then
-           windStressZonal(i) = x2o_o % rAttr(index_x2o_Foxx_taux, n)
+           if (config_use_drag_from_sea_ice_velocity .and. iceFractionField % isActive ) then
+              windStressZonal(i) = (1 - iceFraction(i)) * x2o_o(index_x2o_Faox_taux, n)
+           else
+              windStressZonal(i) = x2o_o % rAttr(index_x2o_Foxx_taux, n)
+           endif
         end if
         if ( windStressMeridionalField % isActive ) then
-           windStressMeridional(i) = x2o_o % rAttr(index_x2o_Foxx_tauy, n)
+           if (config_use_drag_from_sea_ice_velocity .and. iceFractionField % isActive ) then
+              windStressMeridional(i) = (1 - iceFraction(i)) * x2o_o(index_x2o_Faox_tauy, n)
+           else
+              windStressMeridional(i) = x2o_o % rAttr(index_x2o_Foxx_tauy, n)
+           endif
         end if
 
         if ( latentHeatFluxField % isActive ) then
@@ -2168,9 +2179,6 @@ contains
         if ( seaIcePressureField % isActive ) then
            ! Set seaIcePressure to be limited to 5m of pressure
            seaIcePressure(i) =  min( x2o_o % rAttr(index_x2o_Si_bpress, n), config_density0 * gravity * 5.0_RKIND )
-        end if
-        if ( iceFractionField % isActive ) then
-           iceFraction(i) = x2o_o % rAttr(index_x2o_Si_ifrac, n)
         end if
         if ( iceVelocityZonalField % isActive ) then
            iceVelocityZonal(i) = x2o_o(index_x2o_Si_uSeaIceVelocity, n)
