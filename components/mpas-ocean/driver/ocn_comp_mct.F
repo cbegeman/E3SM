@@ -1769,6 +1769,7 @@ contains
                                   atmosphericPressureField, iceFractionField, &
                                   seaIcePressureField, windSpeedSquared10mField, &
                                   atmosphericCO2Field, atmosphericCO2_ALT_CO2Field,  &
+                                  iceVelocityZonalField, iceVelocityMeridionalField, &
                                   iceFluxDICField, &
                                   iceFluxDONField, &
                                   iceFluxNO3Field, &
@@ -1807,6 +1808,7 @@ contains
                                   stokesDriftMeridionalWavenumberField
 
    real (kind=RKIND), dimension(:), pointer :: windStressZonal, windStressMeridional, &
+                                               iceVelocityZonal, iceVelocityMeridional, &
                                                latentHeatFlux, sensibleHeatFlux, &
                                                longWaveHeatFluxUp, &
                                                longWaveHeatFluxDown, &
@@ -1908,6 +1910,8 @@ contains
 
       call mpas_pool_get_field(forcingPool, 'windStressZonal', windStressZonalField)
       call mpas_pool_get_field(forcingPool, 'windStressMeridional', windStressMeridionalField)
+      call mpas_pool_get_field(forcingPool, 'iceVelocityZonal', iceVelocityZonalField)
+      call mpas_pool_get_field(forcingPool, 'iceVelocityMeridional', iceVelocityMeridionalField)
       call mpas_pool_get_field(forcingPool, 'latentHeatFlux', latentHeatFluxField)
       call mpas_pool_get_field(forcingPool, 'sensibleHeatFlux', sensibleHeatFluxField)
       call mpas_pool_get_field(forcingPool, 'longWaveHeatFluxUp', longWaveHeatFluxUpField)
@@ -1949,6 +1953,8 @@ contains
 
       windStressZonal => windStressZonalField % array
       windStressMeridional => windStressMeridionalField % array
+      iceVelocityZonal => iceVelocityZonalField % array
+      iceVelocityMeridional => iceVelocityMeridionalField % array
       latentHeatFlux => latentHeatFluxField % array
       sensibleHeatFlux => sensibleHeatFluxField % array
       longWaveHeatFluxUp => longWaveHeatFluxUpField % array
@@ -2165,6 +2171,12 @@ contains
         end if
         if ( iceFractionField % isActive ) then
            iceFraction(i) = x2o_o % rAttr(index_x2o_Si_ifrac, n)
+        end if
+        if ( iceVelocityZonalField % isActive ) then
+           iceVelocityZonal(i) = x2o_o(index_x2o_Si_uSeaIceVelocity, n)
+        end if
+        if ( iceVelocityMeridionalField % isActive ) then
+           iceVelocityMeridional(i) = x2o_o(index_x2o_Si_vSeaIceVelocity, n)
         end if
 
         if ( stokesDriftZonalWavenumberField % isActive ) then
