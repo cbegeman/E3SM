@@ -1379,6 +1379,9 @@ contains
     call seq_flds_add(x2a_fluxes,"Faxx_taux")
     call seq_flds_add(i2x_fluxes,"Fioi_taux")
     call seq_flds_add(x2o_fluxes,"Foxx_taux")
+    call seq_flds_add(x2o_fluxes,"Faox_taux")
+    ! Alternatively, subtract the ice-ocean stress which will already by scaled by iceFraction
+    ! call seq_flds_add(x2o_fluxes,"Fioi_taux")
     longname = 'Zonal surface stress'
     stdname  = 'surface_downward_eastward_stress'
     units    = 'N m-2'
@@ -1402,6 +1405,7 @@ contains
     call seq_flds_add(x2a_fluxes,"Faxx_tauy")
     call seq_flds_add(i2x_fluxes,"Fioi_tauy")
     call seq_flds_add(x2o_fluxes,"Foxx_tauy")
+    call seq_flds_add(x2o_fluxes,"Faox_tauy")
     longname = 'Meridional surface stress'
     stdname  = 'surface_downward_northward_stress'
     units    = 'N m-2'
