@@ -71,6 +71,7 @@ module ocn_diagnostics_variables
    real (kind=RKIND), dimension(:,:), pointer :: RiTopOfEdge
 
    real (kind=RKIND), dimension(:), pointer :: gradSSH
+   real (kind=RKIND), dimension(:), pointer :: seaIceSfcStress
    real (kind=RKIND), dimension(:), pointer :: pressureAdjustedSSH
    real (kind=RKIND), dimension(:), pointer :: pgf_sal
    real (kind=RKIND), dimension(:), pointer :: temp_twd
@@ -195,6 +196,10 @@ module ocn_diagnostics_variables
    real (kind=RKIND), dimension(:), pointer :: gradSSHX
    real (kind=RKIND), dimension(:), pointer :: gradSSHY
    real (kind=RKIND), dimension(:), pointer :: gradSSHZ
+   real (kind=RKIND), dimension(:), pointer :: seaIceStressSSHZonal, seaIceStressMeridional
+   real (kind=RKIND), dimension(:), pointer :: seaIceStressSSHX
+   real (kind=RKIND), dimension(:), pointer :: seaIceStressSSHY
+   real (kind=RKIND), dimension(:), pointer :: seaIceStressSSHZ
 
    real (kind=RKIND), dimension(:), pointer :: barotropicForcing
    real (kind=RKIND), dimension(:), pointer :: barotropicCoriolisTerm
