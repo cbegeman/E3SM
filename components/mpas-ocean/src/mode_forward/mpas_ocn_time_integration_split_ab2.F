@@ -313,6 +313,8 @@ module ocn_time_integration_split_ab2
       ! velocityZonal, velocityMeridional
       ! gradSSH, gradSSHX, gradSSHY, gradSSHZ
       ! gradSSHZonal, gradSSHMeridional
+      ! seaIceStress, seaIceStressX, seaIceStressY, seaIceStressZ
+      ! seaIceStressZonal, seaIceStressMeridional
       ! surfaceVelocity, SSHGradient
       ! temperatureShortWaveTendency
       ! activeTracerHorizontalAdvectionTendency
@@ -3041,6 +3043,12 @@ module ocn_time_integration_split_ab2
                                 gradSSHX, gradSSHY, gradSSHZ,    &
                                 gradSSHZonal, gradSSHMeridional, &
                                 includeHalos = .true.)
+      if (config_use_drag_from_sea_ice_velocity) then
+         call mpas_reconstruct_gpu(meshPool, seaIceSfcStress,                   &
+                                   seaIceStressX, seaIceStressY, seaIceStressZ, &
+                                   seaIceStressZonal, seaIceStressMeridional,   &
+                                   includeHalos = .true.)
+      endif
 
       call mpas_timer_stop('se final mpas reconstruct')
 
