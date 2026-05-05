@@ -3398,8 +3398,8 @@ contains
           o2x_o % rAttr(index_o2x_So_bls, n) = landIceBoundaryLayerTracers(indexBLS,i)
           o2x_o % rAttr(index_o2x_So_htv, n) = landIceTracerTransferVelocities(indexHeatTrans,i)
           o2x_o % rAttr(index_o2x_So_stv, n) = landIceTracerTransferVelocities(indexSaltTrans,i)
-          o2x_o % rAttr(index_o2x_So_rhoeff, n) = 0.0_RKIND
        endif
+
        if (trim(config_glc_thermal_forcing_coupling_mode) == '3d') then
           do iLevel = 1, nGlcZLevels
              if (avgThermalForcingAtZLevelsMask(ilevel, i) > 0.9_RKIND) then
@@ -3424,7 +3424,6 @@ contains
        !write(stderrUnit,*) 'o2x_o(index_o2x_So_bls, n)=',o2x_o(index_o2x_So_bls, n)
        !write(stderrUnit,*) 'o2x_o(index_o2x_So_htv, n)=',o2x_o(index_o2x_So_htv, n)
        !write(stderrUnit,*) 'o2x_o(index_o2x_So_stv, n)=',o2x_o(index_o2x_So_stv, n)
-       !write(stderrUnit,*) 'o2x_o(index_o2x_So_rhoeff, n)=',o2x_o(index_o2x_So_rhoeff, n)
        !o2x_o(index_o2x_So_blt, n) = 0._r8
        !o2x_o(index_o2x_So_bls, n) = 34.5_r8
        !o2x_o(index_o2x_So_htv, n) = 1.e-4_r8
