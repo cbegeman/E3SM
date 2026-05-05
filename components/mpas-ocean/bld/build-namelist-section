@@ -340,7 +340,7 @@ add_default($nl, 'config_land_ice_rho_ocean');
 
 add_default($nl, 'config_land_ice_flux_mode');
 add_default($nl, 'config_land_ice_flux_formulation');
-add_default($nl, 'config_land_ice_flux_useHollandJenkinsAdvDiff');
+add_default($nl, 'config_land_ice_flux_advDiff_formulation');
 add_default($nl, 'config_land_ice_flux_attenuation_coefficient');
 add_default($nl, 'config_land_ice_flux_boundaryLayerThickness');
 add_default($nl, 'config_land_ice_flux_boundaryLayerNeighborWeight');

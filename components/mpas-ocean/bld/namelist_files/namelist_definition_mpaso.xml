@@ -1783,11 +1783,11 @@ Valid values: 'ISOMIP', 'Jenkins', 'HollandJenkins'
 Default: Defined in namelist_defaults.xml
 </entry>
 
-<entry id="config_land_ice_flux_useHollandJenkinsAdvDiff" type="logical"
+<entry id="config_land_ice_flux_advDiff_formulation" type="char*1024"
 	category="land_ice_fluxes" group="land_ice_fluxes">
-If .true. then uses the advection/diffusion scheme of Holland and Jenkins (1999) for ice-shelf heat fluxes
+Selects the advection/diffusion scheme to use. Holland and Jenkins (1999) assumes a dynamic conductive heat flux (equal to heat required to raise melted mass from the ice temperature to interface freezing point) and no conduction if freezing, a prescribed conductive heat flux from a forcing file or coupler, or no conduction for melting or freezing.
 
-Valid values: .true. and .false.
+Valid values: 'HollandJenkins', 'coupled_or_data', 'none'
 Default: Defined in namelist_defaults.xml
 </entry>
 

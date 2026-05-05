@@ -70,7 +70,9 @@ module ocn_surface_land_ice_fluxes
    logical :: &
       landIceDataOn ,         &! flag to determine if using data (prescribed) fluxes
       landIceCoupledOn,       &! flag to determine if using fluxes from the coupler
-      useHollandJenkinsAdvDiff ! use Holland-Jenkins advection-diffusion
+      useHollandJenkinsAdvDiff, & ! use Holland-Jenkins advection-diffusion
+      useConductiveHeatFluxField, & ! use conductive heat flux field from forcing meshPool
+      ignoreConductiveHeatFlux ! ignore conductive heat flux
 
    real (kind=RKIND) :: &
       cpLandIce,        &! specific heat for land ice
@@ -654,11 +656,31 @@ contains
                   landIceHeatFlux(iCell) = freezeHeatFlux(iCell)
                   heatFluxToLandIce(iCell) = freezeIceHeatFlux(iCell)
                end do
-            else ! not using Holland and Jenkins advection/diffusion
+            elseif (useConductiveHeatFluxField) then
                call mpas_pool_get_array(forcingPool, 'landIceConductiveHeatFlux', landIceConductiveHeatFlux)
                call compute_melt_fluxes_with_conduction( &
                   landIceFloatingMask, &
                   landIceConductiveHeatFlux, &
+                  landIceBoundaryLayerTracers(indexBLT,:), &
+                  landIceBoundaryLayerTracers(indexBLS,:), &
+                  landIceTracerTransferVelocities(indexHeatTrans,:), &
+                  landIceTracerTransferVelocities(indexSaltTrans,:), &
+                  landIcePressure, &
+                  landIceInterfaceTracers(indexIT,:), &
+                  landIceInterfaceTracers(indexIS,:), &
+                  landIceFreshwaterFlux, &
+                  landIceHeatFlux, &
+                  heatFluxToLandIce, &
+                  nCells, &
+                  err)
+               if(err .ne. 0) then
+                  call mpas_log_write( &
+                     'compute_melt_fluxes_with_conduction failed.', &
+                     MPAS_LOG_CRIT)
+               end if
+            elseif (ignoreConductiveHeatFlux) then
+               call compute_melt_fluxes( &
+                  landIceFloatingMask, &
                   landIceBoundaryLayerTracers(indexBLT,:), &
                   landIceBoundaryLayerTracers(indexBLS,:), &
                   landIceTracerTransferVelocities(indexHeatTrans,:), &
@@ -881,8 +903,24 @@ contains
          err = 1
       end select
 
-      useHollandJenkinsAdvDiff = &
-                       config_land_ice_flux_useHollandJenkinsAdvDiff
+      useHollandJenkinsAdvDiff = .false.
+      useConductiveHeatFluxField = .false.
+      ignoreConductiveHeatFlux = .false.
+      select case (trim(config_land_ice_flux_advDiff_formulation))
+
+      case ('HollandJenkins')
+         useHollandJenkinsAdvDiff = .true.
+      case ('coupled_or_data')
+         useConductiveHeatFluxField = .true.
+      case ('none')
+         ignoreConductiveHeatFlux = .true.
+      case default
+         call mpas_log_write( &
+            "config_land_ice_advDiff_formulation not one of 'HollandJenkins', " &
+               // "'coupled_or_data' or 'none'.", &
+               MPAS_LOG_CRIT)
+         err = 1
+      end select
 
       !*** Set physical values
 
@@ -1023,9 +1061,6 @@ contains
       ! the temperature fluxes into the ice are:
       !   1. the advection of ice at the interface temperature out of the domain due to melting
       !      (or in due to freezing)
-      !   2. the diffusion (if any) of heat into the ice, based on temperature difference between
-      !      the reference point in the ice (either the surface or the middle of the bottom layer)
-      !      and the interface
       ! NB: sign convention is the same as outOceanHeatFlux, positive into the ocean
       if (outFreshwaterFlux(iCell) > 0) then ! melting
          outIceHeatFlux(iCell) = cpLandIce*outInterfaceTemperature(iCell)*outFreshwaterFlux(iCell)
