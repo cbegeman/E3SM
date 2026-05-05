@@ -2583,20 +2583,6 @@ contains
            end if
         endif
 
-        if ( landIceFreshwaterFluxField % isActive ) then
-           !landIceFreshwaterFlux(i) = x2o_o(index_x2o_Fogx_qicelo, n)
-        end if
-        if ( landIceInterfaceTracersField % isActive ) then
-           !landIceInterfaceTracers(indexIT, i) = x2o_o(index_x2o_Sg_blit, n)
-           !landIceInterfaceTracers(indexIS, i) = x2o_o(index_x2o_Sg_blis, n)
-        end if
-        if ( landIceFractionField % isActive ) then
-           !landIceFraction(i) = x2o_o(index_x2o_Sg_icemask, n)
-        end if
-        !if ( landIcePressureField % isActive ) then
-           !landIcePressure(i) = x2o_o(index_x2o_Sg_lithop, n)
-        !end if
-
         ! BGC fields
         if (config_use_ecosysTracers) then
            if ( windSpeedSquared10mField % isActive ) then
@@ -3282,8 +3268,8 @@ contains
 
        ! Cryo fields
        if (trim(config_land_ice_flux_mode) == 'active' .or. trim(config_land_ice_flux_mode) == 'data') then
-          o2x_o % rAttr(index_o2x_Foxo_ismw, n)  = avgLandIceFreshwaterFlux(i)
-          o2x_o % rAttr(index_o2x_Foxo_ismh, n)  = avgLandIceHeatFlux(i)
+          o2x_o(index_o2x_Foxo_ismw, n)  = avgLandIceFreshwaterFlux(i)
+          o2x_o(index_o2x_Foxo_ismh, n)  = avgLandIceHeatFlux(i)
        endif
        if (config_remove_ais_river_runoff) then
           o2x_o(index_o2x_Foxo_rrofl, n) = avgRemovedRiverRunoffFlux(i)
@@ -3331,11 +3317,11 @@ contains
 
           else
 
-             o2x_o % rAttr(index_o2x_Fioo_q, n)  = 0.0_RKIND
-             o2x_o % rAttr(index_o2x_Fioo_frazil, n) = 0.0_RKIND
+             o2x_o(index_o2x_Fioo_q, n)  = 0.0_RKIND
+             o2x_o(index_o2x_Fioo_frazil, n) = 0.0_RKIND
              if (trim(config_land_ice_flux_mode) == 'active' .or. trim(config_land_ice_flux_mode) == 'data') then
-                o2x_o % rAttr(index_o2x_Foxo_q_li, n) = accumulatedFrazilIceMass(i) * config_frazil_heat_of_fusion / ocn_cpl_dt
-                o2x_o % rAttr(index_o2x_Foxo_frazil_li, n) = accumulatedFrazilIceMass(i) / ocn_cpl_dt
+                o2x_o(index_o2x_Foxo_q_li, n) = accumulatedFrazilIceMass(i) * config_frazil_heat_of_fusion / ocn_cpl_dt
+                o2x_o(index_o2x_Foxo_frazil_li, n) = accumulatedFrazilIceMass(i) / ocn_cpl_dt
              endif
 
           end if
@@ -3385,13 +3371,6 @@ contains
 !JW       o2x_o(index_o2x_So_bls, n) = landIceBoundaryLayerSalinity(i)
 !JW       o2x_o(index_o2x_So_htv, n) = landIceHeatTransferVelocity(i)
 !JW       o2x_o(index_o2x_So_stv, n) = landIceSaltTransferVelocity(i)
-
-!       if ( trim(config_land_ice_flux_mode) .eq. 'active' ) then
-!          o2x_o % rAttr(index_o2x_So_blt, n) = landIceBoundaryLayerTracers(indexBLT,i)
-!          o2x_o % rAttr(index_o2x_So_bls, n) = landIceBoundaryLayerTracers(indexBLS,i)
-!          o2x_o % rAttr(index_o2x_So_htv, n) = landIceTracerTransferVelocities(indexHeatTrans,i)
-!          o2x_o % rAttr(index_o2x_So_stv, n) = landIceTracerTransferVelocities(indexSaltTrans,i)
-!       endif
 
        if (trim(config_glc_thermal_forcing_coupling_mode) == '3d') then
           do iLevel = 1, nGlcZLevels
@@ -3665,3 +3644,7 @@ contains
          block_ptr => block_ptr % next
       end do
    end subroutine init_glc_z_levels
+
+end module ocn_comp_mct
+
+!|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
