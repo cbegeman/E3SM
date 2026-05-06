@@ -1,0 +1,7 @@
+This testdef is used to test the use of a prescribed conductive heat flux, which
+wasintroduced in MPAS-Ocean PR #6643.
+
+    config_land_ice_flux_advDiff_formulation = 'coupled_or_data'
+
+However, it should be noted that the conductive heat flux field will be
+initialized to 0 in this test.

@@ -1,0 +1,1 @@
+ config_land_ice_flux_advDiff_formulation = 'coupled_or_data'
