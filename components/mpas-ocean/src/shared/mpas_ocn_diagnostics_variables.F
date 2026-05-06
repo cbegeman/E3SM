@@ -248,9 +248,10 @@ contains
 !>  variables contained in the diagnosticsPool.
 !
 !-----------------------------------------------------------------------
-   subroutine ocn_diagnostics_variables_init(domain, jenkinsOn, hollandJenkinsOn, err)!{{{
+   subroutine ocn_diagnostics_variables_init(domain, landIcePressureOn, jenkinsOn, hollandJenkinsOn, err)!{{{
       type (domain_type), intent(in) :: domain
 
+      logical, intent(in) :: landIcePressureOn
       logical, intent(in) :: jenkinsOn
       logical, intent(in) :: hollandjenkinsOn
 
@@ -359,28 +360,32 @@ contains
       end if
 
       ! Retrieve pointers for configurations where land_ice_flux_mode is enabled
+      if ( landIcePressureOn ) then
+         call mpas_pool_get_array(diagnosticsPool, 'landIceDraftForSsh', landIceDraftForSsh)
+      endif
       if ( trim(config_land_ice_flux_mode) /= 'off' ) then
          call mpas_pool_get_array(diagnosticsPool, 'topDrag', topDrag)
-         call mpas_pool_get_array(diagnosticsPool, 'landIceDraftForSsh', landIceDraftForSsh)
          call mpas_pool_get_array(diagnosticsPool, 'topDragMagnitude', topDragMag)
          call mpas_pool_get_dimension(diagnosticsPool, &
                    'index_landIceBoundaryLayerTemperature', indexBLTPtr)
          call mpas_pool_get_dimension(diagnosticsPool, &
                    'index_landIceBoundaryLayerSalinity', indexBLSPtr)
-         call mpas_pool_get_dimension(diagnosticsPool, &
-                   'index_landIceHeatTransferVelocity', indexHeatTransPtr)
-         call mpas_pool_get_dimension(diagnosticsPool, &
-                   'index_landIceSaltTransferVelocity', indexSaltTransPtr)
          indexBLT = indexBLTPtr
          indexBLS = indexBLSPtr
-         indexHeatTrans = indexHeatTransPtr
-         indexSaltTrans = indexSaltTransPtr
 
          call mpas_pool_get_array(diagnosticsPool, &
                    'landIceBoundaryLayerTracers', landIceBoundaryLayerTracers)
-         call mpas_pool_get_array(diagnosticsPool, &
-                   'landIceTracerTransferVelocities', &
-                    landIceTracerTransferVelocities)
+         if (jenkinsOn .or. hollandJenkinsOn) then
+            call mpas_pool_get_dimension(diagnosticsPool, &
+                      'index_landIceHeatTransferVelocity', indexHeatTransPtr)
+            call mpas_pool_get_dimension(diagnosticsPool, &
+                      'index_landIceSaltTransferVelocity', indexSaltTransPtr)
+            indexHeatTrans = indexHeatTransPtr
+            indexSaltTrans = indexSaltTransPtr
+            call mpas_pool_get_array(diagnosticsPool, &
+                      'landIceTracerTransferVelocities', &
+                       landIceTracerTransferVelocities)
+         endif
          call mpas_pool_get_array(diagnosticsPool, &
                    'landIceFrictionVelocity', landIceFrictionVelocity)
          call mpas_pool_get_array(diagnosticsPool, &

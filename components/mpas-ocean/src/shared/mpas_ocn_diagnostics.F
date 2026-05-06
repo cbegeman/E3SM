@@ -4739,7 +4739,7 @@ contains
               & ' is not known', MPAS_LOG_CRIT)
       end if
 
-      call ocn_diagnostics_variables_init(domain, jenkinsOn, &
+      call ocn_diagnostics_variables_init(domain, landIcePressureOn, jenkinsOn, &
                                           hollandJenkinsOn, err)
 
       if ( trim(config_sgr_flux_vertical_location) /= 'top' .and. &
