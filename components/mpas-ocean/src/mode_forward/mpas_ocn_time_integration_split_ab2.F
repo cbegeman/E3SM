@@ -219,7 +219,6 @@ module ocn_time_integration_split_ab2
          btrvel_temp,      &
          sshTemp,          &
          wctEdge,          &! flux water column thickness at edge
-         seaIceSfcStress, &
          surfaceVelocityNew, &
          iceVelocityZonalNew, iceVelocityMeridionalNew, &
          bottomDepthEdge
@@ -291,7 +290,8 @@ module ocn_time_integration_split_ab2
       real (kind=RKIND), dimension(:), pointer :: tidalPotentialEta
 
       real (kind=RKIND), dimension(:), pointer :: &
-        seaIcePressure, atmosphericPressure, iceFraction
+        seaIceSfcStress, seaIcePressure, atmosphericPressure, iceFraction
+      real (kind=RKIND), dimension(:), pointer :: seaIceStressZonal, seaIceStressMeridional
 
       real (kind=RKIND), dimension(:), pointer :: &
         frazilSurfacePressure, landIcePressure, landIceDraft
@@ -313,8 +313,7 @@ module ocn_time_integration_split_ab2
       ! velocityZonal, velocityMeridional
       ! gradSSH, gradSSHX, gradSSHY, gradSSHZ
       ! gradSSHZonal, gradSSHMeridional
-      ! seaIceStress, seaIceStressX, seaIceStressY, seaIceStressZ
-      ! seaIceStressZonal, seaIceStressMeridional
+      ! seaIceStressX, seaIceStressY, seaIceStressZ
       ! surfaceVelocity, SSHGradient
       ! temperatureShortWaveTendency
       ! activeTracerHorizontalAdvectionTendency
@@ -423,7 +422,7 @@ module ocn_time_integration_split_ab2
       call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracersNew, 2)
 
       allocate(bottomDepthEdge(nEdgesAll+1))
-      allocate(iceOcnVelocityTend(nVertLevels,nEdgesOwned), seaIceSfcStress(nEdgesOwned))
+      allocate(iceOcnVelocityTend(nVertLevels,nEdgesOwned))
 
       if (config_transport_tests_flow_id > 0) then
         ! This is a transport test. Write advection velocity from prescribed
@@ -608,6 +607,13 @@ module ocn_time_integration_split_ab2
       call mpas_pool_get_array(forcingPool, 'seaIcePressure', seaIcePressure)
       !call mpas_pool_get_array(forcingPool, 'surfaceStress', sfcStress)
       !call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', sfcStressMag)
+      call mpas_pool_get_array(forcingPool, 'seaIceSfcStress', seaIceSfcStress)
+      if (.not. associated(seaIceSfcStress)) &
+         call mpas_log_write('seaIceSfcStress not associated')
+      call mpas_pool_get_array(forcingPool, 'seaIceStressZonal', seaIceStressZonal)
+      call mpas_pool_get_array(forcingPool, 'seaIceStressMeridional', seaIceStressMeridional)
+      if (.not. associated(seaIceStressMeridional)) &
+         call mpas_log_write('seaIceStressMeridional not associated')
       call mpas_pool_get_array(forcingPool, 'iceFraction', iceFraction)
       call mpas_pool_get_array(forcingPool, 'atmosphericPressure', atmosphericPressure)
       call mpas_pool_get_array(forcingPool, 'frazilSurfacePressure', frazilSurfacePressure)
@@ -641,6 +647,7 @@ module ocn_time_integration_split_ab2
       !$omp end do
       !$omp end parallel
 
+      call mpas_log_write('Initialize iceVelocity*New')
       nCells = nCellsOwned
       ! iceVelocity*New will initially hold the sea ice velocity from coupling and
       ! be updated each iteration
