@@ -72,7 +72,6 @@ module ocn_diagnostics_variables
 
    real (kind=RKIND), dimension(:), pointer :: upwindFactor
    real (kind=RKIND), dimension(:), pointer :: gradSSH
-   real (kind=RKIND), dimension(:), pointer :: seaIceSfcStress
    real (kind=RKIND), dimension(:), pointer :: pressureAdjustedSSH
    real (kind=RKIND), dimension(:), pointer :: pgf_sal
    real (kind=RKIND), dimension(:), pointer :: temp_twd
@@ -198,10 +197,9 @@ module ocn_diagnostics_variables
    real (kind=RKIND), dimension(:), pointer :: gradSSHX
    real (kind=RKIND), dimension(:), pointer :: gradSSHY
    real (kind=RKIND), dimension(:), pointer :: gradSSHZ
-   real (kind=RKIND), dimension(:), pointer :: seaIceStressSSHZonal, seaIceStressMeridional
-   real (kind=RKIND), dimension(:), pointer :: seaIceStressSSHX
-   real (kind=RKIND), dimension(:), pointer :: seaIceStressSSHY
-   real (kind=RKIND), dimension(:), pointer :: seaIceStressSSHZ
+   real (kind=RKIND), dimension(:), pointer :: seaIceStressX
+   real (kind=RKIND), dimension(:), pointer :: seaIceStressY
+   real (kind=RKIND), dimension(:), pointer :: seaIceStressZ
 
    real (kind=RKIND), dimension(:), pointer :: barotropicForcing
    real (kind=RKIND), dimension(:), pointer :: barotropicCoriolisTerm
@@ -484,6 +482,10 @@ contains
                    velocityMeridional)
          call mpas_pool_get_array(diagnosticsPool, 'velocityZonal', &
                    velocityZonal)
+
+         call mpas_pool_get_array(diagnosticsPool, 'seaIceStressX', seaIceStressX)
+         call mpas_pool_get_array(diagnosticsPool, 'seaIceStressY', seaIceStressY)
+         call mpas_pool_get_array(diagnosticsPool, 'seaIceStressZ', seaIceStressZ)
 
          call mpas_pool_get_array(diagnosticsPool, 'RiTopOfCell', RiTopOfCell)
          call mpas_pool_get_array(diagnosticsPool, 'RiTopOfEdge', RiTopOfEdge)
