@@ -200,6 +200,7 @@ module ocn_diagnostics_variables
    real (kind=RKIND), dimension(:), pointer :: seaIceStressX
    real (kind=RKIND), dimension(:), pointer :: seaIceStressY
    real (kind=RKIND), dimension(:), pointer :: seaIceStressZ
+   real (kind=RKIND), dimension(:), pointer :: seaIceStressZonal, seaIceStressMeridional
 
    real (kind=RKIND), dimension(:), pointer :: barotropicForcing
    real (kind=RKIND), dimension(:), pointer :: barotropicCoriolisTerm
@@ -486,6 +487,8 @@ contains
          call mpas_pool_get_array(diagnosticsPool, 'seaIceStressX', seaIceStressX)
          call mpas_pool_get_array(diagnosticsPool, 'seaIceStressY', seaIceStressY)
          call mpas_pool_get_array(diagnosticsPool, 'seaIceStressZ', seaIceStressZ)
+         call mpas_pool_get_array(diagnosticsPool, 'seaIceStressZonal', seaIceStressZonal)
+         call mpas_pool_get_array(diagnosticsPool, 'seaIceStressMeridional', seaIceStressMeridional)
 
          call mpas_pool_get_array(diagnosticsPool, 'RiTopOfCell', RiTopOfCell)
          call mpas_pool_get_array(diagnosticsPool, 'RiTopOfEdge', RiTopOfEdge)

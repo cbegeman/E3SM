@@ -291,7 +291,6 @@ module ocn_time_integration_split_ab2
 
       real (kind=RKIND), dimension(:), pointer :: &
         seaIceSfcStress, seaIcePressure, atmosphericPressure, iceFraction
-      real (kind=RKIND), dimension(:), pointer :: seaIceStressZonal, seaIceStressMeridional
 
       real (kind=RKIND), dimension(:), pointer :: &
         frazilSurfacePressure, landIcePressure, landIceDraft
@@ -314,6 +313,7 @@ module ocn_time_integration_split_ab2
       ! gradSSH, gradSSHX, gradSSHY, gradSSHZ
       ! gradSSHZonal, gradSSHMeridional
       ! seaIceStressX, seaIceStressY, seaIceStressZ
+      ! seaIceStressZonal, seaIceStressMeridional
       ! surfaceVelocity, SSHGradient
       ! temperatureShortWaveTendency
       ! activeTracerHorizontalAdvectionTendency
@@ -603,15 +603,14 @@ module ocn_time_integration_split_ab2
       ! iceVelocity*Cur will hold the velocity at the beg of each coupling interval
       call mpas_pool_get_array(forcingPool, 'seaIceVelocityZonal', iceVelocityZonalCur)
       call mpas_pool_get_array(forcingPool, 'seaIceVelocityMeridional', iceVelocityMeridionalCur)
-
+      if (.not. associated(iceVelocityMeridionalCur)) &
+         call mpas_log_write('iceVelocityMeridionalCur not associated')
       call mpas_pool_get_array(forcingPool, 'seaIcePressure', seaIcePressure)
       !call mpas_pool_get_array(forcingPool, 'surfaceStress', sfcStress)
       !call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', sfcStressMag)
       call mpas_pool_get_array(forcingPool, 'seaIceSfcStress', seaIceSfcStress)
       if (.not. associated(seaIceSfcStress)) &
          call mpas_log_write('seaIceSfcStress not associated')
-      call mpas_pool_get_array(forcingPool, 'seaIceStressZonal', seaIceStressZonal)
-      call mpas_pool_get_array(forcingPool, 'seaIceStressMeridional', seaIceStressMeridional)
       if (.not. associated(seaIceStressMeridional)) &
          call mpas_log_write('seaIceStressMeridional not associated')
       call mpas_pool_get_array(forcingPool, 'iceFraction', iceFraction)
@@ -657,8 +656,10 @@ module ocn_time_integration_split_ab2
         iceVelocityMeridionalNew(iCell) = iceVelocityMeridionalCur(iCell)
       enddo
 
+      call mpas_log_write('Prep ice velocity reconstruction')
       nEdges = nEdgesHalo(3)
       allocate(meridSIEdge(nEdges), zonalSIEdge(nEdges), seaIceVelocity(nEdges))
+      call mpas_log_write('Perf ice velocity reconstruction')
       call mpas_vector_cell_to_edge_isotropic(iceVelocityZonalNew, iceVelocityMeridionalNew, &
         nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
         zonalSIEdge, meridSIEdge)
