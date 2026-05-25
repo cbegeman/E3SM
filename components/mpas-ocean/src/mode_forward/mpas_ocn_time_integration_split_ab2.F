@@ -79,7 +79,7 @@ module ocn_time_integration_split_ab2
    !
    !--------------------------------------------------------------------
 
-   logical :: seaIceDrag
+   logical :: seaIceDrag, seaIceRotate
 
    character (len=*), parameter :: &
       subcycleGroupName = 'subcycleFields', &! name for cached halo exch
@@ -1023,48 +1023,47 @@ module ocn_time_integration_split_ab2
                call mpas_log_write('normalBarotropicVelocityCur(1) = $r', realArgs=(/normalBarotropicVelocityCur(1)/))
                call mpas_log_write('normalBaroclinicVelocityNew(1,1) = $r', realArgs=(/normalBaroclinicVelocityNew(1,1)/))
 
-               call mpas_log_write('Start rotate iceVelocity')
-               nCells = nCellsOwned
-               if (j == 1) then
-                 dt_rotate = dt / 2
-               else
-                 dt_rotate = dt
+               if (seaIceRotate) then
+                  call mpas_log_write('Start rotate iceVelocity')
+                  nCells = nCellsOwned
+                  if (j == 1) then
+                    dt_rotate = dt / 2
+                  else
+                    dt_rotate = dt
+                  endif
+                  !$omp parallel
+                  !$omp do schedule(runtime) &
+                  !$omp    private(theta)
+                  do iCell = 1, nCellsAll
+                    theta = 2.0_RKIND * pi * fCell(iCell) * dt_rotate
+                    iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell) + ( &
+                                                 iceVelocityZonalInit * cos(theta) &
+                                               + iceVelocityMeridionalInit * sin(theta) )
+                    iceVelocityMeridionalNew(iCell) = iceVelocityMeridionalCur(iCell) + ( &
+                                                      - iceVelocityZonalInit * sin(theta) &
+                                                      + iceVelocityMeridionalInit * cos(theta) )
+                  enddo
+                  !$omp end do
+                  !$omp end parallel
+                  call mpas_log_write('iceVelocityZonal,Merid = $r, $r', realArgs=(/iceVelocityZonalNew(1), iceVelocityMeridionalNew(1)/))
+
+                  nEdges = nEdgesHalo(3)
+                  !nEdges = nEdgesOwned
+                  allocate(meridSIEdge(nEdges), zonalSIEdge(nEdges), seaIceVelocity(nEdges))
+                  call mpas_vector_cell_to_edge_isotropic(iceVelocityZonalNew, iceVelocityMeridionalNew, &
+                    nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
+                    zonalSIEdge, meridSIEdge)
+                  call mpas_log_write('zonalSIEdge, meridSIEdge = $r, $r', realArgs=(/zonalSIEdge(1), meridSIEdge(1)/))
+
+                  !$omp parallel
+                  !$omp do schedule(runtime)
+                  do iEdge = 1, nEdges
+                    seaIceVelocity(iEdge) = cos(angleEdge(iEdge))*zonalSIEdge(iEdge) + &
+                                            sin(angleEdge(iEdge))*meridSIEdge(iEdge)
+                  end do
+                  !$omp end do
+                  !$omp end parallel
                endif
-
-               ! Assume that the inertial oscillations have an amplitude equal to the ice velocity
-
-               !$omp parallel
-               !$omp do schedule(runtime) &
-               !$omp    private(theta)
-               do iCell = 1, nCellsAll
-                 theta = 2.0_RKIND * pi * fCell(iCell) * dt_rotate
-                 iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell) + ( &
-                                              iceVelocityZonalCur(iCell) * cos(theta) &
-                                            + iceVelocityMeridionalCur(iCell) * sin(theta) )
-                 iceVelocityMeridionalNew(iCell) = iceVelocityMeridionalCur(iCell) + ( &
-                                                   - iceVelocityZonalCur(iCell) * sin(theta) &
-                                                   + iceVelocityMeridionalCur(iCell) * cos(theta) )
-               enddo
-               !$omp end do
-               !$omp end parallel
-               call mpas_log_write('iceVelocityZonal,Merid = $r, $r', realArgs=(/iceVelocityZonalNew(1), iceVelocityMeridionalNew(1)/))
-
-               nEdges = nEdgesHalo(3)
-               !nEdges = nEdgesOwned
-               allocate(meridSIEdge(nEdges), zonalSIEdge(nEdges), seaIceVelocity(nEdges))
-               call mpas_vector_cell_to_edge_isotropic(iceVelocityZonalNew, iceVelocityMeridionalNew, &
-                 nEdges, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
-                 zonalSIEdge, meridSIEdge)
-               call mpas_log_write('zonalSIEdge, meridSIEdge = $r, $r', realArgs=(/zonalSIEdge(1), meridSIEdge(1)/))
-
-               !$omp parallel
-               !$omp do schedule(runtime)
-               do iEdge = 1, nEdges
-                 seaIceVelocity(iEdge) = cos(angleEdge(iEdge))*zonalSIEdge(iEdge) + &
-                                         sin(angleEdge(iEdge))*meridSIEdge(iEdge)
-               end do
-               !$omp end do
-               !$omp end parallel
 
                !$omp parallel
                !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity)
@@ -3342,6 +3341,7 @@ module ocn_time_integration_split_ab2
          endif
 
          seaIceDrag = config_use_drag_from_sea_ice_velocity
+         seaIceDrag = config_rotate_sea_ice_velocity_for_drag
          dragCoeff = 5.36e-3_RKIND ! default value given in sea ice namelist
 
          do iEdge = 1, nEdges
