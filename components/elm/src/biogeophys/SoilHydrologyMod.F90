@@ -554,23 +554,23 @@ contains
              !5. surface runoff from h2osfc
              if (h2osfcflag==1) then
                 ! calculate runoff from h2osfc  -------------------------------------
-                if (use_modified_infil) then
+                !if (use_modified_infil) then
                   if (frac_h2osfc_act(c) <= pc .and. frac_h2osfc(c) <= pc) then 
                      frac_infclust=0.0_r8
                   else
-                      if (frac_h2osfc(c) <= pc) then
+                      if (frac_h2osfc_act(c) <= pc) then
                         frac_infclust=(frac_h2osfc_act(c)-pc)**mu
                       else
-                        frac_infclust=(frac_h2osfc(c)-pc)**mu
+                        frac_infclust=(frac_h2osfc_act(c)-pc)**mu
                       endif
                   endif
-                else
-                  if (frac_h2osfc(c) <= pc) then
-                    frac_infclust=0.0_r8
-                  else
-                    frac_infclust=(frac_h2osfc(c)-pc)**mu
-                  endif
-                endif
+                !else
+                !  if (frac_h2osfc(c) <= pc) then
+                !    frac_infclust=0.0_r8
+                !  else
+                !    frac_infclust=(frac_h2osfc(c)-pc)**mu
+                !  endif
+                !endif
              endif
 
              if (lun_pp%ispolygon(col_pp%landunit(c))) then
