@@ -967,7 +967,7 @@ void HorzMesh::defineMeshFields() {
    DimNames[0]   = "NEdges";
    DimNames[1]   = "MaxEdges2";
    FieldName     = "WeightsOnEdge";
-   WeightsOnEdge = Array2DReal("KiteAreasOnVertex", NEdgesSize, MaxEdges2);
+   WeightsOnEdge = Array2DReal("WeightsOnEdge", NEdgesSize, MaxEdges2);
    auto WeightsOnEdgeField =
        Field::create(FieldName, // field name
                      "Reconstruction weights associated with each of the"
