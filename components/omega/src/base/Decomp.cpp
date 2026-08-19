@@ -224,6 +224,16 @@ void readMesh(
    I4 MaxEdgesOnEdge = MaxEdges2; // 2*MaxEdges, used below for
                                   // EdgesOnEdge/WeightsOnEdge offsets
 
+   // rearrangeEdgeArrays packs/unpacks the EdgesOnEdge stencil assuming a
+   // row stride of 2*MaxEdges, while the array is read from file with a
+   // row stride of MaxEdges2. These are equal for standard MPAS meshes,
+   // but if a mesh ever violates that the two strides would silently
+   // disagree and scramble the tangential velocity reconstruction.
+   if (MaxEdges2 != 2 * MaxEdges)
+      ABORT_ERROR("Decomp: MaxEdges2 ({}) != 2*MaxEdges ({}); the "
+                  "EdgesOnEdge/WeightsOnEdge stencil strides would not match",
+                  MaxEdges2, 2 * MaxEdges);
+
    // Determine whether the mesh is spherical or planar. This duplicates
    // (temporarily) the OnSphere/on_a_sphere attribute parsing HorzMesh
    // does via the full IOStream mechanism - here we just need a quick
@@ -2450,21 +2460,31 @@ void Decomp::rearrangeEdgeArrays(
                   VerticesOnEdgeTmp(Edge, Vrtx) = EdgeBuf[BufAdd];
                   ++BufAdd;
                }
-               // In the EdgeOnEdge array, a zero entry must be kept in
-               // place but assigned the boundary value NEdgesGlobal+1
+               // In the EdgesOnEdge array, a zero (or otherwise invalid)
+               // entry must be kept in place but assigned the boundary
+               // value NEdgesGlobal+1. Position matters: the tangential
+               // velocity reconstruction pairs EdgesOnEdge(Edge,J) with
+               // WeightsOnEdge(Edge,J), so every slot of the incoming
+               // stencil must map to the same slot of the outgoing one.
+               // Skipping an entry here would shift all later neighbors
+               // left and silently pair them with the wrong weights.
                I4 EdgeCount = 0;
+               // Track the last slot holding a real neighbor so that
+               // NEdgesOnEdge excludes the trailing padding, matching the
+               // nEdgesOnEdge convention used by the mesh file.
+               I4 LastValid = 0;
                for (int NbrEdge = 0; NbrEdge < 2 * MaxEdges; ++NbrEdge) {
                   I4 EdgeID = EdgeBuf[BufAdd];
                   ++BufAdd;
-                  if (EdgeID == 0) {
-                     EdgesOnEdgeTmp(Edge, EdgeCount) = NEdgesGlobal + 1;
-                     EdgeCount++;
-                  } else if (validEdgeID(EdgeID)) {
+                  if (EdgeID != 0 && validEdgeID(EdgeID)) {
                      EdgesOnEdgeTmp(Edge, EdgeCount) = EdgeID;
-                     EdgeCount++;
+                     LastValid = EdgeCount + 1;
+                  } else {
+                     EdgesOnEdgeTmp(Edge, EdgeCount) = NEdgesGlobal + 1;
                   }
+                  EdgeCount++;
                }
-               NEdgesOnEdgeTmp(Edge) = EdgeCount;
+               NEdgesOnEdgeTmp(Edge) = LastValid;
             } // end if address in buffer
          } // end if address on this task
       } // end loop over local edges
