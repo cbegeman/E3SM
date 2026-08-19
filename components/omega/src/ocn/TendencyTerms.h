@@ -98,13 +98,15 @@ class PotentialVortHAdvOnEdge {
       const I4 KLen   = chunkLength(KChunk, KStart, MaxLayerEdgeTop(IEdge));
       Real VortTmp[VecLength] = {0};
 
+      // ---- solution: single accumulation of the PV flux term ----
       for (int J = 0; J < NEdgesOnEdge(IEdge); ++J) {
-         I4 JEdge = EdgesOnEdge(IEdge, J);
+         const I4 JEdge = EdgesOnEdge(IEdge, J);
          for (int KVec = 0; KVec < KLen; ++KVec) {
-            const I4 K    = KStart + KVec;
-            Real NormVort = (NormRVortEdge(IEdge, K) + NormFEdge(IEdge, K) +
-                             NormRVortEdge(JEdge, K) + NormFEdge(JEdge, K)) *
-                            0.5_Real;
+            const I4 K = KStart + KVec;
+            const Real NormVort =
+                (NormRVortEdge(IEdge, K) + NormFEdge(IEdge, K) +
+                 NormRVortEdge(JEdge, K) + NormFEdge(JEdge, K)) *
+                0.5_Real;
 
             VortTmp[KVec] += WeightsOnEdge(IEdge, J) *
                              FluxPseudoThickEdge(JEdge, K) *
@@ -112,6 +114,62 @@ class PotentialVortHAdvOnEdge {
          }
       }
 
+      // ---- diagnostics: read-only, recompute per-neighbor contributions ----
+      // Guarded so it can be compiled out; does not alter VortTmp or Tend.
+      for (int J = 0; J < NEdgesOnEdge(IEdge); ++J) {
+         const I4 JEdge    = EdgesOnEdge(IEdge, J);
+         const Real Weight = WeightsOnEdge(IEdge, J);
+         for (int KVec = 0; KVec < KLen; ++KVec) {
+            const I4 K = KStart + KVec;
+            const Real NormVort =
+                (NormRVortEdge(IEdge, K) + NormFEdge(IEdge, K) +
+                 NormRVortEdge(JEdge, K) + NormFEdge(JEdge, K)) *
+                0.5_Real;
+            const Real JContrib = Weight * FluxPseudoThickEdge(JEdge, K) *
+                                  NormVelEdge(JEdge, K) * NormVort;
+
+            Kokkos::printf(
+                "PotentialVortHAdvOnEdge: IEdge=%d J=%d JEdge=%d K=%d "
+                "WeightsOnEdge=%g FluxPseudoThickEdge=%g NormVelEdge=%g "
+                "NormRVortEdge(I)=%g NormFEdge(I)=%g NormRVortEdge(J)=%g "
+                "NormFEdge(J)=%g NormVort=%g JContrib=%g VortTmpTotal=%g\n",
+                static_cast<int>(IEdge), J, static_cast<int>(JEdge),
+                static_cast<int>(K), Weight, FluxPseudoThickEdge(JEdge, K),
+                NormVelEdge(JEdge, K), NormRVortEdge(IEdge, K),
+                NormFEdge(IEdge, K), NormRVortEdge(JEdge, K),
+                NormFEdge(JEdge, K), NormVort, JContrib, VortTmp[KVec]);
+         }
+      }
+
+      // Report if this term contributes exactly zero over the whole chunk
+      bool AddsOnlyZeros  = (KLen > 0);
+      bool EdgeMaskAllZero = true;
+      bool VortTmpAllZero  = true;
+      for (int KVec = 0; KVec < KLen; ++KVec) {
+         const I4 K         = KStart + KVec;
+         const Real TendAdd = EdgeMask(IEdge, K) * VortTmp[KVec];
+         AddsOnlyZeros   = AddsOnlyZeros && (TendAdd == 0._Real);
+         EdgeMaskAllZero = EdgeMaskAllZero && (EdgeMask(IEdge, K) == 0._Real);
+         VortTmpAllZero  = VortTmpAllZero && (VortTmp[KVec] == 0._Real);
+      }
+
+      if (AddsOnlyZeros) {
+         Kokkos::printf("PotentialVortHAdvOnEdge: adding zeros to Tend "
+                        "IEdge=%d KStart=%d KEnd=%d\n",
+                        static_cast<int>(IEdge), static_cast<int>(KStart),
+                        static_cast<int>(KStart + KLen - 1));
+         if (EdgeMaskAllZero)
+            Kokkos::printf("  cause: EdgeMask is zero over the entire K range\n");
+         if (VortTmpAllZero)
+            Kokkos::printf("  cause: VortTmp is zero over the entire K range\n");
+         if (NEdgesOnEdge(IEdge) == 0)
+            Kokkos::printf("    cause: NEdgesOnEdge is zero\n");
+         if (!EdgeMaskAllZero && !VortTmpAllZero)
+            Kokkos::printf("  EdgeMask and VortTmp are each nonzero somewhere, "
+                           "but their product is zero at every K\n");
+      }
+
+      // ---- solution: single update of Tend ----
       for (int KVec = 0; KVec < KLen; ++KVec) {
          const I4 K = KStart + KVec;
          Tend(IEdge, K) += EdgeMask(IEdge, K) * VortTmp[KVec];
