@@ -228,6 +228,28 @@ HorzMesh::HorzMesh(const std::string &Name, //< [in] Name for new mesh
    // Compute mesh scaling coefficients
    computeMeshScaling();
 
+   // TEMPORARY: verify TRiSK tangential-reconstruction stencil vs mesh file
+   // EdgeID is owned by Decomp (HorzMesh only copies CellID), so read the
+   // global edge IDs directly from the decomposition.
+   {
+      const HostArray1DI4 &EdgeIDH = MeshDecomp->EdgeIDH;
+      LOG_INFO("HorzMesh check: NEdgesSize={} MaxEdges2={}", NEdgesSize,
+               MaxEdges2);
+      const I4 NCheck = std::min(NEdgesOwned, 8);
+      for (I4 IEdge = 0; IEdge < NCheck; ++IEdge) {
+         R8 SumAbsW = 0.0;
+         std::string WStr, EStr;
+         for (I4 J = 0; J < NEdgesOnEdgeH(IEdge); ++J) {
+            SumAbsW += std::fabs(WeightsOnEdgeH(IEdge, J));
+            WStr += std::to_string(WeightsOnEdgeH(IEdge, J)) + " ";
+            EStr += std::to_string(EdgesOnEdgeH(IEdge, J)) + " ";
+         }
+         LOG_INFO("  IEdge={} (glob {}) NEdgesOnEdge={} SumAbsW={} W=[{}] "
+                  "EdgesOnEdge=[{}]",
+                  IEdge, EdgeIDH(IEdge), NEdgesOnEdgeH(IEdge), SumAbsW, WStr,
+                  EStr);
+      }
+   }
 } // end horizontal mesh constructor
 
 //------------------------------------------------------------------------------
