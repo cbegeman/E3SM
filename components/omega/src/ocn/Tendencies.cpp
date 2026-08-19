@@ -14,6 +14,7 @@
 #include "Error.h"
 #include "Field.h"
 #include "Forcing.h"
+#include "MomBudgetDiag.h"
 #include "OceanState.h"
 #include "PGrad.h"
 #include "Pacer.h"
@@ -643,6 +644,14 @@ void Tendencies::computeVelocityTendenciesOnly(
 
    Pacer::start("Tend:computeVelocityTendenciesOnly", 1);
 
+   // TEMPORARY: per-term momentum budget diagnostics
+   MomBudgetDiag::init(Mesh, VCoord->NVertLayers);
+   {
+      R8 DiagTime = 0.0;
+      Time.get(DiagTime, TimeUnits::Seconds);
+      MomBudgetDiag::beginTendencies(DiagTime);
+   }
+
    // Zero NVTend over all layers where at least one neighboring cell is active:
    // [MinLayerEdgeTop, MaxLayerEdgeBot]. This includes boundary edges adjacent
    // to land or bathymetry steps, which have no computed tendency but should
@@ -673,6 +682,7 @@ void Tendencies::computeVelocityTendenciesOnly(
           });
       Pacer::stop("Tend:PotentialVortHAdv", 2);
    }
+   MomBudgetDiag::recordTerm("PVHAdv", NormalVelocityTend);
 
    // Compute kinetic energy gradient
    const Array2DReal &KECell = AuxState->KineticAux.KineticEnergyCell;
@@ -690,6 +700,7 @@ void Tendencies::computeVelocityTendenciesOnly(
           });
       Pacer::stop("Tend:KEGrad", 2);
    }
+   MomBudgetDiag::recordTerm("KEGrad", NormalVelocityTend);
 
    // Compute sea surface height gradient
    const Array1DReal &SSHCell = LocSshCell;
@@ -707,6 +718,7 @@ void Tendencies::computeVelocityTendenciesOnly(
           });
       Pacer::stop("Tend:SSHGrad", 2);
    }
+   MomBudgetDiag::recordTerm("SSHGrad", NormalVelocityTend);
 
    // Compute del2 horizontal diffusion
    const Array2DReal &DivCell     = AuxState->KineticAux.VelocityDivCell;
@@ -726,6 +738,7 @@ void Tendencies::computeVelocityTendenciesOnly(
           });
       Pacer::stop("Tend:velocityDiffusion", 2);
    }
+   MomBudgetDiag::recordTerm("VelDiff", NormalVelocityTend);
 
    // Compute del4 horizontal diffusion
    const Array2DReal &Del2DivCell = AuxState->VelocityDel2Aux.Del2DivCell;
@@ -746,12 +759,14 @@ void Tendencies::computeVelocityTendenciesOnly(
           });
       Pacer::stop("Tend:velocityHyperDiff", 2);
    }
+   MomBudgetDiag::recordTerm("VelHyperDiff", NormalVelocityTend);
 
    Pacer::start("Tend:computeVelocityVAdvTend", 2);
    // Compute velocity tendency from vertical advection
    VAdv->computeVelocityVAdvTend(NormalVelocityTend, NormVelEdge,
                                  FluxPseudoThickEdge);
    Pacer::stop("Tend:computeVelocityVAdvTend", 2);
+   MomBudgetDiag::recordTerm("VAdv", NormalVelocityTend);
 
    // Compute surface stress forcing
    const auto *ForcingState = Forcing::getDefault();
@@ -774,6 +789,7 @@ void Tendencies::computeVelocityTendenciesOnly(
           });
       Pacer::stop("Tend:sfcStressForcing", 2);
    }
+   MomBudgetDiag::recordTerm("SfcStress", NormalVelocityTend);
 
    // Compute explicit bottom drag
    if (LocExplicitBottomDrag.Enabled) {
@@ -785,6 +801,7 @@ void Tendencies::computeVelocityTendenciesOnly(
           });
       Pacer::stop("Tend:explicitBottomDrag", 2);
    }
+   MomBudgetDiag::recordTerm("BottomDrag", NormalVelocityTend);
 
    if (CustomVelocityTend) {
       Pacer::start("Tend:customVelocityTend", 2);
@@ -792,6 +809,7 @@ void Tendencies::computeVelocityTendenciesOnly(
                          VelTimeLevel, Time);
       Pacer::stop("Tend:customVelocityTend", 2);
    }
+   MomBudgetDiag::recordTerm("CustomVelTend", NormalVelocityTend);
 
    // Compute pressure gradient
    if (PGrad->Enabled) {
@@ -807,6 +825,10 @@ void Tendencies::computeVelocityTendenciesOnly(
                                  PseudoThick);
       Pacer::stop("Tend:pressureGradTerm", 2);
    }
+   MomBudgetDiag::recordTerm("PGrad", NormalVelocityTend);
+
+   // Sum of all explicit terms above
+   MomBudgetDiag::recordTotal("ExplicitTotal", NormalVelocityTend);
 
    Pacer::stop("Tend:computeVelocityTendenciesOnly", 1);
 
