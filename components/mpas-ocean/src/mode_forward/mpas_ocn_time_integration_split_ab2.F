@@ -601,18 +601,12 @@ module ocn_time_integration_split_ab2
       call mpas_timer_stop("se prep")
 
       ! iceVelocity*Cur will hold the velocity at the beg of each coupling interval
-      call mpas_pool_get_array(forcingPool, 'seaIceVelocityZonal', iceVelocityZonalCur)
-      call mpas_pool_get_array(forcingPool, 'seaIceVelocityMeridional', iceVelocityMeridionalCur)
-      if (.not. associated(iceVelocityMeridionalCur)) &
-         call mpas_log_write('iceVelocityMeridionalCur not associated')
+      call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', iceVelocityZonalCur)
+      call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', iceVelocityMeridionalCur)
       call mpas_pool_get_array(forcingPool, 'seaIcePressure', seaIcePressure)
       !call mpas_pool_get_array(forcingPool, 'surfaceStress', sfcStress)
       !call mpas_pool_get_array(forcingPool, 'surfaceStressMagnitude', sfcStressMag)
       call mpas_pool_get_array(forcingPool, 'seaIceSfcStress', seaIceSfcStress)
-      if (.not. associated(seaIceSfcStress)) &
-         call mpas_log_write('seaIceSfcStress not associated')
-      if (.not. associated(seaIceStressMeridional)) &
-         call mpas_log_write('seaIceStressMeridional not associated')
       call mpas_pool_get_array(forcingPool, 'iceFraction', iceFraction)
       call mpas_pool_get_array(forcingPool, 'atmosphericPressure', atmosphericPressure)
       call mpas_pool_get_array(forcingPool, 'frazilSurfacePressure', frazilSurfacePressure)
@@ -655,6 +649,7 @@ module ocn_time_integration_split_ab2
         iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell)
         iceVelocityMeridionalNew(iCell) = iceVelocityMeridionalCur(iCell)
       enddo
+      call mpas_log_write('iceVelocityZonal, Meridional = $r, $r', realArgs=(/iceVelocityZonalNew(1), iceVelocityMeridionalNew(1)/))
 
       call mpas_log_write('Prep ice velocity reconstruction')
       nEdges = nEdgesHalo(3)
@@ -883,12 +878,10 @@ module ocn_time_integration_split_ab2
                         CoriolisTermOld(k,iEdge) = normalVelocityNew(k,iEdge)
                      enddo ! vertical
                   end if
-   
+
                enddo ! iEdge
                !$omp end do
                !$omp end parallel
-               call mpas_log_write('DEBUG uTemp: iceOcnVelocityTend=$r, normalVelocityTend=$r', &
-                realArgs=(/iceOcnVelocityTend(1,1), normalVelocityTend(1,1)/) )
 
             else ! nowTimeStamp
 
@@ -928,8 +921,6 @@ module ocn_time_integration_split_ab2
                   enddo ! iEdge
                   !$omp end do
                   !$omp end parallel
-                  !call mpas_log_write('DEBUG uTemp: iceOcnVelocityTend=$r', &
-                  !  realArgs=(/iceOcnVelocityTend(1,1)/))
 
                else ! j
 
@@ -969,8 +960,6 @@ module ocn_time_integration_split_ab2
                   enddo ! iEdge
                   !$omp end do
                   !$omp end parallel
-                  !call mpas_log_write('DEBUG uTemp: iceOcnVelocityTend=$r', &
-                  !  realArgs=(/iceOcnVelocityTend(1,1)/))
 
                end if ! j
 
@@ -1037,11 +1026,11 @@ module ocn_time_integration_split_ab2
                   do iCell = 1, nCellsAll
                     theta = 2.0_RKIND * pi * fCell(iCell) * dt_rotate
                     iceVelocityZonalNew(iCell) = iceVelocityZonalCur(iCell) + ( &
-                                                 iceVelocityZonalInit * cos(theta) &
-                                               + iceVelocityMeridionalInit * sin(theta) )
+                                                 iceVelocityZonalCur(iCell) * cos(theta) &
+                                               + iceVelocityMeridionalCur(iCell) * sin(theta) )
                     iceVelocityMeridionalNew(iCell) = iceVelocityMeridionalCur(iCell) + ( &
-                                                      - iceVelocityZonalInit * sin(theta) &
-                                                      + iceVelocityMeridionalInit * cos(theta) )
+                                                      - iceVelocityZonalCur(iCell) * sin(theta) &
+                                                      + iceVelocityMeridionalCur(iCell) * cos(theta) )
                   enddo
                   !$omp end do
                   !$omp end parallel
@@ -1065,21 +1054,23 @@ module ocn_time_integration_split_ab2
                   !$omp end parallel
                endif
 
+               call mpas_log_write('DEBUG Update iceOcnVelocityTend')
                !$omp parallel
                !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity)
                do iEdge = 1, nEdges
-                 iceFractionEdge = 1.0_RKIND
-                 !iceFractionEdge = 0.5_RKIND * &
-                 !       (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
-                 iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
-                 seaIceSfcStress(iEdge) = iceFractionEdge * dragCoeff * &
-                        abs(iceOcnRelVelocity) * iceOcnRelVelocity
+                  if (iEdge == 1) call mpas_log_write('DEBUG set iceFractionEdge')
+                  iceFractionEdge = 0.5_RKIND * &
+                         (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
+                  if (iEdge == 1) call mpas_log_write('DEBUG set iceOcnRelVelocity')
+                  iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
+                  if (iEdge == 1) call mpas_log_write('DEBUG set seaIceSfcStress')
+                  seaIceSfcStress(iEdge) = iceFractionEdge * dragCoeff * &
+                         abs(iceOcnRelVelocity) * iceOcnRelVelocity
                end do
                !$omp end do
                !$omp end parallel
-               call mpas_log_write('DEBUG Update seaIceSfcStress: iceOcnRelVelocity=$r, seaIceSfcStress=$r', &
-                 realArgs=(/seaIceVelocity(1) - surfaceVelocityNew(1), seaIceSfcStress(1)/))
-               deallocate(meridSIEdge, zonalSIEdge, seaIceVelocity)
+               !call mpas_log_write('DEBUG Update seaIceSfcStress: iceOcnRelVelocity=$r, seaIceSfcStress=$r', &
+               !  realArgs=(/seaIceVelocity(1) - surfaceVelocityNew(1), seaIceSfcStress(1)/))
 
                !$omp parallel
                !$omp do schedule(runtime) private(kTop)
@@ -1093,6 +1084,7 @@ module ocn_time_integration_split_ab2
 
                call mpas_log_write('DEBUG Update iceOcnVelocityTend=$r, seaIceSfcStress=$r', &
                  realArgs=(/iceOcnVelocityTend(1,1), seaIceSfcStress(1)/))
+               deallocate(meridSIEdge, zonalSIEdge, seaIceVelocity)
 
             endif
 
