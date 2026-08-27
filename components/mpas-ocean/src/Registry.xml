@@ -690,10 +690,6 @@
 					description="Controls if forcing variables seaIceVelocityZonal and seaIceVelocityMeridional are used to compute the drag term."
 					possible_values=".true. or .false."
 		/>
-		<nml_option name="config_rotate_sea_ice_velocity_for_drag" type="logical" default_value=".false."
-					description="Controls if forcing variables seaIceVelocityZonal and seaIceVelocityMeridional are rotated to compute the drag term."
-					possible_values=".true. or .false."
-		/>
 		<nml_option name="config_use_bulk_wind_stress" type="logical" default_value=".false."
 					description="Controls if zonal and meridional components of windstress are used to build surface wind stress."
 					possible_values=".true. or .false."
@@ -3181,6 +3177,14 @@
 			 description="Z Component of the gradient of sea surface height at cell centers."
 			 packages="forwardMode;analysisMode"
 		/>
+        <var name="seaIceStressZonal" type="real" dimensions="nCells Time" units="N m^-2"
+                 description="Zonal component of the sea-ice/ocean drag stress at cell centers."
+                 packages="forwardMode;analysisMode"
+        />
+        <var name="seaIceStressMeridional" type="real" dimensions="nCells Time" units="N m^-2"
+                 description="Meridional component of the sea-ice/ocean drag stress at cell centers."
+                 packages="forwardMode;analysisMode"
+        />
 		<var name="normalGMBolusVelocity" type="real" dimensions="nVertLevels nEdges Time" units="m s^-1"
 			 description="Bolus velocity in Gent-McWilliams eddy parameterization"
 			 missing_value="FILLVAL" missing_value_mask="edgeMask"
@@ -3865,9 +3869,6 @@
 		/>
 		<var name="windSpeed10m" type="real" dimensions="nCells Time" units="m s^-1"
 			 description="Wind speed at 10 meter."
-		/>
-	    <var name="ekeCorrection" type="real" dimensions="nEdges Time" units="m s^-2"
-			 description="Correction for high res FOSI runs"
 		/>
 		<var name="iceVelocityZonal" type="real" dimensions="nCells Time" units="m s^-1"
 			 description="Zonal component of sea ice velocity."

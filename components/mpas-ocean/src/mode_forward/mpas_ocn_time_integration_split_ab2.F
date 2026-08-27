@@ -676,9 +676,10 @@ module ocn_time_integration_split_ab2
 
          !$omp parallel
          !$omp do schedule(runtime) private(kTop)
-         do iEdge = 1, nEdgesSI
+         do iEdge = 1, nEdgesAll
            iceOcnVelocityTend(:,iEdge) = 0.0_RKIND
            kTop = minLevelEdgeBot(iEdge)
+           if (maxLevelEdgeTop(iEdge) < kTop) cycle
            iceOcnVelocityTend(kTop,iEdge) = &
               seaIceSfcStress(iEdge)/layerThickEdgeMean(kTop,iEdge)
          end do
@@ -994,11 +995,15 @@ module ocn_time_integration_split_ab2
             if ( seaIceDrag ) then
                call mpas_log_write('Prep variables for new relative sea ice velocity')
                call mpas_log_write('Compute new ocean surface velocity')
-               do iEdge = 1, nEdgesSI
+               !$omp parallel
+               !$omp do schedule(runtime) private(kTop)
+               do iEdge = 1, nEdgesAll
                   kTop = minLevelEdgeBot(iEdge)
                   surfaceVelocityNew(iEdge) = normalBarotropicVelocityCur(iEdge) &
                      + normalBaroclinicVelocityNew(kTop,iEdge)
                enddo
+               !$omp end do
+               !$omp end parallel
                call mpas_log_write('SurfaceVelocityNew = $r', realArgs=(/surfaceVelocityNew(1)/))
                call mpas_log_write('normalBarotropicVelocityCur(1) = $r', realArgs=(/normalBarotropicVelocityCur(1)/))
                call mpas_log_write('normalBaroclinicVelocityNew(1,1) = $r', realArgs=(/normalBaroclinicVelocityNew(1,1)/))
@@ -1006,7 +1011,7 @@ module ocn_time_integration_split_ab2
                call mpas_log_write('DEBUG Update iceOcnVelocityTend')
                !$omp parallel
                !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity)
-               do iEdge = 1, nEdgesSI
+               do iEdge = 1, nEdgesAll
                   iceFractionEdge = 0.5_RKIND * &
                          (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
                   iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
@@ -1020,7 +1025,7 @@ module ocn_time_integration_split_ab2
 
                !$omp parallel
                !$omp do schedule(runtime) private(kTop)
-               do iEdge = 1, nEdgesSI
+               do iEdge = 1, nEdgesAll
                  kTop = minLevelEdgeBot(iEdge)
                  iceOcnVelocityTend(kTop,iEdge) = &
                     seaIceSfcStress(iEdge)/layerThickEdgeMean(kTop,iEdge)
