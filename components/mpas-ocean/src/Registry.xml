@@ -690,6 +690,10 @@
 					description="Controls if forcing variables seaIceVelocityZonal and seaIceVelocityMeridional are used to compute the drag term."
 					possible_values=".true. or .false."
 		/>
+		<nml_option name="config_sea_ice_drag_coeff" type="real" default_value="5.36e-3" units="unitless"
+					description="Quadratic drag coefficient used for the ice-ocean drag when config_use_drag_from_sea_ice_velocity is true. The default matches the sea-ice model default so that the stress felt by the ocean is consistent with the stress felt by the ice."
+					possible_values="Any non-negative real value."
+		/>
 		<nml_option name="config_use_bulk_wind_stress" type="logical" default_value=".false."
 					description="Controls if zonal and meridional components of windstress are used to build surface wind stress."
 					possible_values=".true. or .false."
@@ -3165,16 +3169,16 @@
 			 description="Meridional Component of the gradient of sea surface height at cell centers."
 			 packages="forwardMode;analysisMode"
 		/>
-		<var name="seaIceStressX" type="real" dimensions="nCells Time" units="1"
-			 description="X Component of the gradient of sea surface height at cell centers."
+		<var name="seaIceStressX" type="real" dimensions="nCells Time" units="N m^-2"
+			 description="X Component of the sea-ice/ocean drag stress at cell centers."
 			 packages="forwardMode;analysisMode"
 		/>
-		<var name="seaIceStressY" type="real" dimensions="nCells Time" units="1"
-			 description="Y Component of the gradient of sea surface height at cell centers."
+		<var name="seaIceStressY" type="real" dimensions="nCells Time" units="N m^-2"
+			 description="Y Component of the sea-ice/ocean drag stress at cell centers."
 			 packages="forwardMode;analysisMode"
 		/>
-		<var name="seaIceStressZ" type="real" dimensions="nCells Time" units="1"
-			 description="Z Component of the gradient of sea surface height at cell centers."
+		<var name="seaIceStressZ" type="real" dimensions="nCells Time" units="N m^-2"
+			 description="Z Component of the sea-ice/ocean drag stress at cell centers."
 			 packages="forwardMode;analysisMode"
 		/>
         <var name="seaIceStressZonal" type="real" dimensions="nCells Time" units="N m^-2"
@@ -3702,7 +3706,7 @@
 			 description="The component of the total surface stress on the ocean defined at edge midpoints and pointing in the direction of the edge normal.  This field the sum of constituent stresses (e.g. wind stress and top drag) and is used to compute a tendency in the normal velocity."
 		/>
 		<var name="seaIceSfcStress" type="real" dimensions="nEdges Time" units="N m^-2"
-			 description="The component of the total surface stress on the ocean defined at edge midpoints and pointing in the direction of the edge normal.  This field the sum of constituent stresses (e.g. wind stress and top drag) and is used to compute a tendency in the normal velocity."
+			 description="Diagnostic of the ice-ocean drag stress applied to the ocean surface layer, defined at edge midpoints and pointing in the direction of the edge normal.  This stress is applied implicitly within the vertical mixing solve and is not part of surfaceStress."
 		/>
 		<var name="surfaceStressMagnitude" type="real" dimensions="nCells Time" units="N m^-2"
 			 description="Magnitude of surface stress, at cell centers."

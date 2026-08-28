@@ -26,6 +26,7 @@ module ocn_vmix
    use mpas_pool_routines
    use mpas_timer
    use ocn_mesh
+   use mpas_vector_operations
 
    use mpas_constants
    use ocn_constants
@@ -73,6 +74,14 @@ module ocn_vmix
    logical :: velVmixOn, tracerVmixOn
    real (kind=RKIND) :: implicitBottomDragCoef, implicitTopDragCoef
    real (kind=RKIND) :: bottom_roughness, implicitCd_min, implicitCd_max, zDrag_max
+
+   ! Ice-ocean drag against a *moving* boundary.  Unlike the land-ice top drag
+   ! and the bottom drag, which relax the ocean toward a stationary surface,
+   ! this drag relaxes the surface layer toward the sea-ice velocity supplied
+   ! by the coupler.  It therefore contributes to both the diagonal and the
+   ! right-hand side of the implicit vertical mixing solve.
+   logical :: seaIceDragOn
+   real (kind=RKIND) :: seaIceDragCoef
 
    integer :: &
       dragType   ! id for pressure gradient method selected
@@ -406,7 +415,8 @@ contains
 
    subroutine ocn_vel_vmix_tend_implicit(dt, kineticEnergyCell, vertViscTopOfEdge, layerThickness, & !{{{
                                          layerThickEdgeDrag, layerThickEdgeMean, &
-                                         landIceEdgeFraction, normalVelocity, err)
+                                         landIceEdgeFraction, seaIceEdgeFraction, &
+                                         seaIceEdgeVelocity, normalVelocity, err)
 
       !-----------------------------------------------------------------
       !
@@ -432,6 +442,10 @@ contains
 
       real (kind=RKIND), dimension(:), intent(in) :: &
          landIceEdgeFraction !< Input: land ice fraction
+
+      real (kind=RKIND), dimension(:), intent(in) :: &
+         seaIceEdgeFraction, &!< Input: sea ice area fraction at edges
+         seaIceEdgeVelocity   !< Input: sea ice velocity normal to the edge
 
       !-----------------------------------------------------------------
       !
@@ -460,6 +474,7 @@ contains
 
       real (kind=RKIND), dimension(:), allocatable :: bTemp, C, rTemp
       real (kind=RKIND) :: A, m
+      real (kind=RKIND) :: seaIceDragRate
 
       err = 0
 
@@ -472,11 +487,13 @@ contains
 
       !$acc parallel loop present(maxLevelEdgeTop, minLevelEdgeBot, cellsOnEdge, &
       !$acc    layerThickEdgeDrag, layerThickEdgeMean, layerThickness, vertViscTopOfEdge, &
-      !$acc    normalVelocity, landIceEdgeFraction, kineticEnergyCell) &
-      !$acc    private(Nsurf, N, cell1, cell2, A, bTemp, C, m, rTemp, k)
+      !$acc    normalVelocity, landIceEdgeFraction, kineticEnergyCell, &
+      !$acc    seaIceEdgeFraction, seaIceEdgeVelocity) &
+      !$acc    private(Nsurf, N, cell1, cell2, A, bTemp, C, m, rTemp, k, seaIceDragRate)
 #else
       !$omp parallel
-      !$omp do schedule(runtime) private(Nsurf, N, cell1, cell2, A, bTemp, C, m, rTemp, k)
+      !$omp do schedule(runtime) private(Nsurf, N, cell1, cell2, A, bTemp, C, m, rTemp, k, &
+      !$omp                              seaIceDragRate)
 #endif
       do iEdge = 1, nEdgesOwned
         N = maxLevelEdgeTop(iEdge)
@@ -486,11 +503,23 @@ contains
          cell1 = cellsOnEdge(1,iEdge)
          cell2 = cellsOnEdge(2,iEdge)
 
+         ! Linearized ice-ocean drag rate [s^-1].  The velocity scale is lagged
+         ! but the response is implicit, so the added diagonal term is always
+         ! positive and the solve remains diagonally dominant for any dt.
+         seaIceDragRate = 0.0_RKIND
+         if (seaIceDragOn) then
+            seaIceDragRate = seaIceEdgeFraction(iEdge) * seaIceDragCoef * &
+               abs(seaIceEdgeVelocity(iEdge) - normalVelocity(Nsurf,iEdge)) / &
+               layerThickEdgeMean(Nsurf,iEdge)
+         end if
+
          ! one active layer
          if (N .eq. Nsurf) then
-            normalVelocity(N,iEdge) = normalVelocity(N,iEdge)  &
-                / (1.0_RKIND + dt*(implicitTopDragCoef * landIceEdgeFraction(iEdge) + implicitBottomDragCoef) &
-                   * sqrt(kineticEnergyCell(N,cell1) + kineticEnergyCell(N,cell2)) / layerThickEdgeDrag(N,iEdge) )
+            normalVelocity(N,iEdge) = &
+                (normalVelocity(N,iEdge) + dt*seaIceDragRate*seaIceEdgeVelocity(iEdge)) &
+                / (1.0_RKIND + dt*seaIceDragRate &
+                   + dt*(implicitTopDragCoef * landIceEdgeFraction(iEdge) + implicitBottomDragCoef) &
+                     * sqrt(kineticEnergyCell(N,cell1) + kineticEnergyCell(N,cell2)) / layerThickEdgeDrag(N,iEdge) )
          else
 
            ! tridiagonal matrix algorithm
@@ -500,8 +529,12 @@ contains
            bTemp(Nsurf) = 1.0_RKIND - C(Nsurf) &
               + dt * implicitTopDragCoef * landIceEdgeFraction(iEdge) &
                 * sqrt(kineticEnergyCell(Nsurf,cell1) + kineticEnergyCell(Nsurf,cell2)) / &
-                layerThickEdgeMean(Nsurf,iEdge)
-           rTemp(Nsurf) = normalVelocity(Nsurf,iEdge)
+                layerThickEdgeMean(Nsurf,iEdge) &
+              ! ice-ocean drag: implicit in the ocean velocity
+              + dt * seaIceDragRate
+           ! ice-ocean drag: the boundary moves, so the ice velocity enters the RHS
+           rTemp(Nsurf) = normalVelocity(Nsurf,iEdge) &
+              + dt * seaIceDragRate * seaIceEdgeVelocity(iEdge)
 
            ! first pass: set the coefficients
            do k = Nsurf+1, N-1
@@ -1343,7 +1376,12 @@ contains
 
       integer :: iCell, timeLevel, k, cell1, cell2, iEdge, iTracer, num_tracers, nCells, nEdges, N, Nsurf
       real (kind=RKIND), dimension(:), pointer :: bottomDrag, ssh, landIceFraction
+      real (kind=RKIND), dimension(:), pointer :: iceFraction, iceVelocityZonal, iceVelocityMeridional
+      real (kind=RKIND), dimension(:), pointer :: seaIceSfcStress
       real (kind=RKIND), dimension(:), allocatable :: landIceEdgeFraction
+      real (kind=RKIND), dimension(:), allocatable :: seaIceEdgeFraction, seaIceEdgeVelocity
+      real (kind=RKIND), dimension(:), allocatable :: zonalSIEdge, meridSIEdge
+      real (kind=RKIND) :: seaIceDragRate
       real (kind=RKIND), dimension(:,:), pointer :: normalVelocity, layerThickness
       real (kind=RKIND), dimension(:,:), pointer :: tracerGroupSurfaceFlux
       real (kind=RKIND), dimension(:,:,:), pointer :: tracersGroup
@@ -1409,6 +1447,46 @@ contains
          !$omp end parallel
 #endif
       end if
+
+      !
+      ! Sea-ice velocity and area fraction at edges, for the ice-ocean drag.
+      ! These are only needed on owned edges, but the cell-to-edge
+      ! reconstruction requires the cell-centered ice velocity to be valid in
+      ! the halo (see the halo exchange in ocn_import_mct).
+      !
+      allocate(seaIceEdgeFraction(nEdgesOwned), seaIceEdgeVelocity(nEdgesOwned))
+      do iEdge = 1, nEdgesOwned
+         seaIceEdgeFraction(iEdge) = 0.0_RKIND
+         seaIceEdgeVelocity(iEdge) = 0.0_RKIND
+      end do
+
+      if (seaIceDragOn) then
+         call mpas_pool_get_array(forcingPool, 'iceFraction', iceFraction)
+         call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', iceVelocityZonal)
+         call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', iceVelocityMeridional)
+
+         allocate(zonalSIEdge(nEdgesOwned), meridSIEdge(nEdgesOwned))
+         call mpas_vector_cell_to_edge_isotropic(iceVelocityZonal, iceVelocityMeridional, &
+            nEdgesOwned, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
+            zonalSIEdge, meridSIEdge)
+
+         !$omp parallel
+         !$omp do schedule(runtime) private(cell1, cell2)
+         do iEdge = 1, nEdgesOwned
+            cell1 = cellsOnEdge(1,iEdge)
+            cell2 = cellsOnEdge(2,iEdge)
+            seaIceEdgeFraction(iEdge) = 0.5_RKIND*(iceFraction(cell1) + iceFraction(cell2))
+            seaIceEdgeVelocity(iEdge) = cos(angleEdge(iEdge))*zonalSIEdge(iEdge) + &
+                                        sin(angleEdge(iEdge))*meridSIEdge(iEdge)
+         end do
+         !$omp end do
+         !$omp end parallel
+
+         deallocate(zonalSIEdge, meridSIEdge)
+      end if
+#ifdef MPAS_OPENACC
+      !$acc enter data copyin(seaIceEdgeFraction, seaIceEdgeVelocity)
+#endif
 
       call mpas_pool_get_array(statePool, 'normalVelocity', normalVelocity, timeLevel)
       call mpas_pool_get_array(statePool, 'layerThickness', layerThickness, timeLevel)
@@ -1502,7 +1580,7 @@ contains
 
         call ocn_vel_vmix_tend_implicit(dt, kineticEnergyCell, &
           vertViscTopOfEdge, layerThickness, layerThickEdgeDrag, layerThickEdgeMean, &
-          landIceEdgeFraction, normalVelocity, err)
+          landIceEdgeFraction, seaIceEdgeFraction, seaIceEdgeVelocity, normalVelocity, err)
 
       case (dragTypeRayleigh)
 
@@ -1533,6 +1611,28 @@ contains
 #ifdef MPAS_OPENACC
       !$acc exit data copyout(normalVelocity)
 #endif
+
+      ! Diagnose the ice-ocean stress actually applied to the ocean, using the
+      ! post-solve surface velocity so that the diagnostic is consistent with
+      ! the implicit update above.
+      if (seaIceDragOn) then
+         call mpas_pool_get_array(forcingPool, 'seaIceSfcStress', seaIceSfcStress)
+         !$omp parallel
+         !$omp do schedule(runtime) private(Nsurf, N, seaIceDragRate)
+         do iEdge = 1, nEdgesOwned
+            seaIceSfcStress(iEdge) = 0.0_RKIND
+            Nsurf = minLevelEdgeBot(iEdge)
+            N = maxLevelEdgeTop(iEdge)
+            if (N < Nsurf) cycle
+            seaIceDragRate = seaIceEdgeFraction(iEdge) * seaIceDragCoef * &
+               abs(seaIceEdgeVelocity(iEdge) - normalVelocity(Nsurf,iEdge))
+            seaIceSfcStress(iEdge) = config_density0 * seaIceDragRate * &
+               (seaIceEdgeVelocity(iEdge) - normalVelocity(Nsurf,iEdge))
+         end do
+         !$omp end do
+         !$omp end parallel
+      end if
+
       call mpas_timer_stop('vmix solve momentum')
 
       !
@@ -1665,8 +1765,10 @@ contains
 
 #ifdef MPAS_OPENACC
       !$acc exit data delete(layerThickness,landIceEdgeFraction)
+      !$acc exit data delete(seaIceEdgeFraction, seaIceEdgeVelocity)
 #endif
       deallocate(landIceEdgeFraction)
+      deallocate(seaIceEdgeFraction, seaIceEdgeVelocity)
 
       call mpas_timer_stop('vmix imp')
 
@@ -1713,6 +1815,25 @@ contains
 
       implicitBottomDragCoef = 0.0_RKIND
       implicitTopDragCoef = 0.0_RKIND
+
+      seaIceDragOn = config_use_drag_from_sea_ice_velocity
+      seaIceDragCoef = config_sea_ice_drag_coeff
+
+      if (seaIceDragOn .and. &
+          .not. trim(config_bottom_drag_mode) == 'implicit') then
+         call mpas_log_write('config_use_drag_from_sea_ice_velocity requires ' //&
+              & 'config_bottom_drag_mode = ''implicit''', MPAS_LOG_CRIT)
+      endif
+      if (seaIceDragOn .and. &
+          .not. trim(config_implicit_bottom_drag_type) == 'constant') then
+         call mpas_log_write('config_use_drag_from_sea_ice_velocity is only ' //&
+              & 'implemented for config_implicit_bottom_drag_type = ''constant''', &
+              MPAS_LOG_CRIT)
+      endif
+      if (seaIceDragOn .and. seaIceDragCoef < 0.0_RKIND) then
+         call mpas_log_write('config_sea_ice_drag_coeff must be non-negative', &
+              MPAS_LOG_CRIT)
+      endif
 
       if (config_use_implicit_top_drag .and. &
           .not. trim(config_bottom_drag_mode) == 'implicit') then

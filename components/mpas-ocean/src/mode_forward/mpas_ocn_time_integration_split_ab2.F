@@ -29,7 +29,6 @@ module ocn_time_integration_split_ab2
    use mpas_constants
    use mpas_dmpar
    use mpas_vector_reconstruction
-   use mpas_vector_operations
    use mpas_spline_interpolation
    use mpas_timer
    use mpas_threading
@@ -79,8 +78,6 @@ module ocn_time_integration_split_ab2
    !
    !--------------------------------------------------------------------
 
-   logical :: seaIceDrag
-
    character (len=*), parameter :: &
       subcycleGroupName = 'subcycleFields', &! name for cached halo exch
       finalBtrGroupName = 'finalBtrFields'   ! name for cached halo exch
@@ -103,7 +100,6 @@ module ocn_time_integration_split_ab2
       thickEdgeFluxUpwind   = 2   ! use upwind cell thickness at edge
 
    real (kind=RKIND) :: &
-      dragCoeff,&
       useVelocityCorrection,&! mask for velocity correction
       splitFact, &! mask for terms in split cases
       self_attraction_and_loading_beta
@@ -176,7 +172,7 @@ module ocn_time_integration_split_ab2
          config_use_tracerGroup  ! flag for using each tracer group
 
       integer :: &
-         iCell, iEdge, k, kTop, &! loop iterators for cell, edge, vert loops
+         iCell, iEdge, k, &! loop iterators for cell, edge, vert loops
          nCells, nEdges,  &! number of cells or edges (incl halos)
          i,j,             &! generic loop iterators
          cell1, cell2,    &! neighbor cell addresses
@@ -192,8 +188,6 @@ module ocn_time_integration_split_ab2
          cellHaloComputeCounter   ! halo updates during cycling
 
       real (kind=RKIND) :: &
-         iceFractionEdge, &
-         iceOcnRelVelocity, &
          normalThicknessFluxSum, &! sum of thickness flux in column
          thicknessSum,     &! sum of thicknesses in column
          flux,             &! temp for computing flux for barotropic
@@ -209,20 +203,16 @@ module ocn_time_integration_split_ab2
          sshGrad            ! temp for holding ssh gradient
 
       real (kind=RKIND), dimension(:,:), allocatable:: &
-         uTemp, &
-         iceOcnVelocityTend
+         uTemp
 
       real (kind=RKIND), dimension(:), allocatable :: &
-         meridSIEdge, zonalSIEdge, seaIceVelocity, &
          btrvel_temp,      &
          sshTemp,          &
          wctEdge,          &! flux water column thickness at edge
-         surfaceVelocityNew, &
          bottomDepthEdge
 
       ! State Array Pointers
       real (kind=RKIND), dimension(:), pointer :: &
-         iceVelocityZonalCur, iceVelocityMeridionalCur, &
          sshSubcycleCur,              &! subcycl ssh    at current time
          sshSubcycleNew,              &! subcycl ssh    at new     time
          sshSubcycleCurWithTides,     &! subcycl ssh    at current time
@@ -287,7 +277,7 @@ module ocn_time_integration_split_ab2
       real (kind=RKIND), dimension(:), pointer :: tidalPotentialEta
 
       real (kind=RKIND), dimension(:), pointer :: &
-        seaIceSfcStress, seaIcePressure, atmosphericPressure, iceFraction
+        seaIceSfcStress, seaIcePressure, atmosphericPressure
 
       real (kind=RKIND), dimension(:), pointer :: &
         frazilSurfacePressure, landIcePressure, landIceDraft
@@ -419,8 +409,6 @@ module ocn_time_integration_split_ab2
       call mpas_pool_get_array(tracersPool, 'activeTracers', activeTracersNew, 2)
 
       allocate(bottomDepthEdge(nEdgesAll+1))
-      allocate(iceOcnVelocityTend(nVertLevels,nEdgesAll))
-      iceOcnVelocityTend(:,:) = 0.0_RKIND
 
       if (config_transport_tests_flow_id > 0) then
         ! This is a transport test. Write advection velocity from prescribed
@@ -598,12 +586,8 @@ module ocn_time_integration_split_ab2
 
       call mpas_timer_stop("se prep")
 
-      ! iceVelocity*Cur will hold the velocity at the beg of each coupling interval
-      call mpas_pool_get_array(forcingPool, 'iceVelocityZonal', iceVelocityZonalCur)
-      call mpas_pool_get_array(forcingPool, 'iceVelocityMeridional', iceVelocityMeridionalCur)
       call mpas_pool_get_array(forcingPool, 'seaIcePressure', seaIcePressure)
       call mpas_pool_get_array(forcingPool, 'seaIceSfcStress', seaIceSfcStress)
-      call mpas_pool_get_array(forcingPool, 'iceFraction', iceFraction)
       call mpas_pool_get_array(forcingPool, 'atmosphericPressure', atmosphericPressure)
       call mpas_pool_get_array(forcingPool, 'frazilSurfacePressure', frazilSurfacePressure)
 
@@ -627,67 +611,8 @@ module ocn_time_integration_split_ab2
       endif
 #endif
 
-      if ( seaIceDrag ) then
-         allocate(surfaceVelocityNew(nEdgesAll))
-         surfaceVelocityNew(:) = 0.0_RKIND
-         !$omp parallel
-         !$omp do schedule(runtime)
-         do iEdge = 1, nEdgesAll
-           surfaceVelocityNew(iEdge) = normalVelocityCur(minLevelEdgeBot(iEdge), iEdge)
-         end do
-         !$omp end do
-         !$omp end parallel
-
-         call mpas_log_write('Prep ice velocity reconstruction')
-         ! These work arrays are allocated once here and reused (and possibly
-         ! recomputed) within the baroclinic iteration loop below.  They are
-         ! deallocated only after the outer timestep loop completes.
-         allocate(meridSIEdge(nEdgesAll), zonalSIEdge(nEdgesAll), seaIceVelocity(nEdgesAll))
-         meridSIEdge(:) = 0.0_RKIND
-         zonalSIEdge(:) = 0.0_RKIND
-         seaIceVelocity(:) = 0.0_RKIND
-
-         call mpas_vector_cell_to_edge_isotropic(iceVelocityZonalCur, iceVelocityMeridionalCur, &
-           nEdgesAll, vertexDegree, verticesOnEdge, cellsOnVertex, kiteAreasOnVertex, &
-           zonalSIEdge, meridSIEdge)
-
-         !$omp parallel
-         !$omp do schedule(runtime)
-         do iEdge = 1, nEdgesAll
-           seaIceVelocity(iEdge) = cos(angleEdge(iEdge))*zonalSIEdge(iEdge) + &
-                                   sin(angleEdge(iEdge))*meridSIEdge(iEdge)
-         end do
-         !$omp end do
-         !$omp end parallel
-         call mpas_log_write('seaIceVelocity = $r', realArgs=(/seaIceVelocity(1)/))
-         call mpas_log_write('surfaceVelocityNew = $r', realArgs=(/surfaceVelocityNew(1)/))
-
-         !$omp parallel
-         !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity)
-         do iEdge = 1, nEdgesAll
-           iceFractionEdge = 0.5_RKIND * &
-                  (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
-           iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
-           seaIceSfcStress(iEdge) = iceFractionEdge * dragCoeff * &
-                  abs(iceOcnRelVelocity) * iceOcnRelVelocity
-         end do
-         !$omp end do
-         !$omp end parallel
-
-         !$omp parallel
-         !$omp do schedule(runtime) private(kTop)
-         do iEdge = 1, nEdgesAll
-           iceOcnVelocityTend(:,iEdge) = 0.0_RKIND
-           kTop = minLevelEdgeBot(iEdge)
-           if (maxLevelEdgeTop(iEdge) < kTop) cycle
-           iceOcnVelocityTend(kTop,iEdge) = &
-              seaIceSfcStress(iEdge)/layerThickEdgeMean(kTop,iEdge)
-         end do
-         !$omp end do
-         !$omp end parallel
-         call mpas_log_write('Initialize iceOcnVelocityTend to $r, seaIceSfcStress=$r', &
-           realArgs=(/iceOcnVelocityTend(1,1), seaIceSfcStress(1)/))
-      endif
+      ! Note: the ice-ocean drag is applied implicitly within ocn_vmix_implicit
+      ! (see ocn_vel_vmix_tend_implicit), not as an explicit tendency here.
 
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! BEGIN large outer timestep iteration loop
@@ -813,6 +738,7 @@ module ocn_time_integration_split_ab2
 
          call ocn_tend_vel(domain, tendPool, statePool, forcingPool, &
                            stage1_tend_time, domain % dminfo, dt)
+
          call mpas_timer_stop('se bcl vel tend')
 
          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -822,7 +748,6 @@ module ocn_time_integration_split_ab2
          do j=1,numClinicIterations(splitExplicitStep)
 
             call mpas_timer_start('bcl iters on linear Coriolis')
-            call mpas_log_write('bcl iters on linear Coriolis')
 
             ! Put f*normalBaroclinicVelocity^{perp} in
             ! normalVelocityNew as a work variable
@@ -857,7 +782,6 @@ module ocn_time_integration_split_ab2
                      !  -fEdge(iEdge)*normalBaroclinicVelocityPerp(k,iEdge)
                      uTemp(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge) &
                               + dt * (normalVelocityTend(k,iEdge) &
-                              + iceOcnVelocityTend(k,iEdge) &
                               + normalVelocityNew(k,iEdge) &
                               + sshGrad )
                   enddo ! vertical
@@ -865,7 +789,6 @@ module ocn_time_integration_split_ab2
                      do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
                         normalVelocityTendOld(k,iEdge)  = &
                                    normalVelocityTend(k,iEdge) &
-                                 + iceOcnVelocityTend(k,iEdge) &
                                  + sshGrad
                         CoriolisTermOld(k,iEdge) = normalVelocityNew(k,iEdge)
                      enddo ! vertical
@@ -899,7 +822,6 @@ module ocn_time_integration_split_ab2
                         !  -fEdge(iEdge)*normalBaroclinicVelocityPerp(k,iEdge)
                         uTemp(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge) &
                                  + 1.5_RKIND * dt * (normalVelocityTend(k,iEdge) &
-                                 + iceOcnVelocityTend(k,iEdge) &
                                  + normalVelocityNew(k,iEdge) &
                                  + sshGrad) &
                                  - 0.5_RKIND * dt * ( normalVelocityTendOld(k,iEdge) &
@@ -937,7 +859,6 @@ module ocn_time_integration_split_ab2
                         !  -fEdge(iEdge)*normalBaroclinicVelocityPerp(k,iEdge)
                         uTemp(k,iEdge) = normalBaroclinicVelocityCur(k,iEdge) &
                                  + 1.5_RKIND * dt * (normalVelocityTend(k,iEdge) &
-                                 + iceOcnVelocityTend(k,iEdge) &
                                  + sshGrad) &
                                  - 0.5_RKIND * dt * normalVelocityTendOld(k,iEdge) &
                                  +             dt * normalVelocityNew(k,iEdge)
@@ -945,7 +866,6 @@ module ocn_time_integration_split_ab2
 
                      do k = minLevelEdgeBot(iEdge), maxLevelEdgeTop(iEdge)
                         normalVelocityTendOld(k,iEdge)  = normalVelocityTend(k,iEdge) &
-                                                        + iceOcnVelocityTend(k,iEdge) &
                                                         + sshGrad
                      enddo ! vertical
 
@@ -992,51 +912,6 @@ module ocn_time_integration_split_ab2
             enddo ! iEdge
             !$omp end do
             !$omp end parallel
-            if ( seaIceDrag ) then
-               call mpas_log_write('Prep variables for new relative sea ice velocity')
-               call mpas_log_write('Compute new ocean surface velocity')
-               !$omp parallel
-               !$omp do schedule(runtime) private(kTop)
-               do iEdge = 1, nEdgesAll
-                  kTop = minLevelEdgeBot(iEdge)
-                  surfaceVelocityNew(iEdge) = normalBarotropicVelocityCur(iEdge) &
-                     + normalBaroclinicVelocityNew(kTop,iEdge)
-               enddo
-               !$omp end do
-               !$omp end parallel
-               call mpas_log_write('SurfaceVelocityNew = $r', realArgs=(/surfaceVelocityNew(1)/))
-               call mpas_log_write('normalBarotropicVelocityCur(1) = $r', realArgs=(/normalBarotropicVelocityCur(1)/))
-               call mpas_log_write('normalBaroclinicVelocityNew(1,1) = $r', realArgs=(/normalBaroclinicVelocityNew(1,1)/))
-
-               call mpas_log_write('DEBUG Update iceOcnVelocityTend')
-               !$omp parallel
-               !$omp do schedule(runtime) private(iceFractionEdge, iceOcnRelVelocity)
-               do iEdge = 1, nEdgesAll
-                  iceFractionEdge = 0.5_RKIND * &
-                         (iceFraction(cellsOnEdge(1,iEdge)) + iceFraction(cellsOnEdge(2,iEdge)))
-                  iceOcnRelVelocity = seaIceVelocity(iEdge) - surfaceVelocityNew(iEdge)
-                  seaIceSfcStress(iEdge) = iceFractionEdge * dragCoeff * &
-                         abs(iceOcnRelVelocity) * iceOcnRelVelocity
-               end do
-               !$omp end do
-               !$omp end parallel
-               call mpas_log_write('DEBUG Update seaIceSfcStress: iceOcnRelVelocity=$r, seaIceSfcStress=$r', &
-                 realArgs=(/seaIceVelocity(1) - surfaceVelocityNew(1), seaIceSfcStress(1)/))
-
-               !$omp parallel
-               !$omp do schedule(runtime) private(kTop)
-               do iEdge = 1, nEdgesAll
-                 kTop = minLevelEdgeBot(iEdge)
-                 iceOcnVelocityTend(kTop,iEdge) = &
-                    seaIceSfcStress(iEdge)/layerThickEdgeMean(kTop,iEdge)
-               end do
-               !$omp end do
-               !$omp end parallel
-
-               call mpas_log_write('DEBUG Update iceOcnVelocityTend=$r, seaIceSfcStress=$r', &
-                 realArgs=(/iceOcnVelocityTend(1,1), seaIceSfcStress(1)/))
-
-            endif
 
             bottomDepthEdge(:) = 0.0_RKIND
             !$omp parallel
@@ -2742,12 +2617,6 @@ module ocn_time_integration_split_ab2
          call mpas_timer_stop('se loop')
 
       end do  ! outer timestep loop (splitExplicitStep)
-      ! Note: iceVelocityZonalCur/iceVelocityMeridionalCur are pointers into
-      ! forcingPool and must NOT be deallocated here.
-      if ( seaIceDrag ) then
-         deallocate(surfaceVelocityNew)
-         deallocate(meridSIEdge, zonalSIEdge, seaIceVelocity)
-      endif
 
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       ! END large iteration loop
@@ -3096,9 +2965,6 @@ module ocn_time_integration_split_ab2
          call mpas_timer_stop("se effective density halo")
       end if
       deallocate(bottomDepthEdge)
-      ! Note: seaIceSfcStress is a pointer into forcingPool and must NOT be
-      ! deallocated here.
-      deallocate(iceOcnVelocityTend)
 
       ! get current time & setup num TS iteration
       nowTime = mpas_get_clock_time(domain%clock, MPAS_NOW, err)
@@ -3286,9 +3152,6 @@ module ocn_time_integration_split_ab2
                layerThickness(minLevelCell(iCell),iCell) = refBottomDepth(minLevelCell(iCell))
             enddo
          endif
-
-         seaIceDrag = config_use_drag_from_sea_ice_velocity
-         dragCoeff = 5.36e-3_RKIND ! default value given in sea ice namelist
 
          do iEdge = 1, nEdges
             cell1 = cellsOnEdge(1,iEdge)
