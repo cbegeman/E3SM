@@ -599,7 +599,10 @@ contains
                 ! limit runoff to value of storage above S(pc)
                 if(h2osfc(c) >= h2osfc_thresh(c) .and. h2osfcflag/=0) then
                    ! spatially variable k_wet
-                   k_wet=1.0_r8 * sin((rpi/180._r8) * col_pp%topo_slope(c))
+                   ! Reduce k_wet from 1 to 1e-4 and apply a minimum slope so h2osfc
+                   ! does not drain in a single timestep; this is an ELM ponding
+                   ! calibration, not CLM cryosphere physics.
+                   k_wet=1.0e-4_r8 * sin((rpi/180._r8) * max(col_pp%topo_slope(c), 1.0e-3_r8))
                    qflx_h2osfc_surf(c) = k_wet * frac_infclust * (h2osfc(c) - h2osfc_thresh(c))
 
                    qflx_h2osfc_surf(c)=min(qflx_h2osfc_surf(c),(h2osfc(c) - h2osfc_thresh(c))/dtime)
