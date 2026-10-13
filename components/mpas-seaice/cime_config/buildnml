@@ -346,7 +346,7 @@ def buildnml(case, caseroot, compname):
         decomp_prefix = 'partitions/mpas-seaice.graph.info.'
         data_iceberg_file = 'Iceberg_Climatology_Merino.SOwISC12to30E3r3.20241017.nc'
         if ice_ic_mode == 'spunup':
-            grid_date = '20240829'
+            grid_date = '20261006'
             grid_prefix = 'mpassi.SOwISC12to30E3r3.rstFromG-chrysalis'
 
     elif ice_grid == 'SOwISC12to30E3r4':
