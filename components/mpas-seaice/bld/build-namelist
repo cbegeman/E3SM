@@ -551,7 +551,7 @@ add_default($nl, 'config_nSnowLayers');
 
 add_default($nl, 'config_earth_radius');
 if ($ice_ic_mode eq 'spunup') {
-        add_default($nl, 'config_initial_condition_type', 'val'=>"restart");
+        add_default($nl, 'config_initial_condition_type', 'val'=>"iceArea_from_file");
 } else {
         add_default($nl, 'config_initial_condition_type');
 }
