@@ -847,6 +847,7 @@ def buildnml(case, caseroot, compname):
             lines.append('        clobber_mode="truncate"')
             lines.append('        packages="timeSeriesStatsDailyAMPKG">')
             lines.append('')
+            lines.append('    <var name="icePressure"/>')
             lines.append('    <var name="iceAreaCell"/>')
             lines.append('    <var name="iceVolumeCell"/>')
             lines.append('    <var name="snowVolumeCell"/>')
