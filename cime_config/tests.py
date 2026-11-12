@@ -141,6 +141,8 @@ _TESTS = {
     "e3sm_cryo_developer" : {
         "tests"   : (
             "SMS_D_Ld1.TL319_IcoswISC30E3r5.GMPAS-JRA1p5-DIB-PISMF.mpaso-jra_1958",
+            # Temporary fork-only coverage of frazil porosity with prognostic shelf melt.
+            "SMS_D_Ld1.T62_oQU240wLI.GMPAS-DIB-IAF-PISMF.mpaso-frazil_ice_porosity",
             "ERS_Ld5.T62_oQU240wLI.GMPAS-DIB-IAF-PISMF",
             "PEM_Ln5.T62_oQU240wLI.GMPAS-DIB-IAF-PISMF",
             "PET_Ln5.T62_oQU240wLI.GMPAS-DIB-IAF-PISMF",
